@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Deno Edge Functions live under supabase/functions/. They import
+    // from URLs (`https://esm.sh/...`) and use Deno APIs that don't
+    // resolve in Node/Next — they're deployed separately via the
+    // Supabase CLI. Lint them with `deno lint` inside that directory
+    // if needed.
+    "supabase/**",
   ]),
 ]);
 

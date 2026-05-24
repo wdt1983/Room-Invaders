@@ -1,0 +1,26 @@
+# supabase/config.toml
+#
+# Project configuration used by the Supabase CLI (`supabase functions
+# deploy`, `supabase db push`, etc.). The `project_id` is the slug the
+# CLI keys its link state off — matches the deployed project.
+
+project_id = "tqvsympapbmpbwkydumc"
+
+# ---------- Edge Functions ----------
+# 3.0.19 note: the project's JWT signing key is ES256 (Supabase's new
+# default). The platform-level JWT verifier that runs BEFORE the
+# function body doesn't support ES256 and returns
+# `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM` to the browser. Our
+# functions do their own auth via `supabase.auth.getUser()` against a
+# request-scoped client that carries the browser's Authorization
+# header, so the platform verifier is redundant. Disabling it here
+# lets our function actually run, and the in-function auth check
+# still rejects unauthenticated requests with a 401.
+[functions.resolve-raid]
+verify_jwt = false
+
+[functions.process-quest]
+verify_jwt = false
+
+[functions.matchmaking]
+verify_jwt = false

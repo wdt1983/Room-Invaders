@@ -1,0 +1,231 @@
+{
+  "tutorial": [
+    {
+      "id": "tut-01",
+      "title": "Wake Up",
+      "description": "Welcome to your new bedroom stronghold. Take a look around and get familiar with your surroundings.",
+      "category": "view_room",
+      "targetValue": 1,
+      "requiredLevel": 1,
+      "xpReward": 50,
+      "rewards": {
+        "scrap": 100,
+        "credits": 20
+      },
+      "unlockSequence": "tut-02"
+    },
+    {
+      "id": "tut-02",
+      "title": "Make It Yours",
+      "description": "A secure room needs to be comfortable. Open the Room Editor and place at least 3 furniture items from your inventory or catalog.",
+      "category": "place_furniture",
+      "targetValue": 3,
+      "requiredLevel": 1,
+      "xpReward": 80,
+      "rewards": {
+        "scrap": 150,
+        "credits": 30
+      },
+      "unlockSequence": "tut-03"
+    },
+    {
+      "id": "tut-03",
+      "title": "Lock the Door",
+      "description": "A proper fortress needs claws. Go to the Room Editor, browse the defenses catalog, and install your first trap.",
+      "category": "place_defense",
+      "targetValue": 1,
+      "requiredLevel": 1,
+      "xpReward": 100,
+      "rewards": {
+        "components": 10,
+        "credits": 50
+      },
+      "unlockSequence": "tut-04"
+    },
+    {
+      "id": "tut-04",
+      "title": "Know Your Enemy",
+      "description": "Information is power. Navigate to the Recon Map and scout an NPC base to check its layout and entry points.",
+      "category": "scout_room",
+      "targetValue": 1,
+      "requiredLevel": 1,
+      "xpReward": 60,
+      "rewards": {
+        "intel": 15,
+        "credits": 20
+      },
+      "unlockSequence": "tut-05"
+    },
+    {
+      "id": "tut-05",
+      "title": "First Strike",
+      "description": "It is time to gather resources. Select an NPC target on the map, launch a raid, navigate past defenses, and secure the loot stash.",
+      "category": "raid_fixture",
+      "targetValue": 1,
+      "requiredLevel": 1,
+      "xpReward": 150,
+      "rewards": {
+        "scrap": 200,
+        "components": 15,
+        "credits": 80
+      },
+      "unlockSequence": "tut-06"
+    },
+    {
+      "id": "tut-06",
+      "title": "Spoils of War",
+      "description": "Invest in yourself. Open the upgrades panel at the top-left and pay scrap to upgrade your player level.",
+      "category": "upgrade_level",
+      "targetValue": 1,
+      "requiredLevel": 1,
+      "xpReward": 120,
+      "rewards": {
+        "scrap": 250,
+        "components": 20
+      },
+      "unlockSequence": "tut-07"
+    },
+    {
+      "id": "tut-07",
+      "title": "Dig In",
+      "description": "Double down on your security. Buy and place defenses (barricades, traps, or turrets) until your total Room Defense Rating reaches at least 50.",
+      "category": "reach_defense_rating",
+      "targetValue": 50,
+      "requiredLevel": 1,
+      "xpReward": 200,
+      "rewards": {
+        "components": 30,
+        "contraband": 2,
+        "credits": 100
+      },
+      "unlockSequence": "tut-08"
+    },
+    {
+      "id": "tut-08",
+      "title": "Safe Mode Briefing",
+      "description": "Your starter shield keeps you safe, but eventually it will drop. Read the Safe Mode overlay on your quests dashboard to complete your training.",
+      "category": "safe_mode_briefing",
+      "targetValue": 1,
+      "requiredLevel": 1,
+      "xpReward": 100,
+      "rewards": {
+        "credits": 150,
+        "intel": 20
+      },
+      "unlockSequence": null
+    }
+  ],
+  "daily": [
+    {
+      "id": "daily-01",
+      "title": "Scavenger's Duty",
+      "description": "Raid and secure any 2 NPC locations to gather supplies for the community.",
+      "category": "raid_fixture",
+      "targetValue": 2,
+      "requiredLevel": 1,
+      "xpReward": 50,
+      "rewards": {
+        "scrap": 75,
+        "credits": 15
+      }
+    },
+    {
+      "id": "daily-02",
+      "title": "Fortification Check",
+      "description": "Place or rotate at least 2 traps, turrets, or barricades in your room to refine your defenses.",
+      "category": "place_defense",
+      "targetValue": 2,
+      "requiredLevel": 1,
+      "xpReward": 40,
+      "rewards": {
+        "components": 8,
+        "credits": 10
+      }
+    },
+    {
+      "id": "daily-03",
+      "title": "Interior Designer",
+      "description": "Rearrange your space. Place at least 2 furniture items in your room.",
+      "category": "place_furniture",
+      "targetValue": 2,
+      "requiredLevel": 1,
+      "xpReward": 30,
+      "rewards": {
+        "scrap": 50,
+        "credits": 10
+      }
+    },
+    {
+      "id": "daily-04",
+      "title": "Data Collector",
+      "description": "Gather intelligence. Scout 2 bases from the Recon Map.",
+      "category": "scout_room",
+      "targetValue": 2,
+      "requiredLevel": 1,
+      "xpReward": 40,
+      "rewards": {
+        "intel": 10,
+        "credits": 15
+      }
+    },
+    {
+      "id": "daily-05",
+      "title": "Veteran Raider",
+      "description": "Complete 3 raids successfully (victory) to establish dominance in the district.",
+      "category": "raid_fixture",
+      "targetValue": 3,
+      "requiredLevel": 2,
+      "xpReward": 70,
+      "rewards": {
+        "scrap": 100,
+        "components": 12,
+        "credits": 25
+      }
+    }
+  ],
+  "weekly": [
+    {
+      "id": "weekly-01",
+      "title": "Architect of Anarchy",
+      "description": "Design a master defense system. Place at least 8 defenses (traps, turrets, guards, or barricades) in your room.",
+      "category": "place_defense",
+      "targetValue": 8,
+      "requiredLevel": 1,
+      "xpReward": 200,
+      "rewards": {
+        "components": 35,
+        "contraband": 2,
+        "credits": 50
+      }
+    },
+    {
+      "id": "weekly-02",
+      "title": "Dominion over the Blocks",
+      "description": "Successfully execute 10 raids in the city to clear out hostiles.",
+      "category": "raid_fixture",
+      "targetValue": 10,
+      "requiredLevel": 1,
+      "xpReward": 300,
+      "rewards": {
+        "scrap": 500,
+        "components": 40,
+        "contraband": 3,
+        "credits": 150
+      }
+    },
+    {
+      "id": "weekly-03",
+      "title": "Elite Engineer",
+      "description": "Upgrade your bedroom fortification by placing a total of 15 furniture or defense items.",
+      "category": "place_any",
+      "targetValue": 15,
+      "requiredLevel": 1,
+      "xpReward": 250,
+      "rewards": {
+        "scrap": 400,
+        "components": 30,
+        "credits": 100
+      }
+    }
+  ]
+}
