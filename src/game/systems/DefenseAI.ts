@@ -61,6 +61,10 @@ export interface TurretStats {
    * trap — reuses {@link RaidScene}'s squad-stun helper.
    */
   stun_duration?: number;
+  /** Tesla chain targets limit. */
+  chain_targets?: number;
+  /** Shotgun spread cone enabled. */
+  spread_cone?: boolean;
 }
 
 /**
@@ -71,10 +75,10 @@ export interface TurretStats {
  */
 export const TURRET_STATS_BY_SPRITE_KEY: Record<string, TurretStats> = {
   turret_nailgun: { damage: 8, range: 3, fire_rate: 1.0, ammo: 15 },
-  turret_taser: { damage: 5, range: 2, fire_rate: 0.8, ammo: 10, stun_duration: 1.0 },
-  turret_tesla: { damage: 15, range: 2, fire_rate: 1.2, ammo: 20 },
-  turret_autocannon: { damage: 40, range: 5, fire_rate: 2.0, ammo: 12 },
-  turret_shotgun: { damage: 22, range: 2, fire_rate: 1.5, ammo: 10 },
+  turret_taser: { damage: 6, range: 2, fire_rate: 0.8, ammo: 12, stun_duration: 1.2 },
+  turret_tesla: { damage: 18, range: 3, fire_rate: 1.1, ammo: 20, chain_targets: 3 },
+  turret_autocannon: { damage: 45, range: 5, fire_rate: 1.8, ammo: 12 },
+  turret_shotgun: { damage: 25, range: 2, fire_rate: 1.4, ammo: 10, spread_cone: true },
 };
 
 /** How long an alert from a tripwire lasts, in ms. Extends all turrets

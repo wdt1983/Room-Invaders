@@ -378,7 +378,7 @@ export async function upgradePlayerLevel(currentLevel: number) {
     return { success: false as const, error: 'Unauthorized' };
   }
 
-  const cost = currentLevel * 500;
+  const cost = currentLevel * currentLevel * 50 + currentLevel * 450;
 
   // fetch inventory
   const { data: inventory } = await (supabase.from('inventories') as any)

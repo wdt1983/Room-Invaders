@@ -82,12 +82,13 @@ export const MAX_ROOM_LEVEL = 20;
 /**
  * Room-level upgrade costs.
  * Deducted in `upgradeRoomLevel` server action.
- * Cost scales with the current level.
+ * Cost scales quadratically with the current level.
  */
 export function roomUpgradeCost(currentRoomLevel: number): { scrap: number; components: number } {
+  const level = Math.max(1, Math.floor(currentRoomLevel));
   return {
-    scrap: currentRoomLevel * 400,
-    components: currentRoomLevel * 80,
+    scrap: level * level * 100 + level * 300,
+    components: level * level * 20 + level * 60,
   };
 }
 

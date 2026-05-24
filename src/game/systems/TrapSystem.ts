@@ -75,6 +75,8 @@ export interface TrapStats {
   slow?: number;
   /** Max times this trap can trigger before exhaustion removes it. */
   uses: number;
+  /** EMP duration in seconds. */
+  emp_duration?: number;
 }
 
 /**
@@ -95,13 +97,13 @@ export interface TrapStats {
 export const TRAP_STATS_BY_SPRITE_KEY: Record<string, TrapStats> = {
   trap_pressure_plate: { damage: 15, uses: 1 },
   trap_spike_strip: { damage: 10, slow: 0.5, uses: 2 },
-  trap_shock_pad: { damage: 8, stun_duration: 1.5, uses: 1 },
-  trap_glue: { damage: 0, immobilize_duration: 3, uses: 1 },
-  trap_tripwire_alarm: { damage: 0, alert_radius: 3, uses: 1 },
-  trap_flame_vent: { damage: 25, uses: 3 },
+  trap_shock_pad: { damage: 12, stun_duration: 1.8, uses: 1 },
+  trap_glue: { damage: 0, immobilize_duration: 4, uses: 1 },
+  trap_tripwire_alarm: { damage: 0, alert_radius: 4, uses: 1 },
+  trap_flame_vent: { damage: 30, uses: 3 },
   trap_laser_grid: { damage: 0, alert_radius: 15, uses: 99 },
-  trap_shock_wire: { damage: 12, stun_duration: 2.0, uses: 2 },
-  trap_emp_mine: { damage: 0, uses: 1 },
+  trap_shock_wire: { damage: 15, stun_duration: 2.5, uses: 2 },
+  trap_emp_mine: { damage: 0, emp_duration: 12.0, uses: 1 },
 };
 
 /**

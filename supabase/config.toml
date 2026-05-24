@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.matchmaking]
 verify_jwt = false
+
+[functions.validate-defense]
+verify_jwt = false

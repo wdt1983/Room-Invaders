@@ -69,18 +69,18 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
   '{"w": 1, "h": 1}', 'trap_spike_strip', 1),
 
 ('trap', 'Shock Pad', 'An electrified floor pad. Stuns the target briefly.', 2,
-  '{"scrap": 15, "components": 20}',
-  '{"damage": 8, "stun_duration": 1.5, "trigger": "step", "uses": 1}',
+  '{"scrap": 20, "components": 20}',
+  '{"damage": 12, "stun_duration": 1.8, "trigger": "step", "uses": 1}',
   '{"w": 1, "h": 1}', 'trap_shock_pad', 3),
 
 ('trap', 'Glue Trap', 'Industrial adhesive spread. Immobilizes for a short duration.', 1,
-  '{"scrap": 10, "components": 12}',
-  '{"damage": 0, "immobilize_duration": 3, "trigger": "step", "uses": 1}',
+  '{"scrap": 15, "components": 12}',
+  '{"damage": 0, "immobilize_duration": 4.0, "trigger": "step", "uses": 1}',
   '{"w": 1, "h": 1}', 'trap_glue', 1),
 
 ('trap', 'Tripwire Alarm', 'A thin wire connected to an alarm. Alerts nearby defenses.', 1,
-  '{"scrap": 10, "components": 5}',
-  '{"damage": 0, "alert_radius": 3, "trigger": "step", "uses": 1}',
+  '{"scrap": 12, "components": 5}',
+  '{"damage": 0, "alert_radius": 4, "trigger": "step", "uses": 1}',
   '{"w": 1, "h": 1}', 'trap_tripwire_alarm', 1);
 
 -- ============================================
@@ -95,7 +95,7 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
 
 ('turret', 'Taser Turret', 'A jury-rigged taser with auto-targeting. Short range, high stun.', 2,
   '{"scrap": 35, "components": 30}',
-  '{"damage": 5, "range": 2, "fire_rate": 0.8, "ammo": 10, "stun_duration": 1.0}',
+  '{"damage": 6, "range": 2, "fire_rate": 0.8, "ammo": 12, "stun_duration": 1.2}',
   '{"w": 1, "h": 1}', 'turret_taser', 5);
 
 -- ============================================
@@ -125,26 +125,26 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
 INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite_key, unlock_level, tech_tree_node) VALUES
 -- Traps
 ('trap', 'Flame Vent', 'Wall-mounted nozzle firing flame streams. Deals fire damage to 3 linear tiles.', 3,
-  '{"scrap": 50, "components": 35}', '{"damage": 25, "aoe_line": 3, "uses": 3}', '{"w": 1, "h": 1}', 'trap_flame_vent', 8, 'def_unlock_flame_vent'),
+  '{"scrap": 55, "components": 35}', '{"damage": 30, "aoe_line": 3, "uses": 3}', '{"w": 1, "h": 1}', 'trap_flame_vent', 8, 'def_unlock_flame_vent'),
 
 ('trap', 'Laser Alarm Grid', 'Trips an alarm if crossed, alerting sentries across the entire grid size.', 2,
-  '{"scrap": 30, "components": 15}', '{"alert_radius": 15, "uses": 99}', '{"w": 1, "h": 1}', 'trap_laser_grid', 8, 'def_unlock_laser_grid'),
+  '{"scrap": 35, "components": 15}', '{"alert_radius": 15, "uses": 99}', '{"w": 1, "h": 1}', 'trap_laser_grid', 8, 'def_unlock_laser_grid'),
 
 ('trap', 'Shock Wire', 'Electrified metal wire that stuns and damages multiple units crossing adjacent tiles.', 3,
-  '{"scrap": 40, "components": 20}', '{"damage": 12, "stun_duration": 2.0, "uses": 2}', '{"w": 2, "h": 1}', 'trap_shock_wire', 10, 'def_unlock_tesla'),
+  '{"scrap": 45, "components": 20}', '{"damage": 15, "stun_duration": 2.5, "uses": 2}', '{"w": 2, "h": 1}', 'trap_shock_wire', 10, 'def_unlock_tesla'),
 
 ('trap', 'EMP Mine', 'Deactivates electronic squad loadouts and delays abilities by 10s when detonated.', 3,
-  '{"scrap": 35, "components": 30}', '{"damage": 0, "emp_duration": 10.0, "uses": 1}', '{"w": 1, "h": 1}', 'trap_emp_mine', 10, 'def_unlock_guard_drone'),
+  '{"scrap": 40, "components": 30}', '{"damage": 0, "emp_duration": 12.0, "uses": 1}', '{"w": 1, "h": 1}', 'trap_emp_mine', 10, 'def_unlock_guard_drone'),
 
 -- Turrets
 ('turret', 'Tesla Coil', 'High-frequency electric tower firing chain lightning. Deals moderate damage in radius 2 Chebyshev disks.', 3,
-  '{"scrap": 80, "components": 60}', '{"damage": 15, "range": 2, "fire_rate": 1.2, "ammo": 20, "chain_targets": 3}', '{"w": 1, "h": 1}', 'turret_tesla', 8, 'def_unlock_tesla'),
+  '{"scrap": 80, "components": 60}', '{"damage": 18, "range": 3, "fire_rate": 1.1, "ammo": 20, "chain_targets": 3}', '{"w": 1, "h": 1}', 'turret_tesla', 8, 'def_unlock_tesla'),
 
 ('turret', 'Heavy Autocannon', 'Massive armor-piercing turret. Long range, slower fire rate, destructive shell blast.', 4,
-  '{"scrap": 120, "components": 95}', '{"damage": 40, "range": 5, "fire_rate": 2.0, "ammo": 12}', '{"w": 2, "h": 2}', 'turret_autocannon', 12, 'def_turret_ammo_1'),
+  '{"scrap": 120, "components": 95}', '{"damage": 45, "range": 5, "fire_rate": 1.8, "ammo": 12}', '{"w": 2, "h": 2}', 'turret_autocannon', 12, 'def_turret_ammo_1'),
 
 ('turret', 'Shotgun Sentry', 'Fires spread sweeps covering Chebyshev cone ranges. High knockback.', 3,
-  '{"scrap": 75, "components": 45}', '{"damage": 22, "range": 2, "fire_rate": 1.5, "ammo": 10, "spread_cone": true}', '{"w": 1, "h": 1}', 'turret_shotgun', 10, 'def_turret_range_1'),
+  '{"scrap": 75, "components": 45}', '{"damage": 25, "range": 2, "fire_rate": 1.4, "ammo": 10, "spread_cone": true}', '{"w": 1, "h": 1}', 'turret_shotgun', 10, 'def_turret_range_1'),
 
 -- Guards
 ('guard', 'Sentry Patrol Drone', 'Hover drone with built-in nailguns patrolling designated tiles.', 3,

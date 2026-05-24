@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { useRoomStore } from "@/lib/store/useRoomStore";
 import { createClient } from "@/lib/supabase/client";
+import { validateDefense } from "@/lib/game/validateDefense";
 import {
   Dialog,
   DialogContent,
@@ -200,7 +201,7 @@ export function TopBar() {
 
   const slotsAtCap = defenseSlotsUsed >= defenseSlotsCap;
 
-  const upgradeCost = playerLevel * 500;
+  const upgradeCost = playerLevel * playerLevel * 50 + playerLevel * 450;
 
   // Task 3.0.19: XP progress bar on the level button. `levelProgress`
   // returns `xpIntoLevel / xpForNext` for the current level; clamps to
@@ -219,9 +220,68 @@ export function TopBar() {
   // not in it, otherwise it returns to the default `view`. This makes every
   // transition reachable without multi-step clicks — e.g., from `defense-view`
   // tapping Edit flips straight to edit mode (exiting defense-view en route).
+  const triggerLayoutValidation = async () => {
+    const toastId = toast.loading("Verifying stronghold layout on server...");
+    const result = await validateDefense();
+
+    if (!result) {
+      toast.dismiss(toastId);
+      toast.error("Validation failed", {
+        description: "Server was unreachable. Layout is saved locally, but not authoritatively verified.",
+      });
+      return;
+    }
+
+    if (result.success) {
+      toast.dismiss(toastId);
+      if (result.valid) {
+        // Sync the authoritative defense rating in the room store
+        useRoomStore.getState().setDefenseStats({
+          defenseRating: result.defenseRating,
+          defenseSlotsUsed: result.defenseSlotsUsed,
+          defenseSlotsCap: result.defenseSlotsCap,
+        });
+
+        toast.success("Stronghold layout verified!", {
+          description: `Authoritative Defense Rating: ${result.defenseRating}`,
+        });
+      } else {
+        // Layout has validation errors! Show warning toast with details.
+        toast.warning("Layout violations detected!", {
+          description: (
+            <div className="text-xs space-y-1 mt-1 pr-2 font-medium">
+              <p className="text-amber-500 font-bold">Your base layout contains exploits or structural errors:</p>
+              <ul className="list-disc list-inside pl-1 space-y-0.5 text-muted-foreground max-h-24 overflow-y-auto">
+                {result.errors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+              <p className="text-[10px] text-muted-foreground mt-1.5 italic">Correct these inside Edit Mode to update your rank and enable PvP defense.</p>
+            </div>
+          ),
+          duration: 8000,
+        });
+      }
+    } else {
+      toast.dismiss(toastId);
+      toast.error("Validation error", {
+        description: result.error,
+      });
+    }
+  };
+
+  // Each toggle "owns" a specific mode. Clicking it enters that mode if we're
+  // not in it, otherwise it returns to the default `view`. This makes every
+  // transition reachable without multi-step clicks — e.g., from `defense-view`
+  // tapping Edit flips straight to edit mode (exiting defense-view en route).
   const applyMode = (next: UIMode) => {
+    const prevMode = mode;
     setMode(next);
     EventBus.emit("change-mode", next);
+
+    if (prevMode === "edit" && next !== "edit") {
+      triggerLayoutValidation();
+    }
   };
 
   const toggleEditMode = () => applyMode(mode === "edit" ? "view" : "edit");
