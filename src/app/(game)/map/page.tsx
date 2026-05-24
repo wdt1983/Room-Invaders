@@ -21,8 +21,7 @@ export default async function MapPage() {
   }
 
   // Fetch player's own profile for central base rendering
-  const { data: ownProfile } = await supabase
-    .from("profiles")
+  const { data: ownProfile } = await (supabase.from("profiles") as any)
     .select("id, username, player_level")
     .eq("id", user.id)
     .single();
@@ -34,8 +33,7 @@ export default async function MapPage() {
   };
 
   // Fetch accepted friends in a highly robust two-step lookup
-  const { data: friendshipRows } = await supabase
-    .from("friendships")
+  const { data: friendshipRows } = await (supabase.from("friendships") as any)
     .select("sender_id, receiver_id, status")
     .eq("status", "accepted")
     .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
@@ -46,8 +44,7 @@ export default async function MapPage() {
       r.sender_id === user.id ? r.receiver_id : r.sender_id
     );
     
-    const { data: friendProfiles } = await supabase
-      .from("profiles")
+    const { data: friendProfiles } = await (supabase.from("profiles") as any)
       .select("id, username, player_level")
       .in("id", friendIds);
       

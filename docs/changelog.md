@@ -1,6 +1,77 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.4.3] — 2026-05-24 — Task 7.0.8: Multi-Entry Raids
+
+### Added
+- **Multi-Entry Raider Breach Alignment (Task 7.0.8)**: Corrected a property mapping discrepancy between Next.js React overlays and Phaser game engines to allow true multi-point breaches. Spawns squad members from their individually selected entryways.
+- **Glassmorphic Schematic Grid Upgrade (Task 7.0.8)**: Enhanced the Recon Briefing schematic grid (`RaidPrepContainer.tsx`) to dynamically trace entry choices and replace generic "E" indicators with raider slot assignments (e.g., `E1`, `E1,2`). Added glowing emerald borders, shadow filters, and active pulsing animations on assigned tiles.
+- **Dual Spawning Property Lookup**: Expanded `resolveSpawnForMember` in `RaidScene.ts` to query `member.selectedEntryPoint ?? member.assignedEntryPoint` recursively, making the engine fully backward-compatible with legacy and active store states.
+
+### Changed
+- **`src/components/game/RaidPrepContainer.tsx`**: Updated `handleCommenceRaid` to pass `selectedEntryPoint` to Phaser stores, and upgraded grid-cell render pipelines.
+- **`src/game/scenes/RaidScene.ts`**: Upgraded coordinates lookup inside the raider spawning loop to support multi-point starting positions.
+
+---
+
+## [0.4.2] — 2026-05-24 — Task 7.0.5: Individualized Squad Loadout Slots
+
+### Added
+- **Individualized Squad Loadout Slots (Task 7.0.5)**: Expanded tactical customization for raiders by replacing the uniform equipment template with three dedicated slots: Weapon, Armor, and Utility. Persistence is guaranteed by database schema migrations and Server Actions, and modifiers apply dynamically per unit in raids.
+  - **Weapon Slot** (Sword icon): Default Crowbar, Heavy Machete (+50% barricade demolition damage), or Demo Hammer (+100% barricade damage).
+  - **Armor Slot** (Shield icon): Default none, Reinforced Vest (+15% max HP), or Tactical Armor Sheets (+35% max HP).
+  - **Utility Slot** (Wrench icon): Default none, Adrenaline Jet (+10% speed), or Decryption Scanner (sweeps reveal trap schematics in Chebyshev radius 3).
+- **Tactical Loadout UI Cards**: Redesigned the cards on `/squad` to support these four stacked glassmorphic drop-downs (Abilities, Weapons, Armor, Utility), with Lucide icons (Swords, Shield, Wrench) and colors. Added a dynamic stats overview computing the individual member's custom stats in real-time.
+- **Enhanced Insertion Briefing HUD**: Upgraded the Raid Briefing screen (`RaidPrepContainer.tsx`) to show colored, icon-appended miniature badges of each active squad member's equipped Weapons, Armor, and Utility selections.
+- **Phaser Physics Stat Decoupling**: Updated `EntitySprite.ts` to accept weapon, armor, and utility gear selections, calculating individual unit HP, movement rate, and demolition damage values rather than applying global team-wide multipliers.
+- **Interactive Active Portrait Indicators**: Added loadout mini-icons inside the horizontal squad roster on the active Raid HUD overlay (`RaidHUD.tsx`), letting players view their active duty members' equipped weapons, armor, and scanners in miniature.
+
+### Changed
+- **`supabase/migrations/00011_squad_loadout_slots.sql`**: Added `weapon` and `armor` columns to `public.player_squad`.
+- **`src/lib/store/useSquadStore.ts`**: Extended `SquadMember` state structure.
+- **`src/app/(game)/squad/actions.ts`**: Integrated validation checks for weapon and armor items based on unlocked tech trees.
+- **`src/app/(game)/layout.tsx`**: Selected the new columns in server-side queries.
+- **`src/game/scenes/RaidScene.ts`**: Passed individual parameters to unit spawning and updated barricade attacks.
+
+---
+
+## [0.4.1] — 2026-05-24 — Task 7.0.4: Tech Tree Effects
+
+### Added
+- **Shop Technology Gating (Task 7.0.4)**: Integrated database and client-side checks to prevent players from placing advanced defenses (e.g., Tesla Coil, Flame Vent) until their corresponding tech nodes are researched. Catalog items are styled with active lock indicators and display "Research Req" badges in `ItemPanel.tsx`.
+- **Phaser Combat Modifier Scaling (Task 7.0.4)**: Integrated active tech tree passive modifiers into gameplay calculations:
+  - **Sentry Range & Ammo**: Turrets in `DefenseAI.ts` scale their initial ammo via `turretAmmoMult` and expand target acquisition disks using `turretRangeBonus`.
+  - **Trap Uses, Damage, & Stuns**: Traps in `TrapSystem.ts` multiply their damage by `trapDamageMult`, gain trigger charges via `trapUsesBonus`, and lengthen stun/immobilize periods by `trapStunBonus`.
+  - **Squad Barricade Melee**: Scaled melee demolition hits in `RaidScene.ts` by `squadMeleeDmgMult`.
+- **Server-Authoritative Loot Multipliers (Task 7.0.4)**: Extended the `resolve-raid` Deno Edge Function to check the player's unlocked technologies. Authoritatively multiplies rolled PvE and PvP scrap rewards by `util_econ_scrap_mult_1` (+15% scrap) and PvP contraband rewards by `util_econ_contraband_mult_1` (+25% contraband) before committing assets to the database.
+- **Multiplied Offline Tick Generation (Task 7.0.4)**: Upgraded Server Component calculations in `room/page.tsx` to read the player's active tech tree status on page rehydrate, applying passive scrap multipliers (`util_econ_gen_1` for +15% scrap) and passive component generators (`util_econ_passive_comp_1`) to offline passive ticks.
+
+### Changed
+- **`src/app/(game)/room/page.tsx`**: Selected `tech_tree_node` in the items query and hydrated it through `StoreInitializer`.
+- **`src/app/(game)/room/actions.ts`**: Updated `buyAndPlaceFurniture` server action to enforce `player_tech` unlocking checks.
+- **`src/components/game/ItemPanel.tsx`**: Checked tech tree locking status defensively on client render.
+- **`supabase/functions/resolve-raid/index.ts`**: Deployed server-side queries and multiplier math to Supabase.
+
+---
+
+## [0.4.0] — 2026-05-24 — Phase 7: Tech Tree & Loadouts (v0.4)
+
+### Added
+- **Multi-Squad Spawning (Task 7.0.6)**: Refactored `RaidScene.ts` to spawn 2–4 squad members dynamically based on the prep screen squad selection list (`prepSquadMembers`). Added a dynamic self-healing pathing fallback querying adjacent tiles to distribute squad members and avoid overlapping sprites on start.
+- **Dynamic Unit Selection (Task 7.0.6)**: Built an isometric pulsing squad selection ring drawn under the active sprite using Phaser Graphics overlay. Programmed mouse click-to-select handlers on in-scene `EntitySprite` characters, and synced state transitions with Zustand (`activeSquadIndex`) and Phaser EventBus (`change-active-unit`) to center the camera automatically on the selected unit.
+- **Raid Active Support Abilities (Task 7.0.7)**: Programmed three dynamic tactile support abilities:
+  - **Medkit**: Targeted squad heals (+40 HP) with green cross particle rises.
+  - **Breach Charge**: Adjacent barricade destruction (9999 damage) with orange blast wave and camera shake.
+  - **EMP Grenade**: Turret disable sweeps (6s stun) in Chebyshev radius 1 with cyan electrical arcs.
+- **Support Abilities React HUD & Input Handling**: Designed tactile interactive capability action cards with visual hotkeys (Q, W, E) and visual targeting indicators. Phaser intercepts pointer clicks in targeting mode to resolve targets on a selected tile and trigger actions via event buses.
+- **Seeded Advanced Stronghold Defenses (Task 7.0.9)**: Seeded 10+ advanced gated defenses (Tesla Coil, Flame Vent, Laser Alarm, Heavy Autocannon, Patrol Drone, Guard Dog, Poison Trap, Gas Trap, Sound Alarm, and Decoy) into `supabase/seed.sql` with their `tech_tree_node` conditions. Integrated their operational metrics inside Phaser's offline simulation layers (`DefenseAI.ts` and `TrapSystem.ts`).
+- **Passive Scanner Scouting Highlights**: Integrated vision-radius-based scanner Highlights to render hidden traps visible within a Chebyshev vision range around active squad members during raids, adding immediate strategic scouting capability.
+
+### Changed
+- **`src/lib/store/useRaidStore.ts`**: Upgraded the state definitions to track `prepSquadMembers`, `activeSquadIndex`, and `activeAbilityMode`. Added robust mutators to swap units, activate ability modes, and handle damage/healing across individual squad members.
+- **`src/game/scenes/RaidScene.ts`**: Re-engineered core setup loops to construct list arrays of `EntitySprite` objects, route movement per selected unit, draw selection highlights, track visions, and render ability-targeted Phaser graphics elements.
+- **`src/components/game/RaidPrepContainer.tsx` & `/raid/[id]/page.tsx`**: Resolved all TypeScript compilation and out-of-order execution issues by correcting casting checks, importing schemas properly, and securing clean Next.js Turbopack compilation with **zero errors**.
+
 ---
 
 ## [0.3.2] — 2026-05-24 — Tasks 5.0.2, 5.0.3, & 5.0.4: Safe Mode & PvP Matchmaking

@@ -4,6 +4,7 @@ import {
   type HasHp,
   type PlacedTarget,
 } from '@/game/systems/CombatSystem';
+import { usePlayerStore } from '@/lib/store/usePlayerStore';
 
 /**
  * TrapSystem — step-on trap triggering + effect dispatch.
@@ -97,6 +98,10 @@ export const TRAP_STATS_BY_SPRITE_KEY: Record<string, TrapStats> = {
   trap_shock_pad: { damage: 8, stun_duration: 1.5, uses: 1 },
   trap_glue: { damage: 0, immobilize_duration: 3, uses: 1 },
   trap_tripwire_alarm: { damage: 0, alert_radius: 3, uses: 1 },
+  trap_flame_vent: { damage: 25, uses: 3 },
+  trap_laser_grid: { damage: 0, alert_radius: 15, uses: 99 },
+  trap_shock_wire: { damage: 12, stun_duration: 2.0, uses: 2 },
+  trap_emp_mine: { damage: 0, uses: 1 },
 };
 
 /**
@@ -147,12 +152,12 @@ export interface TrapTarget extends HasHp {
 
 export class TrapSystem {
   private readonly traps = new Map<string, DeployedTrap>();
-  private readonly target: TrapTarget;
+  private readonly targets: TrapTarget[] = [];
   private readonly onEnteredTile: (payload: EnteredTilePayload) => void;
   private destroyed = false;
 
-  constructor(target: TrapTarget) {
-    this.target = target;
+  constructor(target: TrapTarget | TrapTarget[]) {
+    this.targets = Array.isArray(target) ? target : [target];
     this.onEnteredTile = (payload) => this.handleTileEntered(payload);
     EventBus.on('entity-entered-tile', this.onEnteredTile);
   }
@@ -187,12 +192,15 @@ export class TrapSystem {
         `[TrapSystem] Duplicate trap registration at (${params.gridX}, ${params.gridY}); overwriting previous entry.`,
       );
     }
+    const activeEffects = usePlayerStore.getState().activeEffects;
+    const trapUsesBonus = activeEffects.trapUsesBonus ?? 0;
+
     this.traps.set(key, {
       gridX: params.gridX,
       gridY: params.gridY,
       spriteKey: params.spriteKey,
       stats,
-      usesRemaining: stats.uses,
+      usesRemaining: stats.uses + trapUsesBonus,
       sprite: params.sprite,
     });
     return true;
@@ -222,23 +230,29 @@ export class TrapSystem {
 
   private handleTileEntered(payload: EnteredTilePayload): void {
     if (this.destroyed) return;
-    if (payload.entityId !== this.target.entityId) return;
+    const target = this.targets.find((t) => t.entityId === payload.entityId);
+    if (!target) return;
+    if (target.hp <= 0) return;
     const trap = this.traps.get(`${payload.x},${payload.y}`);
     if (!trap) return;
     if (trap.usesRemaining <= 0) return;
-    this.trigger(trap, payload.entityId);
+    this.trigger(trap, target);
   }
 
-  private trigger(trap: DeployedTrap, entityId: string): void {
+  private trigger(trap: DeployedTrap, target: TrapTarget): void {
     trap.usesRemaining -= 1;
 
-    const damage = Number.isFinite(trap.stats.damage) ? trap.stats.damage : 0;
+    const activeEffects = usePlayerStore.getState().activeEffects;
+    const baseDamage = Number.isFinite(trap.stats.damage) ? trap.stats.damage : 0;
+    const damage = Math.round(baseDamage * (activeEffects.trapDamageMult ?? 1.0));
+    
     if (damage > 0) {
-      applyDamage(this.target, damage, entityId);
+      applyDamage(target, damage, target.entityId);
     }
 
-    const stunSeconds = Number(trap.stats.stun_duration) || 0;
-    const immobilizeSeconds = Number(trap.stats.immobilize_duration) || 0;
+    const trapStunBonus = activeEffects.trapStunBonus ?? 0;
+    const stunSeconds = (Number(trap.stats.stun_duration) || 0) + (Number(trap.stats.stun_duration) > 0 ? trapStunBonus : 0);
+    const immobilizeSeconds = (Number(trap.stats.immobilize_duration) || 0) + (Number(trap.stats.immobilize_duration) > 0 ? trapStunBonus : 0);
     const alertRadius = Number(trap.stats.alert_radius) || 0;
     const slow = Number(trap.stats.slow) || 0;
     const exhausted = trap.usesRemaining <= 0;
@@ -247,7 +261,7 @@ export class TrapSystem {
       gridX: trap.gridX,
       gridY: trap.gridY,
       spriteKey: trap.spriteKey,
-      entityId,
+      entityId: target.entityId,
       damageDealt: damage,
       stunSeconds,
       immobilizeSeconds,

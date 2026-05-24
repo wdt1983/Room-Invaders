@@ -16,6 +16,206 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-24 — Phase 7: Multi-Entry Raids (Task 7.0.8)
+
+### Summary
+
+Successfully implemented, visually polished, and verified the **Multi-Entry Breaching & Squad Splitting system** (Task 7.0.8). Resolved a property mapping mismatch between the React Recon Briefing overlays and Phaser isometric spawning engines to enable true multi-point insertionBreaches. Upgraded the visual Schematic Grid to dynamically trace raider starting coordinates and project glowing slot indicators (e.g. `E1`, `E1,2`). Handled spawning coordinates culling elegantly to prevent overlaps recursively. Next.js production builds and TypeScript typechecks compile with **0 errors and 0 warnings**.
+
+### Work Accomplished
+
+1. **Alignment of preparedSquad properties**:
+   - Upgraded `handleCommenceRaid` in `src/components/game/RaidPrepContainer.tsx` to map `selectedEntryPoint: entry` (alongside `assignedEntryPoint` as a safe fallback) onto the prepared active members list. This correctly propagates raider coordinate configurations to Phaser's global Zustand store `prepSquadMembers`.
+
+2. **Schematic Grid Visual Polishing**:
+   - Refactored schematic grid cell rendering in `RaidPrepContainer.tsx` to dynamically query active members' assigned entry points.
+   - Replaced generic "E" indicator markers with active, glowing raider slot indicators (e.g., `E1`, `E2`, `E1,2`).
+   - Added glowing emerald border tints, drop shadow overlays, and pulsing micro-animations on assigned entry points to deliver a premium tactician experience.
+
+3. **Multi-Point Spawning coordinate culling**:
+   - Refactored `resolveSpawnForMember` in `RaidScene.ts` to check `member.selectedEntryPoint ?? member.assignedEntryPoint ?? this.fixture?.entryPoints?.[0]`. This allows squad members to cleanly breach from their designated doors, windows, vents, or wall breaches.
+   - Maintained full backward compatibility with legacy and dynamic mock store states.
+   - Retained the spacing fallback to recursively query walkable neighbors, preventing overlaps seamlessly on multiple breach points simultaneously.
+
+4. **Production Build & Compiler Stability**:
+   - Verified TypeScript code correctness via `pnpm tsc --noEmit` which completed with 0 errors.
+   - Ran `pnpm build` confirming that Next.js Turbopack compiles in 4.9s with **zero errors and zero warnings**.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/components/game/RaidPrepContainer.tsx` | Mapped `selectedEntryPoint` during breach commence, and visually enriched schematic grid tiles. |
+| `src/game/scenes/RaidScene.ts` | Expanded raider spawning coordinate checks to look up `selectedEntryPoint`/`assignedEntryPoint` robustly. |
+| `docs/tasks.md` | Checked off Task 7.0.8 `[DONE]`. |
+| `docs/changelog.md` | Documented version `[0.4.3]` changes. |
+| `docs/handoff.md` | This entry. |
+
+### Handoff — Best Next Tasks
+
+1. **Task 7.0.10 — Balance pass: defense values, raid difficulty, resource costs across all content**:
+   Construct and execute a thorough balancing sweep across all trapped stats, barricade HP, turret cadences, and scrap/component upgrade ledgers to unify Phase 7's gameplay loops.
+2. **Task 2.0.9 — Implement `validate-defense` Edge Function**:
+   Introduce a server-side Deno verification filter on save transactions to secure legally constructed defense parameters from client manipulation.
+
+---
+
+## 2026-05-24 — Phase 7: Individualized Squad Loadout Slots (Task 7.0.5)
+
+### Summary
+
+Successfully designed, implemented, and verified the individualized **Weapon, Armor, and Utility Gear squad loadout system** (Task 7.0.5) spanning remote Supabase database schemas, Next.js Server Actions, Zustand stores, React UI customization interfaces, and Phaser isometric combat engines. Decoupled team-wide global combat multipliers to simulate raider health, traversal velocities, and barricade demolition damage entirely on a per-unit basis according to equipped loadouts. Next.js production compilation is fully type-safe, compiling with **0 errors and 0 warnings**.
+
+### Work Accomplished
+
+1. **Database Schema Migrations**:
+   - Created and successfully pushed migration `00011_squad_loadout_slots.sql` to the remote Supabase project, adding `weapon` and `armor` columns to `public.player_squad`.
+
+2. **Core Stores & Server Hydration**:
+   - Extended `SquadMember` in `src/lib/store/useSquadStore.ts` with `weapon` and `armor`.
+   - Mapped new schema properties in server component database SELECT queries in `src/app/(game)/layout.tsx` and hydrated them into client stores via `PlayerStoreInitializer.tsx`.
+   - Upgraded `updateSquadMemberAction` in `src/app/(game)/squad/actions.ts` to support updating Weapons and Armor, validating selections based on unlocked technologies in the player's tech tree (e.g. `heavy_machete` requires `off_squad_dmg_1`, `tactical_armor` requires `off_squad_hp_2`).
+
+3. **Tactical Loadout UI Cards**:
+   - Expanded individual card heights on `/squad` to `h-[520px]` and developed fourstacked glassmorphic select dropdowns styled with colored Lucide icons (`Swords` for Weapon, `Shield` for Armor, `Wrench` for Utility).
+   - Designed a dynamic stats overview section computing the active duty raider's individualized health, speed, and damage parameters in real-time.
+   - Upgraded the Briefing Room (`RaidPrepContainer.tsx`) to render color-coded miniature insertion badges indicating each member's equipped Weapons, Armor, and Utility selections.
+
+4. **Phaser Combat Engine Decoupling**:
+   - Updated `EntitySprite.ts` constructor to evaluate `weapon`, `armor`, and `passiveGear` selections, calculating custom individual max HP (up to +35%), traversal speed (+10%), and melee barricade demolition hits (+50% to +100%) dynamically.
+   - Passed equipped items during squad unit instantiation inside `RaidScene.ts` and scaled barricade demolition hit rates based on the active selected unit's stats.
+   - Integrated miniature loadout icons inside the horizontal squad roster on the active Raid HUD overlay (`RaidHUD.tsx`), letting players view their active duty members' equipped gear in real-time.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00011_squad_loadout_slots.sql` | **NEW.** Added `weapon` and `armor` columns to `public.player_squad`. |
+| `src/lib/store/useSquadStore.ts` | Extended `SquadMember` interface definition. |
+| `src/components/store/PlayerStoreInitializer.tsx` | Hydrated `weapon` and `armor` states inside the mapping loop. |
+| `src/app/(game)/squad/actions.ts` | Upgraded `updateSquadMemberAction` to validate and update weapon/armor. |
+| `src/app/(game)/squad/SquadDashboard.tsx` | Developed glassmorphic Weapons, Armor, and Utility slots and dynamic stats overview. |
+| `src/components/game/RaidPrepContainer.tsx` | Visualized loadout insertions badges in the briefing room roster. |
+| `src/game/objects/EntitySprite.ts` | Decoupled stats math, computing custom HP, speed, and damage values per unit. |
+| `src/game/scenes/RaidScene.ts` | Passed loadout parameters during squad spawning and scaled barricade hits by active unit stats. |
+| `src/components/game/RaidHUD.tsx` | Showed miniature loadout icons inside horizontal squad portraits list. |
+| `docs/tasks.md` | Checked off Task 7.0.5 `[DONE]`. |
+| `docs/changelog.md` | Documented Version `[0.4.2]` changes. |
+| `docs/handoff.md` | This entry. |
+
+---
+
+## 2026-05-24 — Phase 7: Tech Tree Effects (Task 7.0.4)
+
+### Summary
+
+Successfully implemented and verified all 19 passive and active Tech Tree modifiers (Task 7.0.4) across Phaser game engines, Next.js Server Actions, shop purchase panels, offline tick calculators, and Supabase Edge Functions. Secured database and server actions to prevent client-side exploits on locked defenses, and deployed authoritative Deno Edge Function multipliers for post-raid loot rewards. Resolved all TS compilation issues ensuring Next.js compiles with **0 errors and 0 warnings**.
+
+### Work Accomplished
+
+1. **Base Store & Hydration Integrations**:
+   - Extended the `CatalogItem` interface in `src/lib/store/useRoomStore.ts` to support `tech_tree_node`.
+   - Hydrated `tech_tree_node` in the server catalog query inside `src/app/(game)/room/page.tsx` down to the client store.
+   - Integrated offline tick resource multipliers: rehydrate passive calculations inside `src/app/(game)/room/page.tsx` now check the player's tech unlocks. Scrap passive rate is multiplied by 1.15x if `util_econ_gen_1` is unlocked, and components passive generation is doubled if `util_econ_passive_comp_1` is unlocked.
+
+2. **Purchase Gating & Shop Locks**:
+   - Upgraded `buyAndPlaceFurniture` server action in `src/app/(game)/room/actions.ts` to query `player_tech` unlocking states, transactionally rejecting placements of advanced defenses if the required tech node is locked.
+   - Re-styled `ItemPanel.tsx` to display a pulsing cyan `Cpu` microchip lock and a "Research Req" label for locked catalog items, preventing selection.
+
+3. **Phaser Combat & Gameplay Modifiers**:
+   - Scaled squad melee attacks against barricades in `RaidScene.ts` by `squadMeleeDmgMult` (melee damage scaled by up to +50% via `off_squad_dmg_1`).
+   - Integrated modifiers in `TrapSystem.ts`: scaled trap damage by `trapDamageMult`, trigger uses by `trapUsesBonus` (e.g., +1 use via `def_trap_uses_1`), and stun/immobilize periods by `trapStunBonus` (e.g., +1.0s stun via `def_trap_stun_1`).
+   - Integrated modifiers in `DefenseAI.ts`: scaled initial ammo capacity by `turretAmmoMult` (e.g., +30% via `def_turret_ammo_1`) and target range by `turretRangeBonus` (e.g., +1 Chebyshev tile via `def_turret_range_1`).
+
+4. **Server-Authoritative Loot Multipliers**:
+   - Extended the Deno-side `resolve-raid` Edge Function (`supabase/functions/resolve-raid/index.ts`) to retrieve the attacker's `player_tech` record.
+   - Authoritatively applies a 1.15x multiplier to scrap rewards on PvE/PvP victory if `util_econ_scrap_mult_1` is researched, and a 1.25x multiplier to PvP contraband rewards if `util_econ_contraband_mult_1` is researched, rounding values before saving to the database.
+
+5. **TypeScript Integrity & Compiles**:
+   - Cleaned up pre-existing type errors and PostgREST schema mismatches across Next.js layouts, mapping pages, and server actions by adding defensive type casts.
+   - Ran `pnpm build` verifying that the Next.js production build succeeds with **0 errors and 0 warnings**.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/lib/store/useRoomStore.ts` | Extended `CatalogItem` interface to include `tech_tree_node`. |
+| `src/app/(game)/room/page.tsx` | Selected `tech_tree_node` inside Server Component items query, hydrated `StoreInitializer`, and integrated offline tick multipliers. |
+| `src/app/(game)/room/actions.ts` | Upgraded `buyAndPlaceFurniture` server action to query `player_tech` and validate node unlocks. |
+| `src/components/game/ItemPanel.tsx` | Added visual locks and text indicators for locked defenses. |
+| `src/game/scenes/RaidScene.ts` | Applied `squadMeleeDmgMult` modifier to barricade demolition hits. |
+| `src/game/systems/TrapSystem.ts` | Scaled damage, uses, and stun/immobilize times by tech modifiers. |
+| `src/game/systems/DefenseAI.ts` | Scaled sentry initial ammo capacities and range metrics by tech modifiers. |
+| `supabase/functions/resolve-raid/index.ts` | Queried `player_tech` on the server and applied authoritative post-calculation loot multipliers. |
+| `docs/tasks.md` | Checked off Task 7.0.4 `[DONE]`. |
+| `docs/changelog.md` | Added version `[0.4.1]` documenting Task 7.0.4 completions. |
+| `docs/handoff.md` | This entry. |
+
+---
+
+## 2026-05-24 — Phase 7: Tech Tree & Loadouts (v0.4)
+
+### Summary
+
+Successfully implemented **Task 7.0.6 — Squad Spawning 2-4**, **Task 7.0.7 — Support Abilities (EMP, Medkit, Breach Charge)**, and **Task 7.0.9 — 10+ New Gated Defense Items Seeded**. Refactored and modernized the active raid phase in Phaser (`RaidScene.ts`) and React (`RaidHUD.tsx`) to support independent multi-squad control, custom camera tracking, pulsing isometric selection rings, and three interactive support abilities with dynamic graphic particle VFX. Seeded 10 advanced gated defenses into the global database schema and integrated their specifications inside offline validation networks. Resolved all type safety checks ensuring Next.js compiles with **zero errors**.
+
+### Work Accomplished
+
+1. **Multi-Squad Spawning & Dynamic Selection (Task 7.0.6)**:
+   - **Dynamic Spawning:** Refactored `RaidScene.ts` to instantiate a dynamic squad array (2–4 members) based on the selection configured in the preparation lobby store (`prepSquadMembers`).
+   - **Starting Spacing Fallback:** Programmed a self-healing entry-point pathfinding fallback. If the primary entry tile is occupied during multi-squad spawning, the engine queries neighboring walkable tiles recursively, preventing squad units from overlapping on start.
+   - **Pulsing Isometric Selection Ring:** Designed a stunning dynamic selection indicator drawn via a Phaser Graphics overlay. The ring scales and pulses underneath the active unit in real-time.
+   - **Tactile Click-to-Select:** Bound direct interactive click listeners on `EntitySprite` game objects. Tapping a squad member swaps the active selector dynamically, updates the Zustand store state, triggers Phaser `EventBus` hooks, and centers the camera view tracking cleanly.
+
+2. **Active Support Abilities & Phaser VFX (Task 7.0.7)**:
+   - **Medkit:** Programmed targeted squad heals (+40 HP) with an interactive targeting cursor and customized Phaser particle rising emitters displaying green float crosses over healed units.
+   - **Breach Charge:** Designed adjacent barricade demolition (dealing 9999 structural dmg to clear barriers instantly). Integrated orange circle blast waves and a robust screen camera shake.
+   - **EMP Grenade:** Programmed turret disabling sweeps (stunning defenses in Chebyshev radius 1 for 6 seconds). Integrated custom blue/cyan electric arc vector graphics that fade dynamically.
+   - **Phaser Pointer Interception:** Wired Phaser input listeners to intercept pointer movements and clicks whenever an ability mode is active (`activeAbilityMode !== null`). Computes the isometric Chebyshev tile range dynamically, tints target highlights green (valid) or red (invalid), and fires executions.
+
+3. **React HUD Hotkeys & Abilities Panel**:
+   - Developed three gorgeous, glassmorphic active ability cards in `RaidHUD.tsx`.
+   - Wired keyboard hotkeys (Q for Medkit, W for Breach Charge, E for EMP Grenade) allowing quick activation.
+   - Integrated floating selection indicators and interactive status banners inside the HUD to alert the player of the active targeting state.
+
+4. **10+ Advanced Gated Stronghold Defenses (Task 7.0.9)**:
+   - Seeded 10+ premium advanced defenses (Tesla Coil, Flame Vent, Laser Alarm, Heavy Autocannon, Patrol Drone, Guard Dog, Poison Trap, Gas Trap, Sound Alarm, and Decoy) into `supabase/seed.sql`.
+   - Mapped all entries with unique `tech_tree_node` attributes to establish clean gate unlocking conditions.
+   - Integrated the functional operational stats of these new items inside the offline simulation frameworks `DefenseAI.ts` and `TrapSystem.ts` to ensure full compliance across PvE and future PvP match loops.
+
+5. **Passive Scanner Scouting highlights**:
+   - Built a dynamic scouting vision highlight sweeps layer inside `RaidScene.ts`.
+   - During the active phase, hidden traps within the squad's vision range are continuously scanned and highlighted, enabling players to detect and route around dangerous areas dynamically.
+
+6. **TypeScript Integrity & Compiles**:
+   - Cleaned up all Next.js Server actions type castings and out-of-order execution statements inside `/raid/[id]/page.tsx` and `RaidPrepContainer.tsx`.
+   - Verified compilation correctness using a full production build (`pnpm build`) which finished with **0 errors and 0 warnings**.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/lib/store/useRaidStore.ts` | Added multi-squad tracking arrays, active selectors, and ability modes state. |
+| `src/game/scenes/RaidScene.ts` | Upgraded initialization to spawn multiple units, trace selections, render abilities targeting, draw particle rises/blast waves/arcs, and paint vision outlines. |
+| `src/components/game/RaidHUD.tsx` | Added active abilities glassmorphic panels, keyboard hotkeys (Q, W, E), and status indicators. |
+| `supabase/seed.sql` | Seeded 10+ new advanced defenses with gated `tech_tree_node` values. |
+| `src/game/systems/DefenseAI.ts` | Added stats definitions and behaviors for 10+ new defenses. |
+| `src/game/systems/TrapSystem.ts` | Synced trap attributes mapping for all advanced seeded traps. |
+| `src/components/game/RaidPrepContainer.tsx` | Resolved compilation type checks. |
+| `src/app/(game)/raid/[id]/page.tsx` | Fixed out-of-order execution variables and safe-cast database queries. |
+| `docs/tasks.md` | Checked off Tasks 7.0.6, 7.0.7, and 7.0.9 `[DONE]`. |
+| `docs/changelog.md` | Documented version `[0.4.0]` changes. |
+| `docs/handoff.md` | This entry. |
+
+### Handoff — Best Next Tasks
+
+1. **Task 7.0.1 & 7.0.2 — Tech Tree JSON and UI Visual Node Graph**:
+   Construct the branching node structures (3 branches, ~30 nodes) and create the visual node graph to allow players to unlock advancements utilizing tech points.
+2. **Task 7.0.5 — Equipment slots per squad member**:
+   Expand individual squad customizability by providing inventory slots for weapons, gear, and stat boosts on the prep layout screens.
+
+---
+
 ## 2026-05-24 — Phase 5: Safe Mode Timer & Manual Deactivation
 
 ### Summary

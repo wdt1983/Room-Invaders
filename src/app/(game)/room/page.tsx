@@ -56,7 +56,7 @@ export default async function RoomPage() {
     .single();
 
   const { data: catalogData } = await (supabase.from('items') as any)
-    .select('id, name, type, sprite_key, unlock_level, cost, stats')
+    .select('id, name, type, sprite_key, unlock_level, cost, stats, tech_tree_node')
     .order('unlock_level', { ascending: true });
 
   const playerLevel = profileData?.player_level ?? 1;
@@ -65,6 +65,18 @@ export default async function RoomPage() {
   if (invError || roomError || itemsError) {
     console.error("Data Fetch Errors:", { invError, roomError, itemsError });
   }
+
+  // Fetch player tech tree unlocks to apply passive economy tick modifiers
+  const { data: techUnlocks } = await supabase
+    .from('player_tech')
+    .select('node_id')
+    .eq('owner_id', user.id);
+  const unlockedNodes = (techUnlocks || []).map((t: any) => t.node_id);
+  
+  const hasScrapMult = unlockedNodes.includes('util_econ_gen_1');
+  const hasCompGen = unlockedNodes.includes('util_econ_passive_comp_1');
+  const scrapMult = hasScrapMult ? 1.15 : 1.0;
+  const compMult = hasCompGen ? 2.0 : 1.0;
 
   const finalInventory = inventory ? { ...(inventory as any) } : null;
 
@@ -76,9 +88,9 @@ export default async function RoomPage() {
     if (elapsedSeconds > 60) {
       const cappedSeconds = Math.min(elapsedSeconds, 86400); // 24 hour cap
 
-      // Apply Tick Rates: 5 scrap per 5s (1/s), 1 component per 5s (0.2/s)
-      const earnedScrap = cappedSeconds * 1;
-      const earnedComponents = Math.floor(cappedSeconds * 0.2);
+      // Apply Tick Rates: 5 scrap per 5s (1/s), 1 component per 5s (0.2/s) scaled by tech tree active effects
+      const earnedScrap = Math.round(cappedSeconds * 1 * scrapMult);
+      const earnedComponents = Math.floor(cappedSeconds * 0.2 * compMult);
 
       const maxScrap = playerLevel * 1000;
       const maxComponents = playerLevel * 250;

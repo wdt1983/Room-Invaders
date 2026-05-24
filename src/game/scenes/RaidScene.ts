@@ -17,9 +17,10 @@ import {
   DEFAULT_FIXTURE_ID,
 } from '@/game/fixtures/npc-rooms';
 import type { EntryPointType, EntryPointWall } from '@/lib/store/useRoomStore';
-import { applyDamageToPlaced, DEFAULT_SQUAD_HP } from '@/game/systems/CombatSystem';
+import { applyDamageToPlaced, DEFAULT_SQUAD_HP, heal } from '@/game/systems/CombatSystem';
 import { TrapSystem, type TrapTriggeredPayload } from '@/game/systems/TrapSystem';
 import { TurretAI, type TurretFiredPayload } from '@/game/systems/DefenseAI';
+import { usePlayerStore } from '@/lib/store/usePlayerStore';
 
 const WALL_COLOR = 0x888888;
 const WALL_THICKNESS = 6;
@@ -136,6 +137,9 @@ export class RaidScene extends Phaser.Scene {
   private entryPointSprites: Phaser.GameObjects.Image[] = [];
   private entryPointTiles: Set<string> = new Set();
   private playerEntity!: EntitySprite;
+  private squadEntities: EntitySprite[] = [];
+  private activeSquadIndex: number = 0;
+  private selectionRing!: Phaser.GameObjects.Graphics;
   private pathDebugGraphics!: Phaser.GameObjects.Graphics;
   private trapSystem: TrapSystem | null = null;
   private turretAI: TurretAI | null = null;
@@ -187,6 +191,8 @@ export class RaidScene extends Phaser.Scene {
   private onDefenseDestroyed: ((payload: { gridX: number; gridY: number; spriteKey: string; maxHp: number }) => void) | null = null;
   private onTrapTriggered: ((payload: TrapTriggeredPayload) => void) | null = null;
   private onTurretFired: ((payload: TurretFiredPayload) => void) | null = null;
+  private onChangeActiveUnit: ((index: number) => void) | null = null;
+  private onExecuteAbility: ((payload: any) => void) | null = null;
 
   constructor() {
     super({ key: 'RaidScene' });
@@ -325,23 +331,74 @@ export class RaidScene extends Phaser.Scene {
       }
     }
 
-    // ── Squad unit — spawn one tile inside the first entry ─────────────────
-    const spawn = this.resolveSpawn(this.fixture);
-    this.playerEntity = new EntitySprite(this, spawn.x, spawn.y, 'entity_drone', {
-      entityId: 'player',
-      maxHp: DEFAULT_SQUAD_HP,
-    });
-    this.playerEntity.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+    // ── Squad unit — spawn multiple squad members based on prep selection ──
+    const prepMembers = useRaidStore.getState().prepSquadMembers || [];
+    this.squadEntities = [];
+    this.activeSquadIndex = 0;
 
-    // Mirror initial squad HP into the store so the HUD shows full bar on
-    // raid start before any damage has been dealt.
-    useRaidStore.getState().setSquadHp(this.playerEntity.hp, this.playerEntity.maxHp);
+    if (prepMembers && prepMembers.length > 0) {
+      // First let's map custom textures or keys. We can use default 'entity_drone' or dynamically resolved textures.
+      prepMembers.forEach((member, index) => {
+        const spawn = this.resolveSpawnForMember(member);
+        const sprite = new EntitySprite(this, spawn.x, spawn.y, 'entity_drone', {
+          entityId: `member_${index}`,
+          name: member.name,
+          maxHp: Math.round(DEFAULT_SQUAD_HP * (usePlayerStore.getState().activeEffects.squadHpMult ?? 1.0)),
+          speed: 1.0 * (usePlayerStore.getState().activeEffects.squadSpeedMult ?? 1.0),
+          activeAbility: member.activeAbility,
+          passiveGear: member.passiveGear,
+          weapon: member.weapon || null,
+          armor: member.armor || null,
+        });
+        sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+        this.squadEntities.push(sprite);
+      });
+    } else {
+      // Fallback to single player entity
+      const spawn = this.resolveSpawn(this.fixture);
+      const sprite = new EntitySprite(this, spawn.x, spawn.y, 'entity_drone', {
+        entityId: 'player',
+        name: 'Vanguard',
+        maxHp: DEFAULT_SQUAD_HP,
+        speed: 1.0,
+      });
+      sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+      this.squadEntities.push(sprite);
+    }
+
+    // playerEntity represents the active selected squad member
+    this.playerEntity = this.squadEntities[this.activeSquadIndex];
+
+    // Initialize selection ring
+    this.selectionRing = this.add.graphics().setDepth(1.5);
+
+    // Sync squad members in store with their instantiated HP/maxHp
+    const updatedPrepMembers = this.squadEntities.map((s, idx) => {
+      const existing = prepMembers[idx] || {};
+      return {
+        ...existing,
+        name: s.name,
+        hp: s.hp,
+        maxHp: s.maxHp,
+        activeAbility: s.activeAbility,
+        passiveGear: s.passiveGear,
+        weapon: s.weapon || null,
+        armor: s.armor || null,
+        entityId: s.entityId,
+      };
+    });
+    useRaidStore.getState().setPrepSquadMembers(updatedPrepMembers);
+
+    // Set legacy combined squad HP
+    const totalHp = this.squadEntities.reduce((sum, s) => sum + s.hp, 0);
+    const totalMaxHp = this.squadEntities.reduce((sum, s) => sum + s.maxHp, 0);
+    useRaidStore.getState().setSquadHp(totalHp, totalMaxHp);
 
     // ── TrapSystem registration (task 3.0.8) ───────────────────────────────
     // Subscribes to `'entity-entered-tile'` events from EntitySprite. Each
     // trap in the fixture is registered with its canonical stats from
     // TRAP_STATS_BY_SPRITE_KEY (mirror of supabase/seed.sql).
-    this.trapSystem = new TrapSystem(this.playerEntity);
+    this.trapSystem = new TrapSystem(this.squadEntities);
     for (const item of this.fixture.items) {
       if (item.type !== 'trap') continue;
       const sprite = this.furnitureItems.find(
@@ -361,7 +418,7 @@ export class RaidScene extends Phaser.Scene {
     // by Chebyshev range, fires on its `fire_rate` cadence, and emits
     // `'turret-fired'` — handled by `handleTurretFired` below for VFX +
     // stun + action log.
-    this.turretAI = new TurretAI(this.playerEntity);
+    this.turretAI = new TurretAI(this.squadEntities);
     for (const item of this.fixture.items) {
       if (item.type !== 'turret') continue;
       const sprite = this.furnitureItems.find(
@@ -404,23 +461,37 @@ export class RaidScene extends Phaser.Scene {
     // squad moves to any other tile, cancel the hold. The hold completes
     // after STASH_HOLD_SECONDS[difficulty] → victory.
     this.onEntityEnteredTile = (payload) => {
-      if (payload.entityId !== 'player') return;
+      const memberIndex = this.squadEntities.findIndex(e => e.entityId === payload.entityId);
+      if (memberIndex < 0) return;
 
       // Action log — record every tile the squad enters.
       const st = useRaidStore.getState();
       if (st.phase === 'active') {
         const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
-        st.appendAction({ t: elapsed, type: 'move', data: { gridX: payload.x, gridY: payload.y } });
+        st.appendAction({ t: elapsed, type: 'move', data: { entityId: payload.entityId, gridX: payload.x, gridY: payload.y } });
       }
 
       const s = this.fixture.stash;
-      if (payload.x === s.x && payload.y === s.y) {
+      const anyOnStash = this.squadEntities.some(e => e.hp > 0 && e.currentGridX === s.x && e.currentGridY === s.y);
+      if (anyOnStash) {
         this.startStashHold();
       } else if (this.stashHold) {
         this.cancelStashHold();
       }
     };
     EventBus.on('entity-entered-tile', this.onEntityEnteredTile);
+
+    // change-active-unit listener from React portraits click
+    this.onChangeActiveUnit = (index: number) => {
+      this.selectSquadMember(index);
+    };
+    EventBus.on('change-active-unit', this.onChangeActiveUnit);
+
+    // execute-ability listener from React ability triggers
+    this.onExecuteAbility = (payload: { ability: string; targetId?: string; x?: number; y?: number }) => {
+      this.handleExecuteAbility(payload);
+    };
+    EventBus.on('execute-ability', this.onExecuteAbility);
 
     this.cameras.main.centerOn(this.offsetX, this.offsetY);
     this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
@@ -456,31 +527,81 @@ export class RaidScene extends Phaser.Scene {
     EventBus.on('raid-complete', this.onRaidComplete);
 
     // ── CombatSystem wiring (task 3.0.9) ───────────────────────────────────
-    // Mirror squad HP to the store so the HUD stays live. We gate on
-    // `entityId === 'player'` to ignore damage events from future NPC
-    // guards / additional squad members — the HUD only shows squad HP.
+    // Mirror squad HP to the store so the HUD stays live.
     this.onEntityDamaged = (payload) => {
-      if (payload.entityId !== 'player') return;
-      const st = useRaidStore.getState();
-      st.setSquadHp(payload.hp, payload.maxHp);
-      const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
-      st.appendAction({
-        t: elapsed,
-        type: 'damage',
-        data: { hp: payload.hp, maxHp: payload.maxHp, amount: payload.amount },
-      });
+      const memberIndex = this.squadEntities.findIndex(e => e.entityId === payload.entityId);
+      if (memberIndex >= 0) {
+        const sprite = this.squadEntities[memberIndex];
+        sprite.hp = payload.hp;
+
+        // Update in store
+        const st = useRaidStore.getState();
+        const currentPrepMembers = st.prepSquadMembers ? [...st.prepSquadMembers] : [];
+        if (currentPrepMembers[memberIndex]) {
+          currentPrepMembers[memberIndex] = {
+            ...currentPrepMembers[memberIndex],
+            hp: payload.hp,
+          };
+          st.setPrepSquadMembers(currentPrepMembers);
+        }
+
+        // Recalculate combined HP
+        const totalHp = this.squadEntities.reduce((sum, s) => sum + s.hp, 0);
+        const totalMaxHp = this.squadEntities.reduce((sum, s) => sum + s.maxHp, 0);
+        st.setSquadHp(totalHp, totalMaxHp);
+
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        st.appendAction({
+          t: elapsed,
+          type: 'damage',
+          data: { entityId: payload.entityId, hp: payload.hp, maxHp: payload.maxHp, amount: payload.amount },
+        });
+      }
     };
     this.onEntityKilled = (payload) => {
-      if (payload.entityId !== 'player') return;
-      const st = useRaidStore.getState();
-      st.setSquadHp(0);
-      const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
-      st.appendAction({
-        t: elapsed,
-        type: 'entity_killed',
-        data: { entityId: payload.entityId, maxHp: payload.maxHp },
-      });
-      this.finishRaid('defeat', 'Squad eliminated');
+      const memberIndex = this.squadEntities.findIndex(e => e.entityId === payload.entityId);
+      if (memberIndex >= 0) {
+        const sprite = this.squadEntities[memberIndex];
+        sprite.hp = 0;
+
+        // Update in store
+        const st = useRaidStore.getState();
+        const currentPrepMembers = st.prepSquadMembers ? [...st.prepSquadMembers] : [];
+        if (currentPrepMembers[memberIndex]) {
+          currentPrepMembers[memberIndex] = {
+            ...currentPrepMembers[memberIndex],
+            hp: 0,
+          };
+          st.setPrepSquadMembers(currentPrepMembers);
+        }
+
+        // Check if all squad members are eliminated
+        const anySquadAlive = this.squadEntities.some(s => s.hp > 0);
+        if (!anySquadAlive) {
+          st.setSquadHp(0);
+          this.finishRaid('defeat', 'Squad eliminated');
+        } else {
+          // Re-calculate combined HP
+          const totalHp = this.squadEntities.reduce((sum, s) => sum + s.hp, 0);
+          const totalMaxHp = this.squadEntities.reduce((sum, s) => sum + s.maxHp, 0);
+          st.setSquadHp(totalHp, totalMaxHp);
+
+          // If the killed entity was the active one, auto-select another alive member!
+          if (this.activeSquadIndex === memberIndex) {
+            const nextAliveIndex = this.squadEntities.findIndex(s => s.hp > 0);
+            if (nextAliveIndex >= 0) {
+              this.selectSquadMember(nextAliveIndex);
+            }
+          }
+        }
+
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        st.appendAction({
+          t: elapsed,
+          type: 'entity_killed',
+          data: { entityId: payload.entityId, maxHp: payload.maxHp },
+        });
+      }
     };
     // Defense destruction: remove the sprite + clear the tile so the
     // squad can walk through. Future 3.0.11 (barricade attack) drives
@@ -544,6 +665,221 @@ export class RaidScene extends Phaser.Scene {
       case 'south': return { x: ep.position, y: max - 1 };
       case 'east':  return { x: max - 1,     y: ep.position };
       case 'west':  return { x: 1,           y: ep.position };
+    }
+  }
+
+  private resolveSpawnForEntryPoint(ep: any): { x: number; y: number } {
+    if (!ep) return { x: 1, y: 1 };
+    const max = this.gridSize - 1;
+    switch (ep.wall) {
+      case 'north': return { x: ep.position, y: 1 };
+      case 'south': return { x: ep.position, y: max - 1 };
+      case 'east':  return { x: max - 1,     y: ep.position };
+      case 'west':  return { x: 1,           y: ep.position };
+      default: return { x: 1, y: 1 };
+    }
+  }
+
+  private resolveSpawnForMember(member: any): { x: number; y: number } {
+    const ep = member.selectedEntryPoint ?? member.assignedEntryPoint ?? this.fixture?.entryPoints?.[0];
+    const baseSpawn = this.resolveSpawnForEntryPoint(ep);
+    
+    // Find a nearby unoccupied walkable tile to avoid stacked overlaps at start
+    const maxDist = 3;
+    for (let r = 0; r <= maxDist; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          const tx = baseSpawn.x + dx;
+          const ty = baseSpawn.y + dy;
+          if (tx >= 1 && tx < this.gridSize - 1 && ty >= 1 && ty < this.gridSize - 1) {
+            if (this.gridSystem.isTileWalkable(tx, ty)) {
+              const occupied = this.squadEntities.some(e => e.currentGridX === tx && e.currentGridY === ty);
+              if (!occupied) {
+                return { x: tx, y: ty };
+              }
+            }
+          }
+        }
+      }
+    }
+    return baseSpawn;
+  }
+
+  private selectSquadMember(index: number): void {
+    if (index < 0 || index >= this.squadEntities.length) return;
+    if (this.squadEntities[index].hp <= 0) return; // Ignore dead members
+    
+    this.activeSquadIndex = index;
+    this.playerEntity = this.squadEntities[index];
+    
+    // Update store
+    useRaidStore.getState().setActiveSquadIndex(index);
+    
+    // Update systems
+    this.turretAI?.setTargets(this.squadEntities); // Keeps TurretAI synced to all squad members
+    
+    // Camera start follow
+    this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
+    
+    // Update debug path or cancel it
+    this.pathDebugGraphics.clear();
+  }
+
+  private handleExecuteAbility(payload: { ability: string; targetId?: string; x?: number; y?: number }): void {
+    const store = useRaidStore.getState();
+    const elapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
+    
+    if (payload.ability === 'medkit') {
+      const targetSprite = this.squadEntities.find(s => s.entityId === payload.targetId);
+      if (targetSprite && targetSprite.hp > 0) {
+        const prevHp = targetSprite.hp;
+        heal(targetSprite, 40, targetSprite.entityId);
+        
+        // Custom visual effects in Phaser
+        this.playHealVfx(targetSprite);
+        
+        // Update in store
+        const memberIndex = this.squadEntities.indexOf(targetSprite);
+        const currentPrepMembers = store.prepSquadMembers ? [...store.prepSquadMembers] : [];
+        if (currentPrepMembers[memberIndex]) {
+          currentPrepMembers[memberIndex] = {
+            ...currentPrepMembers[memberIndex],
+            hp: targetSprite.hp,
+          };
+          store.setPrepSquadMembers(currentPrepMembers);
+        }
+        
+        // Recalculate legacy combined HP
+        const totalHp = this.squadEntities.reduce((sum, s) => sum + s.hp, 0);
+        const totalMaxHp = this.squadEntities.reduce((sum, s) => sum + s.maxHp, 0);
+        store.setSquadHp(totalHp, totalMaxHp);
+        
+        store.appendAction({
+          t: elapsed,
+          type: 'ability_medkit',
+          data: { targetId: payload.targetId, healedAmount: targetSprite.hp - prevHp }
+        });
+      }
+    } else if (payload.ability === 'breaching_charge') {
+      const { x, y } = payload;
+      if (x !== undefined && y !== undefined) {
+        const sprite = this.furnitureItems.find(f => f.gridX === x && f.gridY === y);
+        if (sprite && sprite.hp !== null) {
+          applyDamageToPlaced(sprite, 9999);
+          this.playExplosionVfx(x, y);
+          
+          store.appendAction({
+            t: elapsed,
+            type: 'ability_breach',
+            data: { gridX: x, gridY: y }
+          });
+        }
+      }
+    } else if (payload.ability === 'emp_grenade') {
+      const { x, y } = payload;
+      if (x !== undefined && y !== undefined) {
+        let disabledCount = 0;
+        if (this.turretAI) {
+          const deployedTurrets = (this.turretAI as any).turrets;
+          if (deployedTurrets) {
+            for (const turret of deployedTurrets.values()) {
+              const dx = Math.abs(turret.gridX - x);
+              const dy = Math.abs(turret.gridY - y);
+              if (Math.max(dx, dy) <= 1) {
+                const currentTimeMs = this.time.now;
+                turret.lastFiredAtMs = currentTimeMs + 6000;
+                this.playEmpVfx(turret.gridX, turret.gridY);
+                disabledCount++;
+              }
+            }
+          }
+        }
+        
+        store.appendAction({
+          t: elapsed,
+          type: 'ability_emp',
+          data: { gridX: x, gridY: y, disabledCount }
+        });
+      }
+    }
+  }
+
+  private playHealVfx(sprite: EntitySprite): void {
+    const startX = sprite.x;
+    const startY = sprite.y - 16;
+    
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const distance = 10 + Math.random() * 20;
+      const targetX = startX + Math.cos(angle) * distance;
+      const targetY = startY + Math.sin(angle) * distance - 25;
+      
+      const particle = this.add.graphics();
+      particle.setDepth(sprite.depth + 1);
+      particle.fillStyle(0x22c55e, 0.9);
+      particle.fillCircle(startX, startY, 3);
+      
+      this.tweens.add({
+        targets: particle,
+        x: targetX - startX,
+        y: targetY - startY,
+        alpha: 0,
+        scale: 0.5,
+        duration: 800 + Math.random() * 400,
+        ease: 'Quad.easeOut',
+        onComplete: () => particle.destroy()
+      });
+    }
+  }
+
+  private playExplosionVfx(gridX: number, gridY: number): void {
+    const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
+    const cx = screenPos.x + this.offsetX;
+    const cy = screenPos.y + this.offsetY;
+    
+    const blast = this.add.graphics();
+    blast.setDepth(100);
+    blast.fillStyle(0xef4444, 0.8);
+    blast.fillCircle(cx, cy, 5);
+    
+    this.tweens.add({
+      targets: blast,
+      scaleX: 8,
+      scaleY: 8,
+      alpha: 0,
+      duration: 500,
+      ease: 'Quad.easeOut',
+      onComplete: () => blast.destroy()
+    });
+    
+    this.cameras.main.shake(250, 0.015);
+  }
+
+  private playEmpVfx(gridX: number, gridY: number): void {
+    const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
+    const cx = screenPos.x + this.offsetX;
+    const cy = screenPos.y + this.offsetY - 20;
+    
+    for (let i = 0; i < 6; i++) {
+      const spark = this.add.graphics();
+      spark.setDepth(100);
+      spark.lineStyle(2, 0x06b6d4, 1.0);
+      
+      const angle = Math.random() * Math.PI * 2;
+      const length = 15 + Math.random() * 15;
+      
+      spark.beginPath();
+      spark.moveTo(cx, cy);
+      spark.lineTo(cx + Math.cos(angle) * length, cy + Math.sin(angle) * length);
+      spark.strokePath();
+      
+      this.tweens.add({
+        targets: spark,
+        alpha: 0,
+        duration: 300 + Math.random() * 200,
+        ease: 'Linear',
+        onComplete: () => spark.destroy()
+      });
     }
   }
 
@@ -652,6 +988,14 @@ export class RaidScene extends Phaser.Scene {
       EventBus.off('entity-entered-tile', this.onEntityEnteredTile);
       this.onEntityEnteredTile = null;
     }
+    if (this.onChangeActiveUnit) {
+      EventBus.off('change-active-unit', this.onChangeActiveUnit);
+      this.onChangeActiveUnit = null;
+    }
+    if (this.onExecuteAbility) {
+      EventBus.off('execute-ability', this.onExecuteAbility);
+      this.onExecuteAbility = null;
+    }
     this.stunnedUntilMs = 0;
   }
 
@@ -670,33 +1014,65 @@ export class RaidScene extends Phaser.Scene {
   public update(time: number): void {
     if (useRaidStore.getState().phase !== 'active') return;
     this.turretAI?.tick(time);
+
+    // Draw pulsating selection ring under the active squad member
+    if (this.playerEntity && this.playerEntity.active && this.playerEntity.hp > 0) {
+      this.selectionRing.clear();
+      
+      const pulse = 1.0 + 0.15 * Math.sin(time / 150);
+      const screenPos = IsometricEngine.worldToScreen(
+        this.playerEntity.currentGridX,
+        this.playerEntity.currentGridY,
+        this.currentRotation
+      );
+      
+      this.selectionRing.lineStyle(2, 0x00ff00, 0.8);
+      this.selectionRing.beginPath();
+      
+      const rx = 32 * pulse;
+      const ry = 16 * pulse;
+      const cx = screenPos.x + this.offsetX;
+      const cy = screenPos.y + this.offsetY - 5;
+      
+      this.selectionRing.moveTo(cx, cy - ry);
+      this.selectionRing.lineTo(cx + rx, cy);
+      this.selectionRing.lineTo(cx, cy + ry);
+      this.selectionRing.lineTo(cx - rx, cy);
+      this.selectionRing.closePath();
+      this.selectionRing.strokePath();
+    } else {
+      this.selectionRing.clear();
+    }
   }
 
   /**
-   * Apply a stun / immobilize to the squad. Shared between
+   * Apply a stun / immobilize to a specific squad member. Shared between
    * {@link handleTrapTriggered} and {@link handleTurretFired}: kill the
    * current tween chain so movement stops, push `stunnedUntilMs`
-   * forward, and alpha-pulse the squad sprite for the freeze duration.
-   *
-   * Overlapping freezes extend cleanly — `Math.max` prevents a shorter
-   * stun from shortening a longer one that's already running.
+   * forward if it's the currently active squad member, and alpha-pulse the sprite.
    */
-  private applySquadStun(seconds: number): void {
+  private applyEntityStun(entityId: string, seconds: number): void {
     if (!Number.isFinite(seconds) || seconds <= 0) return;
-    if (!this.playerEntity) return;
-    this.tweens.killTweensOf(this.playerEntity);
-    const freezeUntil = Date.now() + seconds * 1000;
-    this.stunnedUntilMs = Math.max(this.stunnedUntilMs, freezeUntil);
+    const sprite = this.squadEntities.find(s => s.entityId === entityId);
+    if (!sprite) return;
+
+    this.tweens.killTweensOf(sprite);
+    
+    if (sprite === this.playerEntity) {
+      const freezeUntil = Date.now() + seconds * 1000;
+      this.stunnedUntilMs = Math.max(this.stunnedUntilMs, freezeUntil);
+    }
+
     this.tweens.add({
-      targets: this.playerEntity,
+      targets: sprite,
       alpha: { from: 0.4, to: 1.0 },
       duration: 330,
       yoyo: true,
       repeat: Math.max(1, Math.ceil(seconds * 1.5)),
       ease: 'Sine.easeInOut',
       onComplete: () => {
-        if (this.playerEntity && this.playerEntity.active) {
-          this.playerEntity.setAlpha(1);
+        if (sprite && sprite.active) {
+          sprite.setAlpha(1);
         }
       },
     });
@@ -704,24 +1080,13 @@ export class RaidScene extends Phaser.Scene {
 
   /**
    * Handle a `'trap-triggered'` event emitted by {@link TrapSystem}.
-   *
-   * Responsibilities split from TrapSystem (which only did damage +
-   * bookkeeping):
-   *   1. **Stun / immobilize** via {@link applySquadStun}.
-   *   2. **Trap sprite flash**: a brief alpha dip on the trap that
-   *      triggered, so a pressure plate / tripwire that deals no damage
-   *      still gives visible feedback. Fires for every trigger,
-   *      regardless of damage.
-   *   3. **Camera shake**: a short subtle shake on every trigger.
-   *   4. **Action log**: append a `trap_triggered` entry. Partial
-   *      3.0.14 landing.
    */
   private handleTrapTriggered(payload: TrapTriggeredPayload): void {
-    const isPlayer = payload.entityId === 'player';
+    const isSquadMember = this.squadEntities.some(s => s.entityId === payload.entityId);
 
     // 1) Stun / immobilize — cancel the rest of the path + lock input.
-    if (isPlayer) {
-      this.applySquadStun(payload.stunSeconds + payload.immobilizeSeconds);
+    if (isSquadMember) {
+      this.applyEntityStun(payload.entityId, payload.stunSeconds + payload.immobilizeSeconds);
     }
 
     // 2) Trap sprite flash.
@@ -742,11 +1107,10 @@ export class RaidScene extends Phaser.Scene {
       });
     }
 
-    // 3) Camera shake — short, subtle; the HP bar + sprite flash carry
-    //    most of the feedback weight.
+    // 3) Camera shake
     this.cameras.main.shake(180, 0.005);
 
-    // 4) Action log — partial 3.0.14 landing.
+    // 4) Action log
     const store = useRaidStore.getState();
     const secondsElapsed = Math.max(
       0,
@@ -773,25 +1137,11 @@ export class RaidScene extends Phaser.Scene {
 
   /**
    * Handle a `'turret-fired'` event emitted by {@link TurretAI}.
-   *
-   *   1. **Projectile line VFX** — short fading line from the turret's
-   *      iso-screen position to the target's. Color-coded per turret
-   *      type (nailgun = yellow, taser = cyan) so multiple turrets
-   *      firing simultaneously read clearly.
-   *   2. **Taser stun** — if the shot carried a non-zero `stunSeconds`
-   *      and landed on the squad, apply via the shared stun helper.
-   *   3. **Action log** — append a `turret_fired` entry.
-   *
-   * No camera shake on turret fire — turrets can fire every 0.8–1.0s
-   * and constant shake would be disorienting. The HP bar + projectile
-   * line carry the feedback weight; shake stays trap-exclusive.
    */
   private handleTurretFired(payload: TurretFiredPayload): void {
-    const isPlayer = payload.targetEntityId === 'player';
+    const isSquadMember = this.squadEntities.some(s => s.entityId === payload.targetEntityId);
 
-    // 1) Projectile line VFX. Graphics object drawn fresh per shot,
-    //    faded via alpha tween, destroyed on completion. Simpler than
-    //    the `Line` GameObject for a short throw-away effect.
+    // 1) Projectile line VFX.
     const turretScreen = IsometricEngine.worldToScreen(
       payload.gridX,
       payload.gridY,
@@ -808,7 +1158,7 @@ export class RaidScene extends Phaser.Scene {
     projectile.lineStyle(2, color, 1.0);
     projectile.lineBetween(
       turretScreen.x + this.offsetX,
-      turretScreen.y + this.offsetY - 20, // Raise origin so the line comes from the turret's barrel, not the base
+      turretScreen.y + this.offsetY - 20,
       targetScreen.x + this.offsetX,
       targetScreen.y + this.offsetY - 20,
     );
@@ -823,8 +1173,8 @@ export class RaidScene extends Phaser.Scene {
     });
 
     // 2) Taser stun propagation.
-    if (isPlayer && payload.stunSeconds > 0) {
-      this.applySquadStun(payload.stunSeconds);
+    if (isSquadMember && payload.stunSeconds > 0) {
+      this.applyEntityStun(payload.targetEntityId, payload.stunSeconds);
     }
 
     // 3) Action log — partial 3.0.14 landing (second emitter).
@@ -895,6 +1245,41 @@ export class RaidScene extends Phaser.Scene {
       this.offsetY,
       this.currentRotation,
     );
+
+    // Check if in ability target selection mode
+    const store = useRaidStore.getState();
+    const abilityMode = store.activeAbilityMode;
+    if (abilityMode) {
+      if (abilityMode === 'breaching_charge') {
+        const tileState = this.gridSystem.getTileState(worldCoords.x, worldCoords.y);
+        if (tileState === 'occupied') {
+          const sprite = this.furnitureItems.find(f => f.gridX === worldCoords.x && f.gridY === worldCoords.y);
+          if (sprite && sprite.hp !== null) {
+            this.handleExecuteAbility({ ability: 'breaching_charge', x: worldCoords.x, y: worldCoords.y });
+            store.setActiveAbilityMode(null);
+            return;
+          }
+        }
+      } else if (abilityMode === 'emp_grenade') {
+        this.handleExecuteAbility({ ability: 'emp_grenade', x: worldCoords.x, y: worldCoords.y });
+        store.setActiveAbilityMode(null);
+        return;
+      }
+      
+      // Any click cancels ability selection
+      store.setActiveAbilityMode(null);
+      return;
+    }
+
+    // 1) Click to select another squad member
+    const clickedMemberIndex = this.squadEntities.findIndex(
+      (s) => s.hp > 0 && s.currentGridX === worldCoords.x && s.currentGridY === worldCoords.y
+    );
+    if (clickedMemberIndex >= 0) {
+      this.selectSquadMember(clickedMemberIndex);
+      return;
+    }
+
     const tileState = this.gridSystem.getTileState(worldCoords.x, worldCoords.y);
     if (!tileState) return;
 
@@ -998,7 +1383,8 @@ export class RaidScene extends Phaser.Scene {
       return;
     }
 
-    const result = applyDamageToPlaced(sprite, SQUAD_MELEE_DAMAGE);
+    const meleeDamage = this.playerEntity.meleeDamage;
+    const result = applyDamageToPlaced(sprite, meleeDamage);
     if (result.ignored) return;
 
     // VFX — brief alpha dip on the barricade. No camera shake (1Hz is
@@ -1030,7 +1416,7 @@ export class RaidScene extends Phaser.Scene {
         gridX: targetGridX,
         gridY: targetGridY,
         spriteKey: sprite.texture.key,
-        damage: SQUAD_MELEE_DAMAGE,
+        damage: meleeDamage,
         hpRemaining: sprite.hp,
         destroyed: result.destroyed,
       },

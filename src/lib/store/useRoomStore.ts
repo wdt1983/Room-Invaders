@@ -12,6 +12,7 @@ export interface CatalogItem {
    *  `damage`, `alert_radius`, `hp`, etc. See seed.sql for the canonical set. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   stats: Record<string, any> | null;
+  tech_tree_node?: string | null;
 }
 
 export interface PlacedItem {

@@ -117,3 +117,41 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
   '{"scrap": 20}',
   '{"hp": 75, "blocks_movement": true}',
   '{"w": 1, "h": 1}', 'barricade_sandbags', 2);
+
+-- ============================================
+-- ADVANCED GATED DEFENSES (Phase 7 Tech Tree & Loadouts)
+-- ============================================
+
+INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite_key, unlock_level, tech_tree_node) VALUES
+-- Traps
+('trap', 'Flame Vent', 'Wall-mounted nozzle firing flame streams. Deals fire damage to 3 linear tiles.', 3,
+  '{"scrap": 50, "components": 35}', '{"damage": 25, "aoe_line": 3, "uses": 3}', '{"w": 1, "h": 1}', 'trap_flame_vent', 8, 'def_unlock_flame_vent'),
+
+('trap', 'Laser Alarm Grid', 'Trips an alarm if crossed, alerting sentries across the entire grid size.', 2,
+  '{"scrap": 30, "components": 15}', '{"alert_radius": 15, "uses": 99}', '{"w": 1, "h": 1}', 'trap_laser_grid', 8, 'def_unlock_laser_grid'),
+
+('trap', 'Shock Wire', 'Electrified metal wire that stuns and damages multiple units crossing adjacent tiles.', 3,
+  '{"scrap": 40, "components": 20}', '{"damage": 12, "stun_duration": 2.0, "uses": 2}', '{"w": 2, "h": 1}', 'trap_shock_wire', 10, 'def_unlock_tesla'),
+
+('trap', 'EMP Mine', 'Deactivates electronic squad loadouts and delays abilities by 10s when detonated.', 3,
+  '{"scrap": 35, "components": 30}', '{"damage": 0, "emp_duration": 10.0, "uses": 1}', '{"w": 1, "h": 1}', 'trap_emp_mine', 10, 'def_unlock_guard_drone'),
+
+-- Turrets
+('turret', 'Tesla Coil', 'High-frequency electric tower firing chain lightning. Deals moderate damage in radius 2 Chebyshev disks.', 3,
+  '{"scrap": 80, "components": 60}', '{"damage": 15, "range": 2, "fire_rate": 1.2, "ammo": 20, "chain_targets": 3}', '{"w": 1, "h": 1}', 'turret_tesla', 8, 'def_unlock_tesla'),
+
+('turret', 'Heavy Autocannon', 'Massive armor-piercing turret. Long range, slower fire rate, destructive shell blast.', 4,
+  '{"scrap": 120, "components": 95}', '{"damage": 40, "range": 5, "fire_rate": 2.0, "ammo": 12}', '{"w": 2, "h": 2}', 'turret_autocannon', 12, 'def_turret_ammo_1'),
+
+('turret', 'Shotgun Sentry', 'Fires spread sweeps covering Chebyshev cone ranges. High knockback.', 3,
+  '{"scrap": 75, "components": 45}', '{"damage": 22, "range": 2, "fire_rate": 1.5, "ammo": 10, "spread_cone": true}', '{"w": 1, "h": 1}', 'turret_shotgun', 10, 'def_turret_range_1'),
+
+-- Guards
+('guard', 'Sentry Patrol Drone', 'Hover drone with built-in nailguns patrolling designated tiles.', 3,
+  '{"scrap": 65, "components": 50}', '{"hp": 60, "damage": 6, "range": 3, "fire_rate": 1.0, "patrol": true}', '{"w": 1, "h": 1}', 'guard_drone', 8, 'def_unlock_guard_drone'),
+
+('guard', 'Attack Guard Dog', 'Fierce dog that runs down and bites targets, causing continuous bleed damage.', 3,
+  '{"scrap": 50, "components": 20}', '{"hp": 80, "damage": 12, "speed": 1.5, "melee": true}', '{"w": 1, "h": 1}', 'guard_dog', 8, 'def_unlock_guard_drone'),
+
+('guard', 'Decoy Dummy Sentry', 'Holographic projector attracting squad movement paths by simulating stashes.', 2,
+  '{"scrap": 30, "components": 15}', '{"hp": 120, "decoy_radius": 3}', '{"w": 1, "h": 1}', 'guard_decoy', 6, 'def_unlock_laser_grid');

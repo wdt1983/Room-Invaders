@@ -84,12 +84,26 @@ export async function buyAndPlaceFurniture(spriteKey: string, gridX: number, gri
   // Get item — need id, cost, type (2.0.6 placement rules) AND stats (2.0.8 defense rating)
   const { data: item, error: itemError } = await supabase
     .from('items')
-    .select('id, cost, type, stats')
+    .select('id, cost, type, stats, tech_tree_node')
     .eq('sprite_key', spriteKey)
     .single();
 
   if (itemError || !item) {
     return { success: false as const, error: 'Item not found' };
+  }
+
+  // --- Tech Tree validation (Task 7.0.4) ---
+  if ((item as any).tech_tree_node) {
+    const { data: techUnlocks, error: techError } = await supabase
+      .from('player_tech')
+      .select('node_id')
+      .eq('owner_id', user.id)
+      .eq('node_id', (item as any).tech_tree_node)
+      .maybeSingle();
+
+    if (techError || !techUnlocks) {
+      return { success: false as const, error: 'Research required in Squad Core to unlock this item.' };
+    }
   }
 
   // Get room — need grid_size + entry_points for placement validation,

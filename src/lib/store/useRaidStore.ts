@@ -123,6 +123,12 @@ interface RaidState {
    *  `resultsValidation === 'error'`. Surfaced in the results screen as
    *  a subtle notice so the scaffold-fallback is visible. */
   resultsValidationError: string | null;
+  prepSquadMembers: any[] | null;
+  setPrepSquadMembers: (members: any[]) => void;
+  activeSquadIndex: number;
+  setActiveSquadIndex: (index: number) => void;
+  activeAbilityMode: string | null;
+  setActiveAbilityMode: (mode: string | null) => void;
 
   /** Set the raid target + reset phase/timer. Called by `RaidInitializer` once
    *  per route load from the SSR-resolved fixture. */
@@ -171,6 +177,9 @@ const INITIAL_STATE = {
   results: null,
   resultsValidation: 'idle' as RaidValidation,
   resultsValidationError: null,
+  prepSquadMembers: null,
+  activeSquadIndex: 0,
+  activeAbilityMode: null,
 };
 
 export const useRaidStore = create<RaidState>((set) => ({
@@ -242,6 +251,12 @@ export const useRaidStore = create<RaidState>((set) => ({
     resultsValidation: 'error',
     resultsValidationError: error,
   })),
+
+  setPrepSquadMembers: (members) => set({ prepSquadMembers: members }),
+
+  setActiveSquadIndex: (index) => set({ activeSquadIndex: index }),
+
+  setActiveAbilityMode: (mode) => set({ activeAbilityMode: mode }),
 
   resetRaid: () => set({ ...INITIAL_STATE }),
 }));

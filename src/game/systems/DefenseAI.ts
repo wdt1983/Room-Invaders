@@ -4,6 +4,7 @@ import {
   type HasHp,
   type PlacedTarget,
 } from '@/game/systems/CombatSystem';
+import { usePlayerStore } from '@/lib/store/usePlayerStore';
 
 /**
  * DefenseAI — active-defense behavior for turrets (and, later, guards).
@@ -71,6 +72,9 @@ export interface TurretStats {
 export const TURRET_STATS_BY_SPRITE_KEY: Record<string, TurretStats> = {
   turret_nailgun: { damage: 8, range: 3, fire_rate: 1.0, ammo: 15 },
   turret_taser: { damage: 5, range: 2, fire_rate: 0.8, ammo: 10, stun_duration: 1.0 },
+  turret_tesla: { damage: 15, range: 2, fire_rate: 1.2, ammo: 20 },
+  turret_autocannon: { damage: 40, range: 5, fire_rate: 2.0, ammo: 12 },
+  turret_shotgun: { damage: 22, range: 2, fire_rate: 1.5, ammo: 10 },
 };
 
 /** How long an alert from a tripwire lasts, in ms. Extends all turrets
@@ -136,12 +140,14 @@ interface TrapTriggeredAlertPayload {
 
 export class TurretAI {
   private readonly turrets = new Map<string, DeployedTurret>();
-  private target: TurretTarget | null;
+  private targets: TurretTarget[] = [];
   private readonly onTrapTriggered: (payload: TrapTriggeredAlertPayload) => void;
   private destroyed = false;
 
-  constructor(target: TurretTarget | null = null) {
-    this.target = target;
+  constructor(target: TurretTarget | TurretTarget[] | null = null) {
+    if (target) {
+      this.targets = Array.isArray(target) ? target : [target];
+    }
     this.onTrapTriggered = (payload) => this.handleTrapTriggered(payload);
     EventBus.on('trap-triggered', this.onTrapTriggered);
   }
@@ -149,7 +155,11 @@ export class TurretAI {
   /** Set (or replace) the target. MVP only ever has the squad; Phase 7
    *  will replace this with `addTarget` / `removeTarget`. */
   public setTarget(target: TurretTarget | null): void {
-    this.target = target;
+    this.targets = target ? [target] : [];
+  }
+
+  public setTargets(targets: TurretTarget[]): void {
+    this.targets = targets;
   }
 
   /**
@@ -177,12 +187,15 @@ export class TurretAI {
         `[TurretAI] Duplicate turret registration at (${params.gridX}, ${params.gridY}); overwriting previous entry.`,
       );
     }
+    const activeEffects = usePlayerStore.getState().activeEffects;
+    const turretAmmoMult = activeEffects.turretAmmoMult ?? 1.0;
+
     this.turrets.set(key, {
       gridX: params.gridX,
       gridY: params.gridY,
       spriteKey: params.spriteKey,
       stats,
-      ammoRemaining: stats.ammo,
+      ammoRemaining: Math.round(stats.ammo * turretAmmoMult),
       lastFiredAtMs: Number.NEGATIVE_INFINITY,
       alertedUntilMs: 0,
       sprite: params.sprite,
@@ -207,9 +220,10 @@ export class TurretAI {
    */
   public tick(timeMs: number): void {
     if (this.destroyed) return;
-    const target = this.target;
-    if (!target) return;
-    if (target.hp <= 0) return;
+    if (this.targets.length === 0) return;
+
+    const aliveTargets = this.targets.filter((t) => t.hp > 0);
+    if (aliveTargets.length === 0) return;
 
     // Iterate a snapshot so `fire()` → exhaustion can safely delete from
     // the underlying map without disturbing iteration order.
@@ -217,12 +231,28 @@ export class TurretAI {
     for (const turret of snapshot) {
       if (turret.ammoRemaining <= 0) continue;
       if (timeMs - turret.lastFiredAtMs < turret.stats.fire_rate * 1000) continue;
-      if (!this.isTargetInRange(turret, target, timeMs)) continue;
-      this.fire(turret, target, timeMs);
-      // One shot per turret per tick — if the shot killed the target,
-      // the remaining turrets will see `target.hp <= 0` on their own
-      // range check (ignored because dead) OR the scene will stop
-      // ticking us once `phase === 'results'`.
+      
+      let bestTarget: TurretTarget | null = null;
+      let minDistance = Infinity;
+
+      for (const target of aliveTargets) {
+        const dx = Math.abs(target.currentGridX - turret.gridX);
+        const dy = Math.abs(target.currentGridY - turret.gridY);
+        const chebyshev = Math.max(dx, dy);
+        if (chebyshev === 0) continue;
+        const alerted = timeMs < turret.alertedUntilMs;
+        const activeEffects = usePlayerStore.getState().activeEffects;
+        const turretRangeBonus = activeEffects.turretRangeBonus ?? 0;
+        const effectiveRange = turret.stats.range + turretRangeBonus + (alerted ? ALERT_RANGE_BONUS : 0);
+        if (chebyshev <= effectiveRange && chebyshev < minDistance) {
+          minDistance = chebyshev;
+          bestTarget = target;
+        }
+      }
+
+      if (bestTarget) {
+        this.fire(turret, bestTarget, timeMs);
+      }
     }
   }
 
@@ -233,7 +263,7 @@ export class TurretAI {
     if (this.destroyed) return;
     EventBus.off('trap-triggered', this.onTrapTriggered);
     this.turrets.clear();
-    this.target = null;
+    this.targets = [];
     this.destroyed = true;
   }
 
@@ -251,7 +281,9 @@ export class TurretAI {
     const chebyshev = Math.max(dx, dy);
     if (chebyshev === 0) return false; // Target is ON the turret tile
     const alerted = timeMs < turret.alertedUntilMs;
-    const effectiveRange = turret.stats.range + (alerted ? ALERT_RANGE_BONUS : 0);
+    const activeEffects = usePlayerStore.getState().activeEffects;
+    const turretRangeBonus = activeEffects.turretRangeBonus ?? 0;
+    const effectiveRange = turret.stats.range + turretRangeBonus + (alerted ? ALERT_RANGE_BONUS : 0);
     return chebyshev <= effectiveRange;
   }
 

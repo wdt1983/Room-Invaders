@@ -1,0 +1,321 @@
+{
+  "branches": {
+    "offense": {
+      "name": "Offensive Tactics",
+      "color": "crimson",
+      "description": "Unlock squad slots, squad combat boosters, and destructive raid abilities."
+    },
+    "defense": {
+      "name": "Fortifications",
+      "color": "cyan",
+      "description": "Unlock high-tier traps, advanced automated turrets, and reinforced barricades."
+    },
+    "utility": {
+      "name": "Logistics & Intel",
+      "color": "amber",
+      "description": "Decrease scouting costs, expand protected storage capacity, and boost currency drops."
+    }
+  },
+  "nodes": [
+    {
+      "id": "off_squad_slot_2",
+      "name": "Squad Expansion I",
+      "description": "Unlocks the 2nd squad member slot. Power in numbers.",
+      "cost": 1,
+      "branch": "offense",
+      "prerequisites": [],
+      "effects": { "unlock_squad_slot": 2 },
+      "icon": "Users"
+    },
+    {
+      "id": "off_squad_hp_1",
+      "name": "Reinforced Vests",
+      "description": "Increases max HP of all squad members by +15%.",
+      "cost": 1,
+      "branch": "offense",
+      "prerequisites": ["off_squad_slot_2"],
+      "effects": { "squad_hp_mult": 1.15 },
+      "icon": "Heart"
+    },
+    {
+      "id": "off_ability_medkit",
+      "name": "Combat Medicine",
+      "description": "Unlocks the Medkit active ability. Heal squad members for 40 HP during raids.",
+      "cost": 2,
+      "branch": "offense",
+      "prerequisites": ["off_squad_hp_1"],
+      "effects": { "unlock_ability": "medkit" },
+      "icon": "PlusSquare"
+    },
+    {
+      "id": "off_squad_speed_1",
+      "name": "Adrenaline Rush",
+      "description": "Increases squad movement speed by +10%.",
+      "cost": 2,
+      "branch": "offense",
+      "prerequisites": ["off_squad_hp_1"],
+      "effects": { "squad_speed_mult": 1.10 },
+      "icon": "Zap"
+    },
+    {
+      "id": "off_squad_dmg_1",
+      "name": "Heavy Melee Gears",
+      "description": "Increases melee damage against barricades by +50%.",
+      "cost": 2,
+      "branch": "offense",
+      "prerequisites": ["off_squad_speed_1"],
+      "effects": { "squad_melee_dmg_mult": 1.50 },
+      "icon": "Hammer"
+    },
+    {
+      "id": "off_ability_breaching",
+      "name": "Breaching Charges",
+      "description": "Unlocks the Breaching Charge active ability. Destroys any targeted barricade tile instantly.",
+      "cost": 3,
+      "branch": "offense",
+      "prerequisites": ["off_squad_dmg_1"],
+      "effects": { "unlock_ability": "breaching_charge" },
+      "icon": "Bomb"
+    },
+    {
+      "id": "off_squad_slot_3",
+      "name": "Squad Expansion II",
+      "description": "Unlocks the 3rd squad member slot. Formidable fireteams.",
+      "cost": 3,
+      "branch": "offense",
+      "prerequisites": ["off_ability_medkit"],
+      "effects": { "unlock_squad_slot": 3 },
+      "icon": "Users"
+    },
+    {
+      "id": "off_squad_hp_2",
+      "name": "Tactical Armor Sheets",
+      "description": "Further increases squad max HP by +20% (accumulative).",
+      "cost": 3,
+      "branch": "offense",
+      "prerequisites": ["off_squad_slot_3"],
+      "effects": { "squad_hp_mult": 1.20 },
+      "icon": "Shield"
+    },
+    {
+      "id": "off_ability_emp",
+      "name": "EMP Disruption",
+      "description": "Unlocks the EMP Grenade ability. Disable targeted turrets in a Chebyshev radius 1 zone for 6 seconds.",
+      "cost": 4,
+      "branch": "offense",
+      "prerequisites": ["off_squad_hp_2"],
+      "effects": { "unlock_ability": "emp_grenade" },
+      "icon": "Activity"
+    },
+    {
+      "id": "off_squad_slot_4",
+      "name": "Squad Expansion III",
+      "description": "Unlocks the 4th and final squad member slot. Command a full squad.",
+      "cost": 4,
+      "branch": "offense",
+      "prerequisites": ["off_ability_emp"],
+      "effects": { "unlock_squad_slot": 4 },
+      "icon": "Users"
+    },
+    {
+      "id": "def_trap_dmg_1",
+      "name": "Calibrated Triggers",
+      "description": "Increases all placed floor/wall trap damage by +20%.",
+      "cost": 1,
+      "branch": "defense",
+      "prerequisites": [],
+      "effects": { "trap_damage_mult": 1.20 },
+      "icon": "Flame"
+    },
+    {
+      "id": "def_trap_uses_1",
+      "name": "Industrial Components",
+      "description": "Adds +1 trigger use for all floor traps before depletion.",
+      "cost": 2,
+      "branch": "defense",
+      "prerequisites": ["def_trap_dmg_1"],
+      "effects": { "trap_uses_bonus": 1 },
+      "icon": "RotateCw"
+    },
+    {
+      "id": "def_unlock_tesla",
+      "name": "Tesla Coil Sentry",
+      "description": "Unlocks the advanced Tesla Coil area turret in the catalog.",
+      "cost": 2,
+      "branch": "defense",
+      "prerequisites": ["def_trap_uses_1"],
+      "effects": { "unlock_catalog_item": "turret_tesla" },
+      "icon": "Zap"
+    },
+    {
+      "id": "def_turret_range_1",
+      "name": "High-Focus Lenses",
+      "description": "Increases all automatic sentry ranges by +1 Chebyshev grid tile.",
+      "cost": 2,
+      "branch": "defense",
+      "prerequisites": ["def_unlock_tesla"],
+      "effects": { "turret_range_bonus": 1 },
+      "icon": "Eye"
+    },
+    {
+      "id": "def_turret_ammo_1",
+      "name": "Expanded Ammo Feeds",
+      "description": "Increases sentry turret ammo capacities by +30%.",
+      "cost": 2,
+      "branch": "defense",
+      "prerequisites": ["def_turret_range_1"],
+      "effects": { "turret_ammo_mult": 1.30 },
+      "icon": "Box"
+    },
+    {
+      "id": "def_unlock_flame_vent",
+      "name": "Wall Flame Vents",
+      "description": "Unlocks the Flame Vent wall defense in the catalog.",
+      "cost": 3,
+      "branch": "defense",
+      "prerequisites": ["def_turret_ammo_1"],
+      "effects": { "unlock_catalog_item": "trap_flame_vent" },
+      "icon": "Flame"
+    },
+    {
+      "id": "def_barricade_hp_1",
+      "name": "Steel Reinforcements",
+      "description": "Increases barricade structural integrity (HP) by +40%.",
+      "cost": 3,
+      "branch": "defense",
+      "prerequisites": ["def_unlock_flame_vent"],
+      "effects": { "barricade_hp_mult": 1.40 },
+      "icon": "ShieldAlert"
+    },
+    {
+      "id": "def_trap_stun_1",
+      "name": "Cryo-Adhesive Gels",
+      "description": "Increases trap stun & immobilize durations by +1.0 second.",
+      "cost": 3,
+      "branch": "defense",
+      "prerequisites": ["def_barricade_hp_1"],
+      "effects": { "trap_stun_bonus": 1.0 },
+      "icon": "Snowflake"
+    },
+    {
+      "id": "def_unlock_guard_drone",
+      "name": "Sentry Patrol Drones",
+      "description": "Unlocks mobile Guard Drones in the catalog that patrol paths.",
+      "cost": 4,
+      "branch": "defense",
+      "prerequisites": ["def_trap_stun_1"],
+      "effects": { "unlock_catalog_item": "guard_drone" },
+      "icon": "Navigation"
+    },
+    {
+      "id": "def_unlock_laser_grid",
+      "name": "Laser Alarm Grids",
+      "description": "Unlocks Wall-to-Wall Laser Grids in the catalog, alerting turrets in Chevalier radius 5.",
+      "cost": 4,
+      "branch": "defense",
+      "prerequisites": ["def_unlock_guard_drone"],
+      "effects": { "unlock_catalog_item": "trap_laser_grid" },
+      "icon": "Spline"
+    },
+    {
+      "id": "util_econ_gen_1",
+      "name": "Mesh Network Relays",
+      "description": "Boosts passive Scrap generation in base by +15%.",
+      "cost": 1,
+      "branch": "utility",
+      "prerequisites": [],
+      "effects": { "passive_scrap_mult": 1.15 },
+      "icon": "Cpu"
+    },
+    {
+      "id": "util_econ_storage_1",
+      "name": "Hidden Floorboards",
+      "description": "Increases protected storage capacity (scrap cap) by +30%.",
+      "cost": 1,
+      "branch": "utility",
+      "prerequisites": ["util_econ_gen_1"],
+      "effects": { "protected_storage_mult": 1.30 },
+      "icon": "Lock"
+    },
+    {
+      "id": "util_intel_scout_cost_1",
+      "name": "Proxy Routing",
+      "description": "Decreases scouting Intel costs by -25%.",
+      "cost": 2,
+      "branch": "utility",
+      "prerequisites": ["util_econ_storage_1"],
+      "effects": { "scout_cost_mult": 0.75 },
+      "icon": "Terminal"
+    },
+    {
+      "id": "util_intel_detail_1",
+      "name": "Decryption Scans",
+      "description": "Reveals trap positions and types during successful scouts.",
+      "cost": 2,
+      "branch": "utility",
+      "prerequisites": ["util_intel_scout_cost_1"],
+      "effects": { "reveal_traps": true },
+      "icon": "ScanFace"
+    },
+    {
+      "id": "util_econ_repair_cost_1",
+      "name": "Scrap Recycling",
+      "description": "Decreases repair scrap costs by -20%.",
+      "cost": 2,
+      "branch": "utility",
+      "prerequisites": ["util_intel_detail_1"],
+      "effects": { "repair_cost_mult": 0.80 },
+      "icon": "RefreshCw"
+    },
+    {
+      "id": "util_econ_scrap_mult_1",
+      "name": "Overflow Scavengers",
+      "description": "Gain +15% more Scrap from all completed PvE and PvP raids.",
+      "cost": 3,
+      "branch": "utility",
+      "prerequisites": ["util_econ_repair_cost_1"],
+      "effects": { "raid_scrap_mult": 1.15 },
+      "icon": "Coins"
+    },
+    {
+      "id": "util_intel_scout_cost_2",
+      "name": "Deep Mesh Overrides",
+      "description": "Decreases scouting costs by another -25% (accumulative).",
+      "cost": 3,
+      "branch": "utility",
+      "prerequisites": ["util_econ_scrap_mult_1"],
+      "effects": { "scout_cost_mult": 0.50 },
+      "icon": "Radio"
+    },
+    {
+      "id": "util_econ_storage_2",
+      "name": "Reinforced Vault Chambers",
+      "description": "Further increases protected storage by +30%.",
+      "cost": 3,
+      "branch": "utility",
+      "prerequisites": ["util_intel_scout_cost_2"],
+      "effects": { "protected_storage_mult": 1.30 },
+      "icon": "ShieldCheck"
+    },
+    {
+      "id": "util_econ_passive_comp_1",
+      "name": "Soldering Workbenches",
+      "description": "Enables passive generation of Components (1 unit per 5 minutes offline/online).",
+      "cost": 4,
+      "branch": "utility",
+      "prerequisites": ["util_econ_storage_2"],
+      "effects": { "passive_components_gen": 1 },
+      "icon": "Wrench"
+    },
+    {
+      "id": "util_econ_contraband_mult_1",
+      "name": "Prestige Smuggling",
+      "description": "Boosts raidable Contraband gains in PvP by +25%.",
+      "cost": 4,
+      "branch": "utility",
+      "prerequisites": ["util_econ_passive_comp_1"],
+      "effects": { "raid_contraband_mult": 1.25 },
+      "icon": "Ship"
+    }
+  ]
+}

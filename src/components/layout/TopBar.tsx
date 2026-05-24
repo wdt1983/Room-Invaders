@@ -256,6 +256,13 @@ export function TopBar() {
             </Button>
           </Link>
         )}
+        <div className="h-4 w-px bg-border mx-1"></div>
+        <Link href="/squad">
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-300">
+            <Swords className="mr-1.5 size-3.5 text-rose-400" />
+            Squad & Tech
+          </Button>
+        </Link>
       </div>
 
       {/* Resource bar */}

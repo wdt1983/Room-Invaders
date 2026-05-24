@@ -2,30 +2,69 @@ import * as Phaser from 'phaser';
 import { IsometricEngine } from '@/game/systems/IsometricEngine';
 import { DEFAULT_SQUAD_HP, type HasHp } from '@/game/systems/CombatSystem';
 import { EventBus } from '@/game/EventBus';
+import { usePlayerStore } from '@/lib/store/usePlayerStore';
 
 export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
   public currentGridX: number;
   public currentGridY: number;
   /** Stable identifier used by the CombatSystem in EventBus payloads. For
-   *  single-squad MVP this is `'player'`; future multi-squad / NPC guards
-   *  will assign unique labels. */
+   *  squad units this is 'member_X'. */
   public entityId: string;
+  public name: string;
   public hp: number;
   public maxHp: number;
+  public speed: number;
+  public activeAbility: string | null;
+  public passiveGear: string | null;
+  public weapon: string | null;
+  public armor: string | null;
+  public meleeDamage: number;
 
   constructor(
     scene: Phaser.Scene,
     startGridX: number,
     startGridY: number,
     textureKey: string,
-    options: { entityId?: string; maxHp?: number } = {},
+    options: {
+      entityId?: string;
+      name?: string;
+      maxHp?: number;
+      speed?: number;
+      activeAbility?: string | null;
+      passiveGear?: string | null;
+      weapon?: string | null;
+      armor?: string | null;
+    } = {},
   ) {
     super(scene, 0, 0, textureKey);
     this.currentGridX = startGridX;
     this.currentGridY = startGridY;
     this.entityId = options.entityId ?? 'player';
-    this.maxHp = options.maxHp ?? DEFAULT_SQUAD_HP;
+    this.name = options.name ?? 'Squad Member';
+    this.activeAbility = options.activeAbility ?? null;
+    this.passiveGear = options.passiveGear ?? null;
+    this.weapon = options.weapon ?? null;
+    this.armor = options.armor ?? null;
+
+    const activeEffects = usePlayerStore.getState().activeEffects;
+
+    // 1. Calculate individualized maxHp from armor and global multipliers
+    let calculatedMaxHp = options.maxHp ?? Math.round(DEFAULT_SQUAD_HP * (activeEffects.squadHpMult ?? 1.0));
+    if (this.armor === 'reinforced_vest') calculatedMaxHp = Math.round(calculatedMaxHp * 1.15);
+    else if (this.armor === 'tactical_armor') calculatedMaxHp = Math.round(calculatedMaxHp * 1.35);
+    this.maxHp = calculatedMaxHp;
     this.hp = this.maxHp;
+
+    // 2. Calculate individualized movement speed from adrenaline gear and global multipliers
+    let calculatedSpeed = options.speed ?? (1.0 * (activeEffects.squadSpeedMult ?? 1.0));
+    if (this.passiveGear === 'adrenaline_rush') calculatedSpeed = calculatedSpeed * 1.10;
+    this.speed = calculatedSpeed;
+
+    // 3. Calculate individualized melee damage from weapons and global multipliers
+    let baseDmg = 10 * (activeEffects.squadMeleeDmgMult ?? 1.0);
+    if (this.weapon === 'heavy_machete') baseDmg = 15;
+    else if (this.weapon === 'demo_hammer') baseDmg = 20;
+    this.meleeDamage = Math.round(baseDmg);
 
     this.setOrigin(0.5, 1);
     this.scene.add.existing(this);
@@ -49,7 +88,7 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
         targets: this,
         x: screenPos.x + offsetX,
         y: screenPos.y + offsetY,
-        duration: 300, // 300ms per tile
+        duration: Math.round(300 / this.speed), // Scaled dynamically by active effects speed
         ease: 'Linear',
         onUpdate: () => {
           // Dynamically update depth as it moves

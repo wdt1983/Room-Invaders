@@ -33,12 +33,26 @@ export default async function GameLayout({
     .single();
 
   const { data: profile, error: profError } = await (supabase.from('profiles') as any)
-    .select('player_level, xp, safe_mode_until')
+    .select('player_level, xp, safe_mode_until, tech_points')
     .eq('id', user.id)
     .single();
 
-  if (invError || profError) {
-    console.error("[GameLayout] Core state fetch errors:", { invError, profError });
+  // Fetch tech tree unlocks
+  const { data: techUnlocks, error: techError } = await supabase
+    .from('player_tech')
+    .select('node_id')
+    .eq('owner_id', user.id);
+  const unlockedNodes = (techUnlocks || []).map((t: any) => t.node_id);
+
+  // Fetch squad loadout
+  const { data: squadRows, error: squadError } = await supabase
+    .from('player_squad')
+    .select('*')
+    .eq('owner_id', user.id)
+    .order('slot_number');
+
+  if (invError || profError || techError || squadError) {
+    console.error("[GameLayout] Core state fetch errors:", { invError, profError, techError, squadError });
   }
 
   // Standard fallback to prevent empty initializations
@@ -55,7 +69,28 @@ export default async function GameLayout({
     player_level: 1,
     xp: 0,
     safe_mode_until: null,
+    tech_points: 1,
   };
+
+  // If squadRows is empty, dynamically seed the database with 4 default squad members
+  let squad = squadRows || [];
+  if (squad.length === 0) {
+    const { data: seededSquad, error: seedError } = await (supabase
+      .from('player_squad') as any)
+      .insert([
+        { owner_id: user.id, slot_number: 1, name: 'Vanguard' },
+        { owner_id: user.id, slot_number: 2, name: 'Support' },
+        { owner_id: user.id, slot_number: 3, name: 'Breacher' },
+        { owner_id: user.id, slot_number: 4, name: 'Recon' },
+      ])
+      .select();
+
+    if (seedError) {
+      console.error("[GameLayout] Failed to seed default squad slots:", seedError);
+    } else if (seededSquad) {
+      squad = seededSquad;
+    }
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -64,6 +99,9 @@ export default async function GameLayout({
         playerLevel={finalProfile.player_level}
         xp={finalProfile.xp}
         safeModeUntil={finalProfile.safe_mode_until}
+        techPoints={(finalProfile as any).tech_points ?? 1}
+        unlockedTechs={unlockedNodes}
+        squad={squad}
       />
       <TopBar />
       <main className="relative flex-1 overflow-hidden">

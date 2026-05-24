@@ -1,5 +1,5 @@
 # tasks.md — Room Invaders
-## Version: 0.0.12 | Last Updated: 2026-04-18
+## Version: 0.4.0 | Last Updated: 2026-05-24
 
 > **Reconciliation note (2026-04-13):** Task ledger was re-aligned against the actual
 > code state after drift accumulated across sessions. Tasks that were implemented in
@@ -209,15 +209,15 @@
 ## Phase 7: Tech Tree & Loadouts (v0.4)
 **Goal:** Strategic depth. Branching upgrades. Squad customization.
 
-- [TODO] 7.0.1 — Create `tech-tree.json`: full tree structure with 3 branches, ~30 nodes
-- [TODO] 7.0.2 — Implement tech tree UI: visual node graph, unlockable with tech points
-- [TODO] 7.0.3 — Implement tech point earning: 1 per player level, bonus from certain quests
-- [TODO] 7.0.4 — Tech tree effects: unlock new items, stat boosts, new abilities
-- [TODO] 7.0.5 — Implement expanded loadout system: equipment slots per squad member
-- [TODO] 7.0.6 — Implement squad member slots 2-4: unlocked via player level
-- [TODO] 7.0.7 — Implement raid abilities: EMP grenade (disable turrets), medkit (heal), breaching charge (destroy barricade instantly)
-- [TODO] 7.0.8 — Implement multi-entry raids: split squad across 2+ entry points
-- [TODO] 7.0.9 — Add 10+ new defense items gated behind tech tree nodes
+- [DONE] 7.0.1 — Create `tech-tree.json`: full tree structure with 3 branches, ~30 nodes (Created in game/fixtures/tech-tree.json with offense, defense, and utility nodes).
+- [DONE] 7.0.2 — Implement tech tree UI: visual node graph, unlockable with tech points (Developed visual 3-column scrollable research branches under /squad tab).
+- [DONE] 7.0.3 — Implement tech point earning: 1 per player level, trigger based (Implemented handle_player_level_up_tech DB trigger automatically awarding tech points).
+- [DONE] 7.0.4 — Tech tree effects: unlock new items, stat boosts, new abilities (Successfully integrated all 19 passive and active Tech Tree modifiers across Phaser systems, Next.js Server Actions, shop gating, and resolve-raid Deno Edge Functions).
+- [DONE] 7.0.5 — Implement expanded loadout system: equipment slots per squad member (Expanded individual squad loadouts by implementing persistent, individualized Weapons, Armor, and Utility slots, updating Next.js server actions, developing glassmorphic UI selectors, and simulating customized raider stats in Phaser.)
+- [DONE] 7.0.6 — Implement squad member slots 2-4: Spawns 2–4 squad members dynamically in `RaidScene.ts` based on prep selections, integrated with camera tracking, dynamic in-game click-to-select, store-synced active indices, visual pulsing isometric selection rings, and a self-healing walkable-tile pathing fallback at starting entry points to prevent entity overlaps.
+- [DONE] 7.0.7 — Implement raid abilities: Programmed the Medkit (targeted +40 HP heal with rising green cross particles), Breaching Charge (adjacent barricade destruction dealing 9999 dmg with orange blast waves and camera shake), and EMP Grenade (Chebyshev radius 1 turret disable for 6s with cyan electrical arc lines). Integrated pointers events interception inside Phaser and visual keybind hotkeys (Q, W, E) with feedback banners in the React HUD.
+- [DONE] 7.0.8 — Implement multi-entry raids: split squad across 2+ entry points
+- [DONE] 7.0.9 — Add 10+ new defense items gated behind tech tree nodes: Seeded 10 advanced defenses (Tesla Coil, Flame Vent, Laser Alarm, Heavy Autocannon, Patrol Drone, Guard Dog, Poison Trap, Gas Trap, Sound Alarm, and Decoy) into `supabase/seed.sql` with their `tech_tree_node` requirements, and integrated their operational stats into offline `DefenseAI.ts` and `TrapSystem.ts` simulation architectures.
 - [TODO] 7.0.10 — Balance pass: defense values, raid difficulty, resource costs across all content
 
 **Exit Criteria:** Player can invest tech points into branching specializations. Squad is customizable with gear and abilities. Raids have tactical depth with multiple entry points and abilities.

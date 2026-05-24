@@ -1,12 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { GameWrapper } from "@/components/game/GameWrapper";
-import { RaidInitializer } from "@/components/game/RaidInitializer";
-import { RaidHUD } from "@/components/game/RaidHUD";
-import { RaidResults } from "@/components/game/RaidResults";
-import { RaidResolver } from "@/components/game/RaidResolver";
 import { resolveFixture } from "@/game/fixtures/npc-rooms";
+import { RaidPrepContainer } from "@/components/game/RaidPrepContainer";
 
 export const metadata = {
   title: "Room Invaders — Raid",
@@ -20,6 +16,14 @@ export default async function RaidRoutePage({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Fetch player profile for level verification
+  const { data: profile } = await (supabase.from("profiles") as any)
+    .select("player_level")
+    .eq("id", user.id)
+    .single();
+
+  const playerLevel = (profile as any)?.player_level ?? 1;
 
   const { id } = await params;
   
@@ -132,23 +136,18 @@ export default async function RaidRoutePage({
     const derivedDifficulty = roomLevel < 5 ? "easy" : roomLevel < 12 ? "medium" : "hard";
 
     return (
-      <div className="relative h-full w-full">
-        <RaidInitializer
-          target={{
-            id: defenderId,
-            name: defenderProfile.username || "Survivor",
-            difficulty: derivedDifficulty,
-            isPvP: true,
-            gridSize,
-            entryPoints,
-            placedItems: mappedItems as any,
-          }}
-        />
-        <GameWrapper />
-        <RaidHUD />
-        <RaidResults />
-        <RaidResolver />
-      </div>
+      <RaidPrepContainer
+        playerLevel={playerLevel}
+        target={{
+          id: defenderId,
+          name: defenderProfile.username || "Survivor",
+          difficulty: derivedDifficulty,
+          isPvP: true,
+          gridSize,
+          entryPoints,
+          placedItems: mappedItems as any,
+        }}
+      />
     );
   }
 
@@ -157,13 +156,7 @@ export default async function RaidRoutePage({
   let fixture: any = null;
   let isProceduralLoaded = false;
 
-  // Fetch player profile for level verification
-  const { data: profile } = await (supabase.from("profiles") as any)
-    .select("player_level")
-    .eq("id", user.id)
-    .single();
 
-  const playerLevel = (profile as any)?.player_level ?? 1;
 
   if (isProcedural) {
     const tierMatch = id.match(/procedural-tier-(\d+)/);
@@ -222,22 +215,17 @@ export default async function RaidRoutePage({
   }
 
   return (
-    <div className="relative h-full w-full">
-      <RaidInitializer
-        target={{
-          id: isProceduralLoaded ? id : fixture.id,
-          name: fixture.name,
-          difficulty: fixture.difficulty,
-          gridSize: fixture.gridSize,
-          entryPoints: fixture.entryPoints,
-          placedItems: fixture.items || fixture.placedItems,
-          stash: fixture.stash,
-        }}
-      />
-      <GameWrapper />
-      <RaidHUD />
-      <RaidResults />
-      <RaidResolver />
-    </div>
+    <RaidPrepContainer
+      playerLevel={playerLevel}
+      target={{
+        id: isProceduralLoaded ? id : fixture.id,
+        name: fixture.name,
+        difficulty: fixture.difficulty,
+        gridSize: fixture.gridSize,
+        entryPoints: fixture.entryPoints,
+        placedItems: fixture.items || fixture.placedItems,
+        stash: fixture.stash,
+      }}
+    />
   );
 }

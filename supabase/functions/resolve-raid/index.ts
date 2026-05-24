@@ -400,6 +400,26 @@ Deno.serve(async (req: Request) => {
     loot = rollLoot(body.fixtureId, body.outcome, user.id);
   }
 
+  // --- Tech Tree Loot Multipliers (Task 7.0.4) ---
+  const { data: techUnlocks, error: techError } = await supabase
+    .from("player_tech")
+    .select("node_id")
+    .eq("owner_id", user.id);
+
+  if (techError) {
+    console.error("[resolve-raid] Failed to fetch player tech tree:", techError);
+  }
+
+  const unlockedNodes = new Set((techUnlocks || []).map((t: any) => t.node_id));
+  const hasScrapMult = unlockedNodes.has("util_econ_scrap_mult_1");
+  const hasContrabandMult = unlockedNodes.has("util_econ_contraband_mult_1");
+
+  const scrapMultiplier = hasScrapMult ? 1.15 : 1.0;
+  const contrabandMultiplier = hasContrabandMult ? 1.25 : 1.0;
+
+  loot.scrap = Math.round(loot.scrap * scrapMultiplier);
+  loot.contraband = Math.round(loot.contraband * contrabandMultiplier);
+
   // --- Base validations for both modes ---
   if (body.outcome !== "victory" && body.outcome !== "defeat") {
     return json({ success: false, error: "Invalid outcome" }, 400);
