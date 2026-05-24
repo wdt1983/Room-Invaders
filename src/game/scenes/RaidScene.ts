@@ -125,6 +125,7 @@ const STASH_HOLD_TICK_MS = 100;
 export class RaidScene extends Phaser.Scene {
   public gridSystem: GridSystem;
   public currentRotation: number = 0;
+  public gridSize: number = 10;
   public offsetX: number = 0;
   public offsetY: number = 0;
 
@@ -173,6 +174,10 @@ export class RaidScene extends Phaser.Scene {
    *  keep decrementing `useRaidStore` after the raid ended. */
   private timerEvent: Phaser.Time.TimerEvent | null = null;
 
+  private isReplayMode: boolean = false;
+  private replayElapsedSeconds: number = 0;
+  private replayActionLog: any[] = [];
+
   /** Bound EventBus listeners — kept as fields so we can detach them in
    *  `shutdown()`. Detaching by reference prevents stale closures from
    *  firing against a destroyed scene if the user navigates mid-raid. */
@@ -193,7 +198,53 @@ export class RaidScene extends Phaser.Scene {
     // RaidInitializer on the /raid/[id] page). Unknown ids fall back to the
     // default fixture so the scene always has something to render.
     const target = useRaidStore.getState().target;
-    this.fixture = resolveFixture(target?.id ?? DEFAULT_FIXTURE_ID);
+    this.gridSize = target?.gridSize ?? 10;
+    this.gridSystem = new GridSystem(this.gridSize);
+
+    if (target?.isPvP || target?.placedItems) {
+      // Resolve dynamic spawn point adjacent to first entry point
+      const entryPoints = target.entryPoints ?? [];
+      const firstEp = entryPoints[0];
+      let spawn = { x: 1, y: 1 };
+      if (firstEp) {
+        const max = this.gridSize - 1;
+        switch (firstEp.wall) {
+          case 'north': spawn = { x: firstEp.position, y: 1 }; break;
+          case 'south': spawn = { x: firstEp.position, y: max - 1 }; break;
+          case 'east':  spawn = { x: max - 1,     y: firstEp.position }; break;
+          case 'west':  spawn = { x: 1,           y: firstEp.position }; break;
+        }
+      }
+
+      // Project stash tile in the far corner opposite to the spawn point, or use custom stash
+      const stash = (target as any).stash ?? {
+        x: spawn.x < this.gridSize / 2 ? this.gridSize - 3 : 2,
+        y: spawn.y < this.gridSize / 2 ? this.gridSize - 3 : 2
+      };
+
+      this.fixture = {
+        id: target.id,
+        name: target.name,
+        description: target.isPvP ? "Custom player stronghold layout." : "Procedural survivor layout.",
+        difficulty: target.difficulty,
+        requiredLevel: 1,
+        gridSize: this.gridSize,
+        spawn,
+        stash,
+        entryPoints,
+        items: (target.placedItems ?? []).map(item => ({
+          spriteKey: item.spriteKey,
+          gridX: item.gridX,
+          gridY: item.gridY,
+          footprintW: item.footprintW,
+          footprintH: item.footprintH,
+          rotation: item.rotation,
+          type: item.type as any
+        }))
+      };
+    } else {
+      this.fixture = resolveFixture(target?.id ?? DEFAULT_FIXTURE_ID);
+    }
 
     this.offsetX = this.scale.width / 2;
     this.offsetY = this.scale.height / 4;
@@ -201,8 +252,8 @@ export class RaidScene extends Phaser.Scene {
     this.pathDebugGraphics = this.add.graphics().setDepth(1000);
 
     // ── Floor ──────────────────────────────────────────────────────────────
-    for (let x = 0; x < DEFAULT_GRID_SIZE; x++) {
-      for (let y = 0; y < DEFAULT_GRID_SIZE; y++) {
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
         const screenPos = IsometricEngine.worldToScreen(x, y);
         const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, 'iso-tile');
         tile.setData('gridX', x);
@@ -213,7 +264,7 @@ export class RaidScene extends Phaser.Scene {
 
     // ── Entry points: hydrate grid + draw markers ──────────────────────────
     for (const ep of this.fixture.entryPoints) {
-      const tile = entryTileFor(ep, DEFAULT_GRID_SIZE);
+      const tile = entryTileFor(ep, this.gridSize);
       if (tile) {
         this.gridSystem.setTileState(tile.x, tile.y, 'entry_point');
         this.entryPointTiles.add(`${tile.x},${tile.y}`);
@@ -225,7 +276,7 @@ export class RaidScene extends Phaser.Scene {
     this.drawWalls();
 
     for (const ep of this.fixture.entryPoints) {
-      const tile = entryTileFor(ep, DEFAULT_GRID_SIZE);
+      const tile = entryTileFor(ep, this.gridSize);
       if (!tile) continue;
       const screenPos = IsometricEngine.worldToScreen(tile.x, tile.y, this.currentRotation);
       const sprite = this.add.image(
@@ -379,17 +430,24 @@ export class RaidScene extends Phaser.Scene {
     this.input.on('pointermove', this.handlePointerMove, this);
     this.input.on('wheel', this.handleWheel, this);
 
-    // ── Countdown timer (task 3.0.13) ──────────────────────────────────────
-    // Kick off active phase explicitly so prep → active is observable in the
-    // store (tests + RaidHUD). The 1Hz TimerEvent then drives `tickTimer`,
-    // which gates itself on `phase === 'active'`.
+    // ── Replay or Countdown Timer ──
     useRaidStore.getState().beginActivePhase();
-    this.timerEvent = this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: this.onTimerTick,
-      callbackScope: this,
-    });
+    if (this.isReplayMode) {
+      this.replayElapsedSeconds = 0;
+      this.timerEvent = this.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: this.tickReplayPlayback,
+        callbackScope: this
+      });
+    } else {
+      this.timerEvent = this.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: this.onTimerTick,
+        callbackScope: this,
+      });
+    }
 
     // ── External termination hook ──────────────────────────────────────────
     this.onRaidComplete = (payload) => {
@@ -480,7 +538,7 @@ export class RaidScene extends Phaser.Scene {
     if (fixture.spawn) return fixture.spawn;
     const ep = fixture.entryPoints[0];
     if (!ep) return { x: 0, y: 0 };
-    const max = DEFAULT_GRID_SIZE - 1;
+    const max = this.gridSize - 1;
     switch (ep.wall) {
       case 'north': return { x: ep.position, y: 1 };
       case 'south': return { x: ep.position, y: max - 1 };
@@ -816,6 +874,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.isReplayMode) return;
     // Pathfinding is only meaningful while the raid is actively running —
     // prep and results phases are read-only.
     if (useRaidStore.getState().phase !== 'active') return;
@@ -1056,7 +1115,7 @@ export class RaidScene extends Phaser.Scene {
    *  tile-length segments with per-entry tinting. */
   private drawWalls(): void {
     this.wallGraphics.clear();
-    const size = DEFAULT_GRID_SIZE;
+    const size = this.gridSize;
 
     const colorFor = (wall: EntryPointWall, position: number): number => {
       const ep = this.fixture.entryPoints.find((e) => e.wall === wall && e.position === position);
@@ -1110,5 +1169,145 @@ export class RaidScene extends Phaser.Scene {
    *  want typed access to the NPC item list. */
   public getFixtureItems(): ReadonlyArray<NpcPlacedItem> {
     return this.fixture.items;
+  }
+
+  /**
+   * Run the chronological replay ticker at 1Hz playback speed.
+   */
+  private tickReplayPlayback(): void {
+    if (!this.isReplayMode) return;
+
+    // Filter events in the historical log that occurred in the current second tick
+    const events = this.replayActionLog.filter(
+      (e) => e && Math.floor(e.t) === this.replayElapsedSeconds
+    );
+
+    for (const event of events) {
+      this.executeReplayEvent(event);
+    }
+
+    this.replayElapsedSeconds++;
+
+    // Check if we have surpassed the duration of the logged session
+    const maxDuration = this.replayActionLog.reduce((max, e) => Math.max(max, e?.t ?? 0), 0);
+    if (this.replayElapsedSeconds > maxDuration + 1) {
+      this.stopTimer();
+
+      // Complete the replay scene gracefully
+      this.time.delayedCall(2000, () => {
+        const lastEvent = this.replayActionLog[this.replayActionLog.length - 1];
+        const isVictory = lastEvent?.type === 'stash_secured';
+        
+        this.finishRaid(
+          isVictory ? 'victory' : 'defeat',
+          isVictory 
+            ? "Replay playback complete: Stronghold breached!" 
+            : "Replay playback complete: Defended successfully."
+        );
+      });
+    }
+  }
+
+  /**
+   * Translates chronological database log events to visible Phaser visual effects.
+   */
+  private executeReplayEvent(event: any): void {
+    if (!event) return;
+
+    switch (event.type) {
+      case "move": {
+        const targetX = event.data?.gridX;
+        const targetY = event.data?.gridY;
+        if (targetX !== undefined && targetY !== undefined) {
+          const path = [{ x: targetX, y: targetY }];
+          this.playerEntity.walkPath(path, this.offsetX, this.offsetY, this.currentRotation);
+          this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
+        }
+        break;
+      }
+      case "trap_triggered": {
+        this.handleTrapTriggered({
+          gridX: event.data?.gridX,
+          gridY: event.data?.gridY,
+          spriteKey: event.data?.spriteKey,
+          entityId: event.data?.entityId,
+          damageDealt: event.data?.damage ?? 0,
+          stunSeconds: event.data?.stun ?? 0,
+          immobilizeSeconds: event.data?.immobilize ?? 0,
+          alertRadius: event.data?.alertRadius ?? 0,
+          slow: event.data?.slow ?? 0,
+          usesRemaining: event.data?.usesRemaining ?? 0,
+          exhausted: event.data?.exhausted ?? false,
+        });
+        break;
+      }
+      case "turret_fired": {
+        this.handleTurretFired({
+          gridX: event.data?.gridX,
+          gridY: event.data?.gridY,
+          spriteKey: event.data?.spriteKey,
+          targetEntityId: event.data?.targetEntityId,
+          targetGridX: event.data?.targetGridX,
+          targetGridY: event.data?.targetGridY,
+          damageDealt: event.data?.damage ?? 0,
+          stunSeconds: event.data?.stun ?? 0,
+          ammoRemaining: event.data?.ammoRemaining ?? 0,
+          exhausted: event.data?.exhausted ?? false,
+          alerted: event.data?.alerted ?? false,
+        });
+        break;
+      }
+      case "barricade_attacked": {
+        const sprite = this.furnitureItems.find(
+          (f) => f.gridX === event.data?.gridX && f.gridY === event.data?.gridY
+        );
+        if (sprite && sprite.active) {
+          this.tweens.add({
+            targets: sprite,
+            alpha: { from: 1.0, to: 0.5 },
+            duration: 100,
+            yoyo: true,
+            repeat: 0,
+            ease: "Sine.easeInOut",
+            onComplete: () => {
+              if (sprite.active) sprite.setAlpha(1);
+            },
+          });
+        }
+        break;
+      }
+      case "defense_destroyed": {
+        const idx = this.furnitureItems.findIndex(
+          (f) => f.gridX === event.data?.gridX && f.gridY === event.data?.gridY
+        );
+        if (idx >= 0) {
+          this.furnitureItems[idx].destroy();
+          this.furnitureItems.splice(idx, 1);
+        }
+        this.gridSystem.setTileState(event.data?.gridX, event.data?.gridY, "empty");
+        break;
+      }
+      case "damage": {
+        // Render HP reduction visual in the HUD
+        useRaidStore.getState().setSquadHp(event.data?.hp ?? 0, event.data?.maxHp);
+        break;
+      }
+      case "stash_entered": {
+        useRaidStore.getState().setStashHoldProgress(0.1);
+        break;
+      }
+      case "stash_secured": {
+        useRaidStore.getState().setStashHoldProgress(1.0);
+        break;
+      }
+      case "stash_cancelled": {
+        useRaidStore.getState().setStashHoldProgress(0);
+        break;
+      }
+      case "entity_killed": {
+        useRaidStore.getState().setSquadHp(0);
+        break;
+      }
+    }
   }
 }

@@ -6,6 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Map, ScanEye, User, ShieldAlert } from 'lucide-react';
 
+import { MapDashboard } from './MapDashboard';
+
 export const metadata = {
   title: "Room Invaders - Recon Map",
 };
@@ -16,6 +18,40 @@ export default async function MapPage() {
 
   if (!user) {
     redirect('/login');
+  }
+
+  // Fetch player's own profile for central base rendering
+  const { data: ownProfile } = await supabase
+    .from("profiles")
+    .select("id, username, player_level")
+    .eq("id", user.id)
+    .single();
+
+  const playerProfile = {
+    id: user.id,
+    username: ownProfile?.username || "You",
+    player_level: ownProfile?.player_level || 1
+  };
+
+  // Fetch accepted friends in a highly robust two-step lookup
+  const { data: friendshipRows } = await supabase
+    .from("friendships")
+    .select("sender_id, receiver_id, status")
+    .eq("status", "accepted")
+    .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+  let friends: any[] = [];
+  if (friendshipRows && friendshipRows.length > 0) {
+    const friendIds = friendshipRows.map((r: any) => 
+      r.sender_id === user.id ? r.receiver_id : r.sender_id
+    );
+    
+    const { data: friendProfiles } = await supabase
+      .from("profiles")
+      .select("id, username, player_level")
+      .in("id", friendIds);
+      
+    friends = friendProfiles || [];
   }
 
   // Fetch session access token to authorize the matchmaking edge function invoke
@@ -59,6 +95,8 @@ export default async function MapPage() {
         room_level: room?.room_level || 1,
         grid_size: room?.grid_size || 10,
         defense_rating: room?.defense_rating || 0,
+        scrap_overflow: 0,
+        components_overflow: 0,
       };
     });
   }
@@ -91,58 +129,13 @@ export default async function MapPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {targets && targets.length > 0 ? (
-          targets.map((target: any) => {
-            return (
-              <Card key={target.id} className="border-primary/20 bg-card/40 backdrop-blur shadow-xl hover:border-primary/40 hover:bg-card/50 transition-all duration-300">
-                <CardHeader className="pb-3 border-b border-border/50">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="flex items-center gap-2 text-sm font-bold text-foreground">
-                      <User className="w-4 h-4 text-muted-foreground" />
-                      {target.username || 'Unknown Target'}
-                    </CardTitle>
-                    <div className="bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded text-[10px] font-bold">
-                      Lv. {target.player_level || 1}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="py-3.5 space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stronghold Level:</span>
-                    <span className="font-bold text-foreground">Lvl {target.room_level || 1}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Grid Dimensions:</span>
-                    <span className="font-mono text-foreground">{target.grid_size}x{target.grid_size}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Defense Rating:</span>
-                    <span className="font-mono font-bold text-cyan-400">{target.defense_rating || 0}</span>
-                  </div>
-                </CardContent>
-                <CardFooter className="pt-2 border-t border-border/50">
-                  {/* Scout → raid. `/raid/[id]` resolves dynamically */}
-                  <Link href={`/raid/${target.id}`} className="w-full">
-                    <Button variant="default" className="w-full gap-2 text-xs font-bold h-8">
-                      <ScanEye className="w-3.5 h-3.5" />
-                      Scout Base
-                    </Button>
-                  </Link>
-                </CardFooter>
-              </Card>
-            )
-          })
-        ) : (
-          <div className="col-span-full flex flex-col items-center justify-center p-12 text-muted-foreground bg-card/30 rounded-lg border border-dashed border-border/60 shadow-inner">
-            <ShieldAlert className="w-12 h-12 mb-4 opacity-50 text-cyan-400 animate-pulse" />
-            <h3 className="text-lg font-medium text-foreground">No Vulnerable Targets</h3>
-            <p className="text-xs text-center max-w-sm mt-2 leading-relaxed text-muted-foreground">
-              Every coordinate in your room bracket has active ceasefire protocols or shields. Check back as shields expire!
-            </p>
-          </div>
-        )}
-      </div>
+      <MapDashboard 
+        targets={targets} 
+        bracketRange={bracketRange} 
+        fallbackActive={fallbackActive} 
+        playerProfile={playerProfile}
+        friends={friends}
+      />
     </div>
   );
 }

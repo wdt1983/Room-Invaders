@@ -8,6 +8,7 @@ import { deactivateSafeMode } from "@/app/(game)/quests/actions";
 import { Button } from "@/components/ui/button";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { useRoomStore } from "@/lib/store/useRoomStore";
+import { createClient } from "@/lib/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,15 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from "@/components/ui/sheet";
 import {
   Cog,
   Cpu,
@@ -31,7 +41,13 @@ import {
   Map,
   Home,
   Shield,
-  Radar
+  Radar,
+  Bell,
+  Play,
+  Swords,
+  Users,
+  CheckCircle,
+  AlertTriangle
 } from "lucide-react";
 import { useUIStore, type UIMode } from "@/lib/store/useUIStore";
 import { EventBus } from "@/game/EventBus";
@@ -50,6 +66,70 @@ export function TopBar() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [now, setNow] = useState(new Date());
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [defenseRaids, setDefenseRaids] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  const fetchNotifsAndLogs = async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Fetch unread notifications count and list
+    const { data: notifs } = await (supabase
+      .from("notifications") as any)
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    
+    if (notifs) {
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter((n: any) => !n.is_read).length);
+    }
+
+    // Fetch incoming PvP raids logs
+    const { data: raids } = await (supabase
+      .from("raid_history") as any)
+      .select(`
+        id,
+        outcome,
+        scrap_looted,
+        components_looted,
+        seconds_elapsed,
+        created_at,
+        profiles:player_id ( id, username, player_level )
+      `)
+      .eq("defender_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (raids) setDefenseRaids(raids);
+  };
+
+  useEffect(() => {
+    fetchNotifsAndLogs();
+    
+    // Refresh notifications every 15 seconds
+    const interval = setInterval(fetchNotifsAndLogs, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkAllAsRead = async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await (supabase
+      .from("notifications") as any)
+      .update({ is_read: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false);
+
+    fetchNotifsAndLogs();
+    toast.success("All notifications marked as read");
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -369,6 +449,187 @@ export function TopBar() {
             </>
           )}
         </Button>
+        {/* Security feed / notifications sheet */}
+        <Sheet>
+          <SheetTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="relative size-8 border-border text-muted-foreground hover:bg-muted/10 hover:text-foreground"
+                title="Stronghold Security Feed"
+              >
+                <Bell className="size-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white ring-2 ring-background animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </Button>
+            }
+          />
+          <SheetContent className="w-full sm:max-w-md bg-card/95 border-l border-primary/20 backdrop-blur-md flex flex-col p-6 h-full text-xs">
+            <SheetHeader className="pb-4 border-b border-border/50">
+              <SheetTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Radar className="size-5 text-primary animate-pulse" />
+                Stronghold Security Feed
+              </SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground">
+                Review alert logs, replay incoming intrusions, or plan retaliation raids.
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-5 pr-1 select-none">
+              {/* Tab Selector */}
+              <div className="flex bg-background/50 border border-border/40 p-1 rounded-lg">
+                <button 
+                  onClick={() => setIsNotifOpen(false)} // false means Show Defense Logs
+                  className={`flex-1 py-1.5 rounded font-bold text-center transition-all ${!isNotifOpen ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' : 'text-muted-foreground'}`}
+                >
+                  ⚔️ Defense Logs ({defenseRaids.length})
+                </button>
+                <button 
+                  onClick={() => setIsNotifOpen(true)} // true means Show Alerts
+                  className={`flex-1 py-1.5 rounded font-bold text-center transition-all ${isNotifOpen ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' : 'text-muted-foreground'}`}
+                >
+                  🔔 Alerts {unreadCount > 0 && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-red-500 animate-ping"></span>}
+                </button>
+              </div>
+
+              {!isNotifOpen ? (
+                /* Defense Logs List */
+                <div className="space-y-3.5">
+                  {defenseRaids.length > 0 ? (
+                    defenseRaids.map((raid) => {
+                      const attacker = Array.isArray(raid.profiles) ? raid.profiles[0] : raid.profiles;
+                      const isBreached = raid.outcome === "victory"; // In defender perspective, "victory" in resolve-raid means attacker victory (breached)
+                      
+                      return (
+                        <div key={raid.id} className="border border-border/50 bg-background/30 rounded-xl p-3.5 space-y-3 shadow-inner">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                                <Users className="size-3.5 text-muted-foreground" />
+                                {attacker?.username || "Unknown Intruder"}
+                              </div>
+                              <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">
+                                {new Date(raid.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isBreached ? "bg-red-500/10 border border-red-500/20 text-red-400" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"}`}>
+                              {isBreached ? "⛔ BREACHED" : "🛡️ DEFENDED"}
+                            </span>
+                          </div>
+
+                          {isBreached ? (
+                            <div className="text-[11px] text-muted-foreground space-y-1 bg-red-950/10 border border-red-500/10 rounded-lg p-2.5 shadow-inner">
+                              <div className="flex justify-between">
+                                <span>⚙️ Scrap stolen:</span>
+                                <span className="font-bold text-red-400">-{raid.scrap_looted} units</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>🎛️ Components stolen:</span>
+                                <span className="font-bold text-red-400">-{raid.components_looted} units</span>
+                              </div>
+                              <div className="flex justify-between text-[10px] text-red-400/80 font-semibold pt-1 border-t border-red-500/10 mt-1">
+                                <span>Reputation Loss:</span>
+                                <span>-10 RP</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-muted-foreground bg-emerald-950/10 border border-emerald-500/10 rounded-lg p-2.5 shadow-inner">
+                              <span className="text-emerald-400 font-bold">Intruder successfully repelled!</span> You earned <span className="text-emerald-400 font-bold">+15 RP</span>.
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <Link href={`/raid/replay/${raid.id}`} className="flex-1">
+                              <Button variant="outline" className="w-full text-[10px] font-bold h-7 gap-1 border-border/80 hover:bg-muted">
+                                <Play className="size-3 text-primary" />
+                                Watch Replay
+                              </Button>
+                            </Link>
+                            {attacker?.id && (
+                              <Link href={`/raid/${attacker.id}`} className="flex-1">
+                                <Button className="w-full text-[10px] font-bold h-7 gap-1 bg-red-900/80 border border-red-800 hover:bg-red-800 text-red-200">
+                                  <Swords className="size-3" />
+                                  Revenge
+                                </Button>
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Shield className="size-10 mx-auto opacity-30 mb-2" />
+                      <p className="text-xs">No intrusions detected on your coordinates.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Alerts List */
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center pb-1">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Latest Alerts</span>
+                    {unreadCount > 0 && (
+                      <button onClick={handleMarkAllAsRead} className="text-[10px] text-primary font-bold hover:underline">
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  {notifications.length > 0 ? (
+                    notifications.map((notif) => {
+                      const isRead = notif.is_read;
+                      const isBreachedAlert = notif.title.includes("Breach") || notif.title.includes("Breached");
+                      
+                      return (
+                        <div 
+                          key={notif.id} 
+                          className={`border rounded-xl p-3 space-y-1 relative shadow-inner ${isRead ? "border-border/30 bg-background/10" : "border-primary/20 bg-primary/5"}`}
+                        >
+                          {!isRead && (
+                            <span className="absolute top-3.5 right-3.5 h-2 w-2 rounded-full bg-red-500"></span>
+                          )}
+                          <h5 className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                            {isBreachedAlert ? (
+                              <AlertTriangle className="size-3.5 text-red-500 animate-pulse" />
+                            ) : (
+                              <CheckCircle className="size-3.5 text-emerald-500" />
+                            )}
+                            {notif.title}
+                          </h5>
+                          <p className="text-muted-foreground text-[10.5px] leading-relaxed pr-2">
+                            {notif.content}
+                          </p>
+                          <span className="text-[9px] text-muted-foreground/60 font-mono block pt-0.5">
+                            {new Date(notif.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Bell className="size-10 mx-auto opacity-30 mb-2" />
+                      <p className="text-xs">Your log is completely clear of alerts.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <SheetClose
+              render={
+                <Button variant="outline" className="w-full text-xs font-bold border-border/80 hover:bg-muted mt-2">
+                  Close Feed
+                </Button>
+              }
+            />
+          </SheetContent>
+        </Sheet>
+
         <form action={logout}>
           <Button
             id="logout-button"

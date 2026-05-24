@@ -78,6 +78,21 @@ export interface RaidTarget {
   id: string;
   name: string;
   difficulty: RaidDifficulty;
+  isPvP?: boolean;
+  gridSize?: number;
+  entryPoints?: Array<{ wall: 'north' | 'south' | 'east' | 'west'; type: 'door' | 'window' | 'vent'; position: number }>;
+  placedItems?: Array<{
+    id: string;
+    spriteKey: string;
+    gridX: number;
+    gridY: number;
+    footprintW: number;
+    footprintH: number;
+    rotation: number;
+    type: string;
+  }>;
+  isReplay?: boolean;
+  replayActionLog?: any[];
 }
 
 interface RaidState {

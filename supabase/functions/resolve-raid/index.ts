@@ -166,14 +166,10 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: "Invalid JSON" }, 400);
   }
 
-  // --- Validation ---
-  const fixture = FIXTURES[body.fixtureId];
-  if (!fixture) return json({ success: false, error: `Unknown fixture: ${body.fixtureId}` }, 400);
-
-  // Fetch profile early for level requirement and XP updates
+  // Fetch profile early for level requirement, XP, and reputation updates
   // deno-lint-ignore no-explicit-any
   const { data: profile, error: profileErr } = await (supabase.from("profiles") as any)
-    .select("xp, player_level")
+    .select("xp, player_level, username, reputation")
     .eq("id", user.id)
     .single();
 
@@ -184,31 +180,227 @@ Deno.serve(async (req: Request) => {
 
   const previousPlayerLevel = Math.max(1, profile.player_level ?? 1);
 
-  // Enforce level lock
-  if (previousPlayerLevel < fixture.requiredLevel) {
-    return json({ success: false, error: "Player level too low for this target" }, 400);
+  // Check if target is a player UUID (PvP raid)
+  const isPvP = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(body.fixtureId);
+
+  let loot: {
+    scrap: number;
+    components: number;
+    credits: number;
+    intel: number;
+    contraband: number;
+    xpGained: number;
+    seed: number;
+  };
+
+  if (isPvP) {
+    const defenderId = body.fixtureId;
+    if (defenderId === user.id) {
+      return json({ success: false, error: "Cannot raid yourself" }, 400);
+    }
+
+    // Query defender profile details
+    const { data: dProfile, error: dpErr } = await (supabase.from("profiles") as any)
+      .select("xp, player_level, username, reputation")
+      .eq("id", defenderId)
+      .single();
+
+    if (dpErr || !dProfile) {
+      console.warn("[resolve-raid] Defender profile not found:", dpErr);
+      return json({ success: false, error: "Defender profile not found" }, 404);
+    }
+
+    // Query defender room details
+    const { data: dRoom, error: drErr } = await (supabase.from("rooms") as any)
+      .select("room_level, grid_size, shield_until, defense_rating, times_raided")
+      .eq("owner_id", defenderId)
+      .single();
+
+    if (drErr || !dRoom) {
+      console.warn("[resolve-raid] Defender room not found:", drErr);
+      return json({ success: false, error: "Defender room not found" }, 404);
+    }
+
+    // Enforce active shield check
+    const now = new Date();
+    if (dRoom.shield_until && new Date(dRoom.shield_until) > now) {
+      return json({ success: false, error: "Target is currently protected by an active shield" }, 400);
+    }
+
+    // Enforce 24-hour daily PvP raid cap (max 3 received per defender in last 24h)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: incomingRaidCount, error: countErr } = await (supabase.from("raid_history") as any)
+      .select("id", { count: "exact", head: true })
+      .eq("defender_id", defenderId)
+      .gt("created_at", oneDayAgo);
+
+    if (!countErr && incomingRaidCount && incomingRaidCount >= 3) {
+      return json({ success: false, error: "Target has reached the daily limit of incoming raids" }, 400);
+    }
+
+    // Query defender inventory to calculate overflow resources
+    const { data: dInventory, error: diErr } = await (supabase.from("inventories") as any)
+      .select("scrap, components, storage_capacity")
+      .eq("owner_id", defenderId)
+      .single();
+
+    if (diErr || !dInventory) {
+      console.warn("[resolve-raid] Defender inventory not found:", diErr);
+      return json({ success: false, error: "Defender inventory not found" }, 500);
+    }
+
+    const dScrap = dInventory.scrap ?? 0;
+    const dComponents = dInventory.components ?? 0;
+    const dStorageCapacity = dInventory.storage_capacity ?? 500;
+
+    const scrapOverflow = Math.max(0, dScrap - dStorageCapacity);
+    const componentsOverflow = Math.max(0, dComponents - Math.floor(dStorageCapacity * 0.25));
+
+    // Calculate plundered assets (50% of overflows) if victory
+    const plunderedScrap = body.outcome === "victory" ? Math.floor(scrapOverflow * 0.5) : 0;
+    const plunderedComponents = body.outcome === "victory" ? Math.floor(componentsOverflow * 0.5) : 0;
+
+    // Deduct stolen assets from defender inventory if victory
+    if (body.outcome === "victory" && (plunderedScrap > 0 || plunderedComponents > 0)) {
+      const { error: deductErr } = await (supabase.from("inventories") as any)
+        .update({
+          scrap: Math.max(0, dScrap - plunderedScrap),
+          components: Math.max(0, dComponents - plunderedComponents),
+          updated_at: new Date().toISOString()
+        })
+        .eq("owner_id", defenderId);
+
+      if (deductErr) {
+        console.error("[resolve-raid] Failed to deduct loot from defender:", deductErr);
+      }
+    }
+
+    // Update defender shield (8h shield granted to defender upon victory raid)
+    if (body.outcome === "victory") {
+      const shieldUntil = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+      const { error: shieldErr } = await (supabase.from("rooms") as any)
+        .update({
+          shield_until: shieldUntil,
+          times_raided: (dRoom.times_raided ?? 0) + 1,
+          last_raided_at: new Date().toISOString()
+        })
+        .eq("owner_id", defenderId);
+
+      if (shieldErr) {
+        console.error("[resolve-raid] Failed to update defender shield:", shieldErr);
+      }
+    }
+
+    // Award reputation (Attacker victory: Attacker +15 RP, Defender -10 RP; Defeat: Attacker -10 RP, Defender +15 RP)
+    const attRepDelta = body.outcome === "victory" ? 15 : -10;
+    const defRepDelta = body.outcome === "victory" ? -10 : 15;
+
+    // Update defender profile reputation (clamp at 0)
+    const { error: defRepErr } = await (supabase.from("profiles") as any)
+      .update({
+        reputation: Math.max(0, (dProfile.reputation ?? 0) + defRepDelta),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", defenderId);
+
+    if (defRepErr) {
+      console.error("[resolve-raid] Failed to update defender reputation:", defRepErr);
+    }
+
+    // Create database notification for defender
+    const notificationTitle = body.outcome === "victory" ? "Stronghold Breached!" : "Raid Defended Successfully";
+    const notificationContent = body.outcome === "victory"
+      ? `Your stronghold was breached by ${profile.username || "an attacker"}! They plundered ${plunderedScrap} Scrap and ${plunderedComponents} Components.`
+      : `Your defensive layout successfully repelled ${profile.username || "an attacker"}! You earned +15 RP.`;
+
+    const { error: notifErr } = await (supabase.from("notifications") as any)
+      .insert({
+        user_id: defenderId,
+        type: "raid",
+        title: notificationTitle,
+        content: notificationContent,
+        metadata: {
+          attacker_id: user.id,
+          attacker_username: profile.username,
+          outcome: body.outcome,
+          scrap_stolen: plunderedScrap,
+          components_stolen: plunderedComponents,
+          rep_delta: defRepDelta
+        }
+      });
+
+    if (notifErr) {
+      console.error("[resolve-raid] Failed to insert notification:", notifErr);
+    }
+
+    // Update attacker profile reputation (cap at 0)
+    const { error: attRepErr } = await (supabase.from("profiles") as any)
+      .update({
+        reputation: Math.max(0, (profile.reputation ?? 0) + attRepDelta),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", user.id);
+
+    if (attRepErr) {
+      console.error("[resolve-raid] Failed to update attacker reputation:", attRepErr);
+    }
+
+    // Assign loot details for attacker response
+    loot = {
+      scrap: plunderedScrap,
+      components: plunderedComponents,
+      credits: 0,
+      intel: body.outcome === "victory" ? 3 : 0, // award a small amount of intel for player victories
+      contraband: 0,
+      xpGained: body.outcome === "victory" ? 80 : 20, // fixed XP for PvP
+      seed: Math.floor(Math.random() * 1000000)
+    };
+
+  } else {
+    // --- NPC Fixture Path (Standard or Procedural) ---
+    let requiredLevel = 1;
+    const isProcedural = body.fixtureId.startsWith("procedural-tier-");
+
+    if (isProcedural) {
+      const tierMatch = body.fixtureId.match(/procedural-tier-(\d+)/);
+      const tier = tierMatch ? parseInt(tierMatch[1], 10) : 1;
+      requiredLevel = tier;
+    } else {
+      const fixture = FIXTURES[body.fixtureId];
+      if (!fixture) return json({ success: false, error: `Unknown fixture: ${body.fixtureId}` }, 400);
+      requiredLevel = fixture.requiredLevel;
+    }
+
+    // Enforce level lock
+    if (previousPlayerLevel < requiredLevel) {
+      return json({ success: false, error: "Player level too low for this target" }, 400);
+    }
+
+    // Enforce 4-hour cooldown
+    const COOLDOWN_MS = 4 * 60 * 60 * 1000;
+    const fourHoursAgo = new Date(Date.now() - COOLDOWN_MS).toISOString();
+    // deno-lint-ignore no-explicit-any
+    const { data: recentRaids, error: cooldownError } = await (supabase.from("raid_history") as any)
+      .select("id")
+      .eq("player_id", user.id)
+      .eq("target_id", body.fixtureId)
+      .gt("created_at", fourHoursAgo)
+      .limit(1);
+
+    if (cooldownError) {
+      console.warn("[resolve-raid] Cooldown check failed:", cooldownError);
+      return json({ success: false, error: "Failed to verify target cooldown status" }, 500);
+    }
+
+    if (recentRaids && recentRaids.length > 0) {
+      return json({ success: false, error: "Target is currently on cooldown" }, 400);
+    }
+
+    // Reward computation (NPC-specific)
+    loot = rollLoot(body.fixtureId, body.outcome, user.id);
   }
 
-  // Enforce 4-hour cooldown
-  const COOLDOWN_MS = 4 * 60 * 60 * 1000;
-  const fourHoursAgo = new Date(Date.now() - COOLDOWN_MS).toISOString();
-  // deno-lint-ignore no-explicit-any
-  const { data: recentRaids, error: cooldownError } = await (supabase.from("raid_history") as any)
-    .select("id")
-    .eq("player_id", user.id)
-    .eq("target_id", body.fixtureId)
-    .gt("created_at", fourHoursAgo)
-    .limit(1);
-
-  if (cooldownError) {
-    console.warn("[resolve-raid] Cooldown check failed:", cooldownError);
-    return json({ success: false, error: "Failed to verify target cooldown status" }, 500);
-  }
-
-  if (recentRaids && recentRaids.length > 0) {
-    return json({ success: false, error: "Target is currently on cooldown" }, 400);
-  }
-
+  // --- Base validations for both modes ---
   if (body.outcome !== "victory" && body.outcome !== "defeat") {
     return json({ success: false, error: "Invalid outcome" }, 400);
   }
@@ -232,8 +424,7 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: "Invalid secondsElapsed" }, 400);
   }
 
-  // Victory requires the squad to have secured the stash — the sole
-  // victory trigger in 3.0.12 is a `stash_secured` action log entry.
+  // Victory validation check
   if (body.outcome === "victory") {
     const secured = body.actionLog.some((e) => e?.type === "stash_secured");
     if (!secured) {
@@ -243,13 +434,6 @@ Deno.serve(async (req: Request) => {
 
   // Damage taken from HP delta — server-computed, not taken from the client.
   const damageTaken = Math.max(0, body.squadMaxHp - body.squadHp);
-
-  // --- Reward computation (task 3.0.17 — LootSystem) ---
-  // Per-NPC loot table + seeded RNG. Seed derived from userId +
-  // second-granularity timestamp so the same raid can be replayed
-  // reproducibly (Phase 5 replay storage) and two rapid-fire POSTs
-  // in the same second collide on the same roll.
-  const loot = rollLoot(body.fixtureId, body.outcome, user.id);
 
   // --- Commit loot + XP ---
   // Fetch inventory; auto-create with defaults if missing. Older
@@ -351,12 +535,25 @@ Deno.serve(async (req: Request) => {
 
   // --- Record raid history ---
   // deno-lint-ignore no-explicit-any
+  const historyInsert: Record<string, unknown> = {
+    player_id: user.id,
+    target_id: body.fixtureId,
+    outcome: body.outcome,
+    action_log: body.actionLog,
+    squad_hp: body.squadHp,
+    seconds_elapsed: body.secondsElapsed,
+    scrap_looted: loot.scrap,
+    components_looted: loot.components,
+    credits_looted: loot.credits,
+  };
+  
+  if (isPvP) {
+    historyInsert.defender_id = body.fixtureId;
+  }
+
+  // deno-lint-ignore no-explicit-any
   const { error: historyError } = await (supabase.from("raid_history") as any)
-    .insert({
-      player_id: user.id,
-      target_id: body.fixtureId,
-      outcome: body.outcome,
-    });
+    .insert(historyInsert);
   
   if (historyError) {
     console.warn("[resolve-raid] Failed to record raid history:", historyError);

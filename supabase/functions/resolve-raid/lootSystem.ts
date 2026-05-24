@@ -179,6 +179,50 @@ function rollInt(rng: () => number, min: number, max: number): number {
 }
 
 /**
+ * Resolves the loot table for a given fixture ID. If the ID is a procedural
+ * NPC room, it dynamically constructs a table scaled progressively from Tier 1 to Tier 10.
+ */
+export function getLootTableForFixture(fixtureId: string): NpcLootTable {
+  if (fixtureId.startsWith("procedural-tier-")) {
+    const tierMatch = fixtureId.match(/procedural-tier-(\d+)/);
+    const tier = tierMatch ? parseInt(tierMatch[1], 10) : 1;
+
+    // Scale loot rewards progressively based on Tier 1 to 10
+    const xpVictory = 45 + tier * 15; // Tier 1 = 60 XP, Tier 10 = 195 XP
+    const xpDefeat = 10 + Math.floor(tier * 2); // Tier 1 = 12 XP, Tier 10 = 30 XP
+
+    const victory: LootTableEntry[] = [
+      { resource: "scrap", min: 15 + tier * 5, max: 25 + tier * 10, chance: 1.0 },
+      { resource: "components", min: 2 + Math.floor(tier * 1.5), max: 5 + Math.floor(tier * 2.5), chance: 1.0 }
+    ];
+
+    // Credits unlock at Tier 2
+    if (tier >= 2) {
+      victory.push({ resource: "credits", min: 5 + tier * 2, max: 15 + tier * 4, chance: 0.3 + (tier * 0.03) });
+    }
+
+    // Intel unlocks at Tier 4
+    if (tier >= 4) {
+      victory.push({ resource: "intel", min: 1 + Math.floor(tier / 4), max: 2 + Math.floor(tier / 3), chance: 0.15 + (tier * 0.02) });
+    }
+
+    // Contraband drops with small chance at Tier 7+
+    if (tier >= 7) {
+      victory.push({ resource: "contraband", min: 1, max: Math.max(1, Math.floor(tier / 6)), chance: 0.05 + (tier * 0.01) });
+    }
+
+    return {
+      victory,
+      defeat: [],
+      xpVictory,
+      xpDefeat
+    };
+  }
+
+  return NPC_LOOT_TABLES[fixtureId] ?? FALLBACK_LOOT;
+}
+
+/**
  * Roll the full loot payload for a raid outcome. Walks the per-NPC
  * table's `victory` or `defeat` entries; each entry rolls its own
  * `chance` gate and, if it passes, adds `rollInt(min, max)` to the
@@ -190,7 +234,7 @@ export function rollLoot(
   userId: string,
   nowMs = Date.now(),
 ): LootRoll {
-  const table = NPC_LOOT_TABLES[fixtureId] ?? FALLBACK_LOOT;
+  const table = getLootTableForFixture(fixtureId);
   const seed = deriveSeed(userId, nowMs);
   const rng = mulberry32(seed);
 
@@ -213,3 +257,4 @@ export function rollLoot(
   const xpGained = outcome === "victory" ? table.xpVictory : table.xpDefeat;
   return { scrap, components, credits, intel, contraband, xpGained, seed };
 }
+

@@ -98,7 +98,12 @@ Deno.serve(async (req: Request) => {
           id,
           username,
           player_level,
-          safe_mode_until
+          safe_mode_until,
+          inventories (
+            scrap,
+            components,
+            storage_capacity
+          )
         )
       `)
       .neq("owner_id", user.id)
@@ -137,6 +142,19 @@ Deno.serve(async (req: Request) => {
   // Format targets response
   const targets = matched.map((opp: any) => {
     const profile = Array.isArray(opp.profiles) ? opp.profiles[0] : opp.profiles;
+    const inventories = Array.isArray(profile?.inventories) ? profile.inventories[0] : profile?.inventories;
+    
+    const scrap = inventories?.scrap ?? 200;
+    const components = inventories?.components ?? 50;
+    const storage_capacity = inventories?.storage_capacity ?? 500;
+
+    const scrapOverflow = Math.max(0, scrap - storage_capacity);
+    const componentsOverflow = Math.max(0, components - Math.floor(storage_capacity * 0.25));
+
+    // Attacker's loot pool is 50% of overflow
+    const scrapLootPool = Math.floor(scrapOverflow * 0.5);
+    const componentsLootPool = Math.floor(componentsOverflow * 0.5);
+
     return {
       id: profile.id,
       username: profile.username || "Survivor",
@@ -144,6 +162,8 @@ Deno.serve(async (req: Request) => {
       room_level: opp.room_level || 1,
       grid_size: opp.grid_size || 10,
       defense_rating: opp.defense_rating || 0,
+      scrap_overflow: scrapLootPool,
+      components_overflow: componentsLootPool,
     };
   });
 

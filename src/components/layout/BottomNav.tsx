@@ -7,7 +7,7 @@ import {
   Map,
   Crosshair,
   ClipboardList,
-  User,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { href: "/map", icon: Map, label: "Map" },
   { href: "/raid", icon: Crosshair, label: "Raid" },
   { href: "/quests", icon: ClipboardList, label: "Quests" },
-  { href: "/profile", icon: User, label: "Profile" },
+  { href: "/social", icon: Users, label: "Social" },
 ] as const;
 
 export function BottomNav() {

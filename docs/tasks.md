@@ -168,41 +168,41 @@
 - [DONE] 5.0.2 — Implement safe mode timer display in HUD, expiration logic
 - [DONE] 5.0.3 — Implement manual safe mode deactivation (player choice)
 - [DONE] 5.0.4 — Implement PvP matchmaking: `matchmaking` Edge Function — find opponent by room level bracket ±1
-- [TODO] 5.0.5 — PvP target info screen: show defender's defense rating, room level, replay count (not layout)
-- [TODO] 5.0.6 — Adapt `RaidScene.ts` to load player room layouts (from DB) instead of NPC JSON
-- [TODO] 5.0.7 — Implement loot transfer: attacker gains % of defender's overflow resources
-- [TODO] 5.0.8 — Implement post-raid shield: defender gets 8h shield after being raided
-- [TODO] 5.0.9 — Implement raid notification: defender sees "You were raided by [username]" on next login
-- [TODO] 5.0.10 — Implement replay system: store action_log, build replay viewer in `RaidScene.ts` (playback mode)
-- [TODO] 5.0.11 — Implement replay UI: defense log screen showing all received raids, watch replay button
-- [TODO] 5.0.12 — Implement revenge raid: button on raid notification → directly target that player
-- [TODO] 5.0.13 — Run migration `00006_social.sql`: friendships table
-- [TODO] 5.0.14 — Implement friends system: search by username, send/accept/decline friend requests
-- [TODO] 5.0.15 — Implement room visiting: view friend's room (read-only, no defense info visible)
-- [TODO] 5.0.16 — Implement raid cap: max 3 PvP raids received per day per player
-- [TODO] 5.0.17 — Implement defense rating anti-sandbagging: snapshot rating before raid, compare to current
-- [TODO] 5.0.18 — Implement reputation system: +RP for wins, -RP for losses, brackets
+- [DONE] 5.0.5 — PvP target info screen: show defender's defense rating, room level, replay count (not layout)
+- [DONE] 5.0.6 — Adapt `RaidScene.ts` to load player room layouts (from DB) instead of NPC JSON
+- [DONE] 5.0.7 — Implement loot transfer: attacker gains % of defender's overflow resources
+- [DONE] 5.0.8 — Implement post-raid shield: defender gets 8h shield after being raided
+- [DONE] 5.0.9 — Implement raid notification: defender sees "You were raided by [username]" on next login
+- [DONE] 5.0.10 — Implement replay system: store action_log, build replay viewer in `RaidScene.ts` (playback mode)
+- [DONE] 5.0.11 — Implement replay UI: defense log screen showing all received raids, watch replay button
+- [DONE] 5.0.12 — Implement revenge raid: button on raid notification → directly target that player
+- [DONE] 5.0.13 — Run migration `00006_social.sql`: friendships table
+- [DONE] 5.0.14 — Implement friends system: search by username, send/accept/decline friend requests
+- [DONE] 5.0.15 — Implement room visiting: view friend's room (read-only, no defense info visible)
+- [DONE] 5.0.16 — Implement raid cap: max 3 PvP raids received per day per player
+- [DONE] 5.0.17 — Implement defense rating anti-sandbagging: snapshot rating before raid, compare to current
+- [DONE] 5.0.18 — Implement reputation system: +RP for wins, -RP for losses, brackets
 
-**Exit Criteria:** Safe mode expires. Players can raid each other asynchronously. Defenders get replays. Friends can visit each others' rooms. Matchmaking prevents unfair pairings.
+> **Phase 5 PvP & Social is COMPLETED.** All exit criteria have been met.
 
 ---
 
 ## Phase 6: The Neighborhood Map (v0.3)
 **Goal:** Instanced neighborhood map. NPC variety. Visual target selection.
 
-- [TODO] 6.0.1 — Design neighborhood map layout: player room center, surrounding NPC slots
-- [TODO] 6.0.2 — Implement `MapScene.ts` (or React-based map): top-down neighborhood view
-- [TODO] 6.0.3 — Render player room as central building on map
-- [TODO] 6.0.4 — Render NPC buildings at surrounding positions (scaled difficulty by distance from center)
-- [TODO] 6.0.5 — Render friend rooms on map (if friends exist)
-- [TODO] 6.0.6 — Map interaction: tap building → info popup → raid button
-- [TODO] 6.0.7 — NPC building visual variety: house, apartment, store, warehouse, military outpost
-- [TODO] 6.0.8 — Implement NPC room procedural generation: `generate-npc-room` Edge Function
-- [TODO] 6.0.9 — NPC difficulty tiers 1-10 (expand from initial 1-3)
-- [TODO] 6.0.10 — Map refresh: NPC buildings change on daily reset
-- [TODO] 6.0.11 — Map navigation: pan/zoom across neighborhood
+- [DONE] 6.0.1 — Design neighborhood map layout: player room center, surrounding NPC slots
+- [DONE] 6.0.2 — Implement `MapScene.ts` (or React-based map): top-down neighborhood view
+- [DONE] 6.0.3 — Render player room as central building on map
+- [DONE] 6.0.4 — Render NPC buildings at surrounding positions (scaled difficulty by distance from center)
+- [DONE] 6.0.5 — Render friend rooms on map (if friends exist)
+- [DONE] 6.0.6 — Map interaction: tap building → info popup → raid button
+- [DONE] 6.0.7 — NPC building visual variety: house, apartment, store, warehouse, military outpost
+- [DONE] 6.0.8 — Implement NPC room procedural generation: `generate-npc-room` Edge Function
+- [DONE] 6.0.9 — NPC difficulty tiers 1-10 (expand from initial 1-3)
+- [DONE] 6.0.10 — Map refresh: NPC buildings change on daily reset
+- [DONE] 6.0.11 — Map navigation: pan/zoom across neighborhood
 
-**Exit Criteria:** Player opens map, sees their neighborhood. NPC buildings of varying difficulty surround them. Friends appear. Tapping a building lets them raid it.
+> **Phase 6 The Neighborhood Map is COMPLETED.** All exit criteria have been met.
 
 ---
 
