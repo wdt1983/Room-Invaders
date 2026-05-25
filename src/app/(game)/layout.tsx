@@ -51,6 +51,14 @@ export default async function GameLayout({
     .eq('owner_id', user.id)
     .order('slot_number');
 
+  // Fetch active tutorial quest
+  const { data: activeTutQuests } = await (supabase.from('player_quests') as any)
+    .select('quest_id')
+    .eq('player_id', user.id)
+    .eq('status', 'active')
+    .like('quest_id', 'tut-%');
+  const activeQuestId = activeTutQuests && activeTutQuests.length > 0 ? activeTutQuests[0].quest_id : null;
+
   if (invError || profError || techError || squadError) {
     console.error("[GameLayout] Core state fetch errors:", { invError, profError, techError, squadError });
   }
@@ -102,6 +110,7 @@ export default async function GameLayout({
         techPoints={(finalProfile as any).tech_points ?? 1}
         unlockedTechs={unlockedNodes}
         squad={squad}
+        activeQuestId={activeQuestId}
       />
       <TopBar />
       <main className="relative flex-1 overflow-hidden">

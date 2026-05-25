@@ -26,6 +26,11 @@ export interface PlacedItem {
   rotation: number;
 }
 
+export interface Cosmetics {
+  wallColor: number;
+  floorType: 'wood' | 'carpet' | 'tile' | 'concrete';
+}
+
 export type EntryPointWall = 'north' | 'south' | 'east' | 'west';
 export type EntryPointType = 'door' | 'window' | 'vent';
 
@@ -51,10 +56,12 @@ interface RoomState {
   defenseRating: number;
   defenseSlotsUsed: number;
   defenseSlotsCap: number;
+  cosmetics: Cosmetics;
   setRoomState: (gridSize: number, placedItems: PlacedItem[]) => void;
   setCatalog: (catalog: CatalogItem[]) => void;
   setEntryPoints: (entryPoints: EntryPoint[]) => void;
   setDefenseStats: (stats: Partial<DefenseStats>) => void;
+  setCosmetics: (cosmetics: Partial<Cosmetics>) => void;
   removePlacedItemAt: (gridX: number, gridY: number) => void;
   rotatePlacedItemAt: (gridX: number, gridY: number, rotation: number) => void;
 }
@@ -68,10 +75,18 @@ export const useRoomStore = create<RoomState>((set) => ({
   defenseRating: 0,
   defenseSlotsUsed: 0,
   defenseSlotsCap: 8,
+  cosmetics: {
+    wallColor: 0x888888,
+    floorType: 'tile',
+  },
   setRoomState: (gridSize, placedItems) => set({ gridSize, placedItems }),
   setCatalog: (catalog) => set({ catalog }),
   setEntryPoints: (entryPoints) => set({ entryPoints }),
   setDefenseStats: (stats) => set((state) => ({ ...state, ...stats })),
+  setCosmetics: (cosmetics) =>
+    set((state) => ({
+      cosmetics: { ...state.cosmetics, ...cosmetics },
+    })),
   removePlacedItemAt: (gridX, gridY) =>
     set((state) => ({
       placedItems: state.placedItems.filter(

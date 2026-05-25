@@ -108,6 +108,7 @@ interface PlayerState {
   contraband: number;
   storageCapacity: number;
   safeModeUntil: string | null;
+  activeQuestId: string | null;
   
   // Tech Tree extensions
   techPoints: number;
@@ -141,6 +142,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   contraband: 0,
   storageCapacity: 500,
   safeModeUntil: null,
+  activeQuestId: null,
   
   // Tech defaults
   techPoints: 1,

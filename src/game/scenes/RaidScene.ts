@@ -21,6 +21,7 @@ import { applyDamageToPlaced, DEFAULT_SQUAD_HP, heal } from '@/game/systems/Comb
 import { TrapSystem, type TrapTriggeredPayload } from '@/game/systems/TrapSystem';
 import { TurretAI, type TurretFiredPayload } from '@/game/systems/DefenseAI';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
+import { SoundManager } from '@/game/objects/SoundManager';
 
 const WALL_COLOR = 0x888888;
 const WALL_THICKNESS = 6;
@@ -200,6 +201,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   create() {
+    SoundManager.getInstance().playMusic('briefing_room');
     // Resolve the fixture from the raid store (SSR-hydrated by
     // RaidInitializer on the /raid/[id] page). Unknown ids fall back to the
     // default fixture so the scene always has something to render.
@@ -258,10 +260,13 @@ export class RaidScene extends Phaser.Scene {
     this.pathDebugGraphics = this.add.graphics().setDepth(1000);
 
     // ── Floor ──────────────────────────────────────────────────────────────
+    const floorType = target?.cosmetics?.floorType || 'tile';
+    const floorKey = `floor_${floorType}`;
+
     for (let x = 0; x < this.gridSize; x++) {
       for (let y = 0; y < this.gridSize; y++) {
         const screenPos = IsometricEngine.worldToScreen(x, y);
-        const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, 'iso-tile');
+        const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, floorKey);
         tile.setData('gridX', x);
         tile.setData('gridY', y);
         this.floorTiles.push(tile);
@@ -502,6 +507,7 @@ export class RaidScene extends Phaser.Scene {
     this.input.on('wheel', this.handleWheel, this);
 
     // ── Replay or Countdown Timer ──
+    SoundManager.getInstance().playMusic('combat_tension');
     useRaidStore.getState().beginActivePhase();
     if (this.isReplayMode) {
       this.replayElapsedSeconds = 0;
@@ -805,6 +811,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private playHealVfx(sprite: EntitySprite): void {
+    SoundManager.getInstance().playSfx('heal');
     const startX = sprite.x;
     const startY = sprite.y - 16;
     
@@ -833,6 +840,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private playExplosionVfx(gridX: number, gridY: number): void {
+    SoundManager.getInstance().playSfx('breach');
     const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
     const cx = screenPos.x + this.offsetX;
     const cy = screenPos.y + this.offsetY;
@@ -856,6 +864,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private playEmpVfx(gridX: number, gridY: number): void {
+    SoundManager.getInstance().playSfx('stun');
     const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
     const cx = screenPos.x + this.offsetX;
     const cy = screenPos.y + this.offsetY - 20;
@@ -911,6 +920,10 @@ export class RaidScene extends Phaser.Scene {
   private finishRaid(outcome: RaidOutcome, reason: string): void {
     const store = useRaidStore.getState();
     if (store.phase === 'results') return;
+
+    SoundManager.getInstance().stopMusic();
+    SoundManager.getInstance().playSfx(outcome === 'victory' ? 'victory' : 'defeat');
+
     const secondsElapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
     // Scaffold math — mirrors the easy-difficulty rewards in
     // `supabase/functions/resolve-raid/fixtures.ts`. Hard/medium get
@@ -949,6 +962,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private teardown(): void {
+    SoundManager.getInstance().stopMusic();
     this.stopTimer();
     if (this.onRaidComplete) {
       EventBus.off('raid-complete', this.onRaidComplete);
@@ -1084,6 +1098,12 @@ export class RaidScene extends Phaser.Scene {
   private handleTrapTriggered(payload: TrapTriggeredPayload): void {
     const isSquadMember = this.squadEntities.some(s => s.entityId === payload.entityId);
 
+    if (payload.stunSeconds > 0 || payload.immobilizeSeconds > 0) {
+      SoundManager.getInstance().playSfx('stun');
+    } else {
+      SoundManager.getInstance().playSfx('alarm');
+    }
+
     // 1) Stun / immobilize — cancel the rest of the path + lock input.
     if (isSquadMember) {
       this.applyEntityStun(payload.entityId, payload.stunSeconds + payload.immobilizeSeconds);
@@ -1140,6 +1160,8 @@ export class RaidScene extends Phaser.Scene {
    */
   private handleTurretFired(payload: TurretFiredPayload): void {
     const isSquadMember = this.squadEntities.some(s => s.entityId === payload.targetEntityId);
+
+    SoundManager.getInstance().playSfx('laser');
 
     // 1) Projectile line VFX.
     const turretScreen = IsometricEngine.worldToScreen(
@@ -1232,6 +1254,8 @@ export class RaidScene extends Phaser.Scene {
     // `stunnedUntilMs` deadline elapses. Ignore pointer clicks while
     // frozen so the player can't path out early.
     if (Date.now() < this.stunnedUntilMs) return;
+
+    SoundManager.getInstance().playSfx('click');
 
     // Any new click cancels in-progress actions — the player's intent
     // changed.
@@ -1502,10 +1526,12 @@ export class RaidScene extends Phaser.Scene {
   private drawWalls(): void {
     this.wallGraphics.clear();
     const size = this.gridSize;
+    const target = useRaidStore.getState().target;
+    const wallColor = target?.cosmetics?.wallColor ?? WALL_COLOR;
 
     const colorFor = (wall: EntryPointWall, position: number): number => {
       const ep = this.fixture.entryPoints.find((e) => e.wall === wall && e.position === position);
-      return ep ? ENTRY_WALL_COLORS[ep.type] : WALL_COLOR;
+      return ep ? ENTRY_WALL_COLORS[ep.type] : wallColor;
     };
 
     const segment = (

@@ -71,16 +71,33 @@ function defenseValueFor(type: string | null | undefined, stats: any): number {
   const stun = Number(stats?.stun_duration) || 0;
   const immobilize = Number(stats?.immobilize_duration) || 0;
   const alert = Number(stats?.alert_radius) || 0;
+  const uses = Number(stats?.uses) || 1;
+  const emp = Number(stats?.emp_duration) || 0;
+  const fireRate = Number(stats?.fire_rate) || 1.0;
+  const chainTargets = Number(stats?.chain_targets) || 1;
+  const decoyRadius = Number(stats?.decoy_radius) || 0;
 
   switch (type) {
     case "trap":
-      return damage + Math.round(stun * 5) + Math.round(immobilize * 3) + alert * 2;
+      // Value scaled by trigger uses (capped at 3 for rating stability), stuns, immobilizations, alerts, and EMPs
+      return (damage * Math.min(3, uses)) + 
+             Math.round(stun * 6) + 
+             Math.round(immobilize * 4) + 
+             Math.round(emp * 3) + 
+             Math.round(alert * 2.5);
     case "turret":
-      return damage * Math.max(1, range);
+      // DPS proxy multiplied by Chebyshev coverage area and chaining targets
+      const fireRateFactor = fireRate > 0 ? (1.0 / fireRate) : 1.0;
+      return Math.round(damage * fireRateFactor * Math.max(1, range) * chainTargets);
     case "barricade":
-      return Math.floor(hp / 10);
+      // Barricades absorb combat hits: value scales with HP
+      return Math.floor(hp / 8);
     case "guard":
-      return damage * 2;
+      // Guards are mobile high-threat targets: value scales with HP, damage, range, and decoy capability
+      return Math.floor(hp / 5) + 
+             Math.round(damage * 2.5) + 
+             (range * 2) + 
+             (decoyRadius * 10);
     default:
       return 0;
   }

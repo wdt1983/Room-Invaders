@@ -55,6 +55,40 @@ function json(payload: unknown, status = 200): Response {
   });
 }
 
+interface EntryPoint {
+  type: "door" | "window" | "vent";
+  wall: "north" | "south" | "east" | "west";
+  position: number;
+}
+
+const VALID_WALLS = new Set(["north", "south", "east", "west"]);
+const VALID_TYPES = new Set(["door", "window", "vent"]);
+
+function coerceEntryPoints(raw: unknown, gridSize: number): EntryPoint[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((ep: any) =>
+    ep &&
+    typeof ep === "object" &&
+    VALID_WALLS.has(ep.wall) &&
+    VALID_TYPES.has(ep.type) &&
+    Number.isInteger(ep.position) &&
+    ep.position >= 0 &&
+    ep.position < gridSize
+  ) as EntryPoint[];
+}
+
+function resolveSpawnForEntryPoint(ep: EntryPoint, gridSize: number): { x: number; y: number } {
+  if (!ep) return { x: 1, y: 1 };
+  const max = gridSize - 1;
+  switch (ep.wall) {
+    case 'north': return { x: ep.position, y: 1 };
+    case 'south': return { x: ep.position, y: max - 1 };
+    case 'east':  return { x: max - 1,     y: ep.position };
+    case 'west':  return { x: 1,           y: ep.position };
+    default: return { x: 1, y: 1 };
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 async function trackRaidQuestProgress(supabase: any, userId: string): Promise<void> {
   try {
@@ -193,6 +227,9 @@ Deno.serve(async (req: Request) => {
     seed: number;
   };
 
+  let gridSize = 10;
+  let entryPoints: any[] = [];
+
   if (isPvP) {
     const defenderId = body.fixtureId;
     if (defenderId === user.id) {
@@ -210,15 +247,43 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: "Defender profile not found" }, 404);
     }
 
-    // Query defender room details
+    // Query defender room details (including entry_points for stash and path validations)
     const { data: dRoom, error: drErr } = await (supabase.from("rooms") as any)
-      .select("room_level, grid_size, shield_until, defense_rating, times_raided")
+      .select("room_level, grid_size, shield_until, defense_rating, times_raided, entry_points")
       .eq("owner_id", defenderId)
       .single();
 
     if (drErr || !dRoom) {
       console.warn("[resolve-raid] Defender room not found:", drErr);
       return json({ success: false, error: "Defender room not found" }, 404);
+    }
+
+    gridSize = dRoom.grid_size ?? 10;
+    entryPoints = dRoom.entry_points ?? [];
+
+    // Fetch attacker room details to enforce Matchmaking Level Brackets
+    const { data: aRoom } = await (supabase.from("rooms") as any)
+      .select("room_level")
+      .eq("owner_id", user.id)
+      .single();
+    const attackerRoomLevel = aRoom?.room_level ?? 1;
+
+    // Enforce Matchmaking Bracket validation (±5 room levels) or revenge raid bypass
+    const roomLevelDiff = Math.abs(attackerRoomLevel - dRoom.room_level);
+    if (roomLevelDiff > 5) {
+      // Check if a valid revenge raid exists (user has been raided by defender in the past 7 days)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: pastRaids } = await (supabase.from("raid_history") as any)
+        .select("id")
+        .eq("player_id", defenderId)
+        .eq("defender_id", user.id)
+        .gt("created_at", sevenDaysAgo)
+        .limit(1);
+
+      const isRevenge = pastRaids && pastRaids.length > 0;
+      if (!isRevenge) {
+        return json({ success: false, error: "Target is outside your matchmaking bracket and no revenge matches exist" }, 400);
+      }
     }
 
     // Enforce active shield check
@@ -449,6 +514,69 @@ Deno.serve(async (req: Request) => {
     const secured = body.actionLog.some((e) => e?.type === "stash_secured");
     if (!secured) {
       return json({ success: false, error: "Victory claim missing stash_secured event" }, 400);
+    }
+
+    // Hardened PvP & Static NPC coordinate path + speed verifications
+    if (isPvP) {
+      // 1. Calculate spawn point
+      const eps = coerceEntryPoints(entryPoints, gridSize);
+      const firstEp = eps[0];
+      let spawn = { x: 1, y: 1 };
+      if (firstEp) {
+        const max = gridSize - 1;
+        switch (firstEp.wall) {
+          case 'north': spawn = { x: firstEp.position, y: 1 }; break;
+          case 'south': spawn = { x: firstEp.position, y: max - 1 }; break;
+          case 'east':  spawn = { x: max - 1,     y: firstEp.position }; break;
+          case 'west':  spawn = { x: 1,           y: firstEp.position }; break;
+        }
+      }
+
+      // 2. Project target stash coordinates
+      const stash = {
+        x: spawn.x < gridSize / 2 ? gridSize - 3 : 2,
+        y: spawn.y < gridSize / 2 ? gridSize - 3 : 2
+      };
+
+      // 3. Verify squad reached the computed stash tile in their action log
+      const reachedStash = body.actionLog.some((e) => 
+        (e?.type === "move" && e?.data?.gridX === stash.x && e?.data?.gridY === stash.y) ||
+        (e?.type === "stash_entered")
+      );
+      if (!reachedStash) {
+        return json({ success: false, error: "Illegal victory claim: squad never reached the loot stash tile" }, 400);
+      }
+
+      // 4. Check for speed hacks: require realistic time delta per step (at least 100ms per tile step)
+      const moveEvents = body.actionLog.filter((e) => e?.type === "move");
+      const minDuration = moveEvents.length * 0.1;
+      if (body.secondsElapsed < minDuration) {
+        return json({ success: false, error: "Movement speed violation detected" }, 400);
+      }
+    } else if (FIXTURES[body.fixtureId]) {
+      // Static NPC fixture validation
+      const stash = FIXTURES[body.fixtureId].stash;
+      const reachedStash = body.actionLog.some((e) => 
+        (e?.type === "move" && e?.data?.gridX === stash.x && e?.data?.gridY === stash.y) ||
+        (e?.type === "stash_entered")
+      );
+      if (!reachedStash) {
+        return json({ success: false, error: "Illegal victory claim: squad never reached the loot stash tile" }, 400);
+      }
+
+      // Speed check for NPC
+      const moveEvents = body.actionLog.filter((e) => e?.type === "move");
+      const minDuration = moveEvents.length * 0.1;
+      if (body.secondsElapsed < minDuration) {
+        return json({ success: false, error: "Movement speed violation detected" }, 400);
+      }
+    } else {
+      // Procedural NPC target: check for speed hacks only (no exact stash coordinates without re-running generator)
+      const moveEvents = body.actionLog.filter((e) => e?.type === "move");
+      const minDuration = moveEvents.length * 0.1;
+      if (body.secondsElapsed < minDuration) {
+        return json({ success: false, error: "Movement speed violation detected" }, 400);
+      }
     }
   }
 

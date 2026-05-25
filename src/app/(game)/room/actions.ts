@@ -498,3 +498,23 @@ export async function upgradeRoomLevel(currentRoomLevel: number) {
     ...defenseState,
   };
 }
+
+export async function saveRoomCosmetics(cosmetics: { wallColor: number; floorType: string }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false as const, error: 'Unauthorized' };
+  }
+
+  const { error } = await (supabase.from('rooms') as any)
+    .update({ cosmetics })
+    .eq('owner_id', user.id);
+
+  if (error) {
+    console.error('Failed to save cosmetics:', error);
+    return { success: false as const, error: 'Failed to save cosmetics' };
+  }
+
+  return { success: true as const };
+}

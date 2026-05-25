@@ -235,7 +235,7 @@ export default function QuestDashboard({ initialQuests, playerLevel }: QuestDash
   return (
     <div className="container mx-auto h-full max-w-4xl overflow-y-auto p-4 pb-20">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-primary/10 border border-primary/20 p-2 text-primary">
             <ClipboardList className="size-7" />
@@ -364,7 +364,7 @@ export default function QuestDashboard({ initialQuests, playerLevel }: QuestDash
                                   <Button
                                     size="sm"
                                     variant="secondary"
-                                    className="h-6 mt-1 text-[10px] border border-border px-1.5"
+                                    className="h-6 mt-1 text-[10px] border border-border px-1.5 animate-tutorial-glow"
                                     onClick={() => setBriefingOpen(true)}
                                   >
                                     <BookOpen className="size-3 mr-1" /> Briefing

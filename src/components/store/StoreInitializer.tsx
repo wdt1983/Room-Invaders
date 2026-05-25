@@ -16,6 +16,7 @@ export default function StoreInitializer({
     defenseRating,
     defenseSlotsUsed,
     defenseSlotsCap,
+    cosmetics,
 }: {
     inventory: {
         scrap: number;
@@ -36,6 +37,10 @@ export default function StoreInitializer({
     defenseRating: number;
     defenseSlotsUsed: number;
     defenseSlotsCap: number;
+    cosmetics?: {
+        wallColor: number;
+        floorType: 'wood' | 'carpet' | 'tile' | 'concrete';
+    };
 }) {
     const initialized = useRef(false);
     if (!initialized.current) {
@@ -62,6 +67,9 @@ export default function StoreInitializer({
             defenseSlotsUsed,
             defenseSlotsCap,
         });
+        if (cosmetics) {
+            useRoomStore.getState().setCosmetics(cosmetics);
+        }
         initialized.current = true;
     }
     return null; // This component renders nothing

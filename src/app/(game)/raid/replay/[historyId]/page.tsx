@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { GameWrapper } from "@/components/game/GameWrapper";
 import { RaidInitializer } from "@/components/game/RaidInitializer";
 import { resolveFixture } from "@/game/fixtures/npc-rooms";
@@ -94,8 +95,14 @@ export default async function ReplayRoutePage({
         .map((ep: any) => ({ wall: ep.wall, type: ep.type, position: ep.position }));
     }
 
-    // Fetch defender placed items (at the time, we load their current layout to recreate the room)
-    const { data: placedItemsData } = await supabase
+    // Create server-side service role client to securely bypass RLS and fetch traps/turrets
+    const supabaseService = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Fetch defender placed items (bypass RLS using service role)
+    const { data: placedItemsData } = await supabaseService
       .from("player_items")
       .select(`
           id,

@@ -35,7 +35,7 @@ export default async function RoomPage() {
 
   const { data: roomData, error: roomError } = await supabase
     .from('rooms')
-    .select('grid_size, entry_points, room_level, defense_rating')
+    .select('grid_size, entry_points, room_level, defense_rating, cosmetics')
     .eq('owner_id', user.id)
     .single();
 
@@ -152,6 +152,14 @@ export default async function RoomPage() {
     )
     .map((ep: any) => ({ wall: ep.wall, type: ep.type, position: ep.position }));
 
+  const rawCosmetics = (roomData as any)?.cosmetics;
+  const cosmetics = {
+    wallColor: typeof rawCosmetics?.wallColor === 'number' ? rawCosmetics.wallColor : 0x888888,
+    floorType: (['wood', 'carpet', 'tile', 'concrete'].includes(rawCosmetics?.floorType) 
+      ? rawCosmetics.floorType 
+      : 'tile') as 'wood' | 'carpet' | 'tile' | 'concrete',
+  };
+
   return (
     <div className="relative h-full w-full">
       {finalInventory && (
@@ -168,6 +176,7 @@ export default async function RoomPage() {
           defenseRating={defenseRating}
           defenseSlotsUsed={defenseSlotsUsed}
           defenseSlotsCap={defenseSlotsCap}
+          cosmetics={cosmetics}
         />
       )}
       <GameBridge />

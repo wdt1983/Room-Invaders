@@ -1,6 +1,56 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.4.7] — 2026-05-25 — Milestone 8C: Performance, PWA, & Security Audits
+
+### Added
+- **Ironclad Row-Level Security (RLS) Hardening (Task 8.0.9)**: Formulated and pushed migration `00012_player_items_rls_hardening.sql`, restricting SELECT on other users' items to strictly non-defensive categories (`type NOT IN ('trap', 'turret')`). This completely obfuscates placed traps and turrets coordinates from browser/console database harvests, preserving strategic scouting and fog of war.
+- **Server-Side layout resolution (Task 8.0.9)**: Refactored Next.js Server Components `RaidRoutePage` and `ReplayRoutePage` to securely instantiate server-side **service role clients** to safely bypass RLS on the server, loading the complete target layout during active raids/replays.
+- **Edge Function PvP matchmaking bracket check (Task 8.0.9)**: Integrated matchmaking level bracket validation (±5 room levels) in the `resolve-raid` Deno Edge Function, verifying that the attacker and defender levels are legitimate before distributing rewards.
+- **Revenge Raid bypass check (Task 8.0.9)**: Added 7-day revenge checking in `resolve-raid`, allowing players to target outside their matchmaking level brackets ONLY if the defender has raided them in the past 7 days.
+- **Path & speed hack validations (Task 8.0.9)**: Calculated deterministic PvP spawn and stash coordinates inside the `resolve-raid` Edge Function, verifying that victory claims contain movement/entry events at those coordinates, and checked for speed hacks by comparing elapsed time with movement counts. Deployed successfully to remote Supabase.
+- **Phaser rendering optimizations (Task 8.0.6)**: Explicitly enabled `roundPixels: true` and configured advanced high-performance WebGL settings in `src/game/config.ts` (`antialias: false`, `pixelArt: true`, `powerPreference: "high-performance"`) to eliminate mobile GPU subpixel coordinate interpolation overhead, guaranteeing a rock-solid 30fps mobile baseline.
+- **PWA route shell precaching (Task 8.0.7)**: Added all active game route shells (`/room`, `/map`, `/quests`, `/squad`, `/social`, `/raid`) to the `PRECACHE_URLS` list in `public/sw.js` and updated version to `0.0.4` to trigger automatic update reloads, ensuring instant offline loading capabilities.
+
+## [0.4.6] — 2026-05-25 — Tasks 8.0.8 & 8.0.10: Responsive & Accessibility Sweep
+
+### Added
+- **Invisible Touch-Target Expander Utility (Task 8.0.10)**: Engineered a custom CSS pseudo-element utility class `.touch-target-expand` in `globals.css` that expands click boundaries to WCAG 2.5.5-compliant sizes (48px min) for small/compact elements without disrupting their visual margins.
+- **Enhanced Mobile Dropdown Touch Targets (Task 8.0.10)**: Blipped all squad loadout dropdown select lists (Active Ability, Weapons, Armor, Utility) in `SquadDashboard.tsx` and the tactical entry-point dropdowns in `RaidPrepContainer.tsx` to `h-10` (40px) to maximize touch precision and look premium on mobile viewports.
+- **Header Responsiveness Optimizations (Task 8.0.8)**: Refactored the Quest Board header element in `QuestDashboard.tsx` to automatically stack vertically on extra-small mobile widths (320px) using Tailwind flexbox flow rules, preventing title clipping and overlapping circle progress gauges.
+
+### Changed
+- **`src/components/layout/TopBar.tsx`**: Applied the `.touch-target-expand` class to the compact `h-8` Level Up, Edit Room, Defense Scan, Ceasefire Countdown, and Bell Icon buttons.
+- **`src/components/game/UpgradePanel.tsx`**: Wired `.touch-target-expand` to the compact Room Level sheet trigger.
+- **`src/components/game/RaidHUD.tsx`**: Attached `.touch-target-expand` to the small Abandon button to simplify raid exits under high-pressure scenarios.
+- **`src/app/(game)/map/MapDashboard.tsx`**: Blipped the Scout Stronghold button to a standard responsive `h-10` full-width card footer button to prevent tap misses.
+
+---
+
+## [0.4.5] — 2026-05-25 — Milestone 8A & Onboarding Glows: Visuals, Procedural Audio, and Navigation Highlights
+
+### Added
+- **Interactive Stronghold Cosmetics (Task 8.0.1)**: Extended the global room store and hydration layers to persist and load customizable `rooms.cosmetics` JSONB preferences securely. Enabled real-time Phaser wall color repainting and floor tile texture swaps (`floor_tile`, `floor_wood`, `floor_carpet`, `floor_concrete`) reacting to a new event-driven Customizer Drawer in React. Confirmed PvP scouting base styling persistence in raids.
+- **Procedural Synthesizer Audio Engine (Tasks 8.0.2 & 8.0.3)**: Built a zero-byte, 100% offline Web Audio synthesizer under `src/game/objects/SoundManager.ts` generating cyber pads, rhythmic pulse briefing tracks, combat techno, and a full suite of interactive SFX loops (turret fires, trap triggers, mechanical clicks, and breach explosions). Routed sound tracks to discrete master, SFX, and music gain channels synchronized dynamically with React Zustand stores.
+- **Branded Decryption Loader (Task 8.0.5)**: Created `PreloaderScene.ts` presenting glowing matrix grid designs, rotating cypherpunk lore tips, and PWA network connectivity indicators during active cache boots.
+- **Dynamic Onboarding Flow Polish (Task 8.0.4)**: Engineered a premium tutorial layout alignment tracking active onboarding quests (`tut-01` to `tut-08`) globally via Zustand. Integrated glowing retro-neon pulsing overlays in Tailwind and CSS around BottomNav tabs (Room, Map, Quests), the TopBar player level upgrade button, the Edit Room button, and the safe mode QuestBriefing panel to guide new users contextually.
+
+### Changed
+- **`src/lib/store/usePlayerStore.ts`**: Integrated `activeQuestId` to allow global onboarding flow logic.
+- **`src/components/store/PlayerStoreInitializer.tsx` & `src/app/(game)/layout.tsx`**: Hydrated active tutorial quests transactionally on Next.js server pre-renders.
+- **`src/components/layout/BottomNav.tsx` & `src/components/layout/TopBar.tsx`**: Configured custom neon pulsing glows mapped to active tutorial phases.
+- **`src/app/(game)/quests/QuestDashboard.tsx`**: Wired premium glow animations on safe-mode briefing buttons.
+
+---
+
+## [0.4.4] — 2026-05-24 — Foundational Completion: Tasks 7.0.10 & 2.0.9
+
+### Added
+- **Server-Side Defense Layout Validation (Task 2.0.9)**: Implemented and deployed the server-side Deno Edge Function `validate-defense` to authorize legal stronghold placements. Bypassed redundant ES256 verifiers securely in `supabase/config.toml`. Triggered authoritatively from client-side `TopBar.tsx` when exiting Edit Mode, displaying detailed glowing validation toasts.
+- **Refined Balanced Defense Rating Math (Task 7.0.10)**: Upgraded `defenseValueFor` inside both the client-side `src/lib/game/defense.ts` helper and the server-side `validate-defense` Deno Edge Function. Incorporated advanced Phase 7 attributes (trigger uses, EMP intervals, firing rates, chaining limits, decoy radii) to calculate ratings representing true tactical value.
+
+---
+
 ## [0.4.3] — 2026-05-24 — Task 7.0.8: Multi-Entry Raids
 
 ### Added

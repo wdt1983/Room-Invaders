@@ -16,6 +16,7 @@ export default function PlayerStoreInitializer({
   techPoints,
   unlockedTechs,
   squad,
+  activeQuestId,
 }: {
   inventory: {
     scrap: number;
@@ -31,6 +32,7 @@ export default function PlayerStoreInitializer({
   techPoints: number;
   unlockedTechs: string[];
   squad: any[];
+  activeQuestId: string | null;
 }) {
   useEffect(() => {
     // 1. Hydrate inventory details
@@ -42,6 +44,7 @@ export default function PlayerStoreInitializer({
       contraband: inventory.contraband,
       storageCapacity: inventory.storage_capacity,
       safeModeUntil,
+      activeQuestId,
     });
     
     // 2. Hydrate player level & XP details
@@ -54,14 +57,14 @@ export default function PlayerStoreInitializer({
     // 4. Hydrate squad loadouts
     useSquadStore.getState().setMembers(
       squad.map((m: any) => ({
-        id: m.id,
-        slotNumber: m.slot_number,
-        name: m.name,
-        activeAbility: m.active_ability,
-        passiveGear: m.passive_gear,
-        weapon: m.weapon || null,
-        armor: m.armor || null,
-        selectedEntryPoint: null,
+         id: m.id,
+         slotNumber: m.slot_number,
+         name: m.name,
+         activeAbility: m.active_ability,
+         passiveGear: m.passive_gear,
+         weapon: m.weapon || null,
+         armor: m.armor || null,
+         selectedEntryPoint: null,
       }))
     );
   }, [
@@ -77,6 +80,7 @@ export default function PlayerStoreInitializer({
     techPoints,
     JSON.stringify(unlockedTechs),
     JSON.stringify(squad),
+    activeQuestId,
   ]);
 
   return null;

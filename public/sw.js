@@ -12,11 +12,17 @@
  * Serwist patterns when offline room editing is implemented.
  */
 
-const SW_VERSION = "0.0.3";
+const SW_VERSION = "0.0.4";
 const CACHE_NAME = `room-invaders-v${SW_VERSION}`;
 
 const PRECACHE_URLS: string[] = [
   "/",
+  "/room",
+  "/map",
+  "/quests",
+  "/squad",
+  "/social",
+  "/raid",
   "/manifest.webmanifest",
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",

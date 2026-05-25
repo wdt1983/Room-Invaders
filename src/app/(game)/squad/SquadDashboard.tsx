@@ -318,7 +318,7 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
                         value={member.activeAbility || ""}
                         onChange={(e) => handleEquipAbility(slot, e.target.value || null)}
                         disabled={isPending}
-                        className="w-full h-8 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
+                        className="w-full h-10 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
                       >
                         <option value="">-- Empty Slot --</option>
                         {activeEffects.unlockedAbilities.map((ab) => (
@@ -338,7 +338,7 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
                         value={member.weapon || ""}
                         onChange={(e) => handleEquipWeapon(slot, e.target.value || null)}
                         disabled={isPending}
-                        className="w-full h-8 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
+                        className="w-full h-10 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
                       >
                         <option value="">-- Crowbar / Default --</option>
                         {unlockedIdsSet.has("off_squad_dmg_1") && (
@@ -359,7 +359,7 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
                         value={member.armor || ""}
                         onChange={(e) => handleEquipArmor(slot, e.target.value || null)}
                         disabled={isPending}
-                        className="w-full h-8 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
+                        className="w-full h-10 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
                       >
                         <option value="">-- No Armor --</option>
                         {unlockedIdsSet.has("off_squad_hp_1") && (
@@ -380,7 +380,7 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
                         value={member.passiveGear || ""}
                         onChange={(e) => handleEquipGear(slot, e.target.value || null)}
                         disabled={isPending}
-                        className="w-full h-8 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
+                        className="w-full h-10 px-2 rounded-md border border-border bg-background/50 hover:bg-background/80 transition-colors text-[11px] font-medium focus:ring-1 focus:ring-primary"
                       >
                         <option value="">-- None --</option>
                         {unlockedIdsSet.has("off_squad_speed_1") && (

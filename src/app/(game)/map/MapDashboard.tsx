@@ -138,7 +138,7 @@ export function MapDashboard({
                     <Button 
                       onClick={() => handleScout(target)}
                       variant="default" 
-                      className="w-full gap-2 text-xs font-bold h-8 bg-primary/80 hover:bg-primary"
+                      className="w-full gap-2 text-xs font-bold h-10 bg-primary/80 hover:bg-primary"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       Scout Stronghold

@@ -93,6 +93,10 @@ export interface RaidTarget {
   }>;
   isReplay?: boolean;
   replayActionLog?: any[];
+  cosmetics?: {
+    wallColor?: number;
+    floorType?: string;
+  };
 }
 
 interface RaidState {

@@ -276,7 +276,7 @@ export function RaidHUD() {
           <Button
             size="sm"
             variant="destructive"
-            className="h-8 px-2 text-xs pointer-events-auto"
+            className="h-8 px-2 text-xs pointer-events-auto touch-target-expand"
             onClick={() => emitOutcome('defeat', 'Abandoned')}
           >
             <LogOut className="mr-1.5 size-3.5" />

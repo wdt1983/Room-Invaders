@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { BootScene } from "@/game/scenes/BootScene";
+import { PreloaderScene } from "@/game/scenes/PreloaderScene";
 import { RoomScene } from "@/game/scenes/RoomScene";
 import { RoomEditorScene } from "@/game/scenes/RoomEditorScene";
 import { RaidScene } from "@/game/scenes/RaidScene";
@@ -19,10 +20,17 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   backgroundColor: "#000000",
   pixelArt: true,
+  roundPixels: true,
+  render: {
+    antialias: false,
+    pixelArt: true,
+    roundPixels: true,
+    powerPreference: "high-performance",
+  },
   scale: {
     mode: Phaser.Scale.RESIZE,
     width: "100%",
     height: "100%",
   },
-  scene: [BootScene, RoomScene, RoomEditorScene, RaidScene],
+  scene: [BootScene, PreloaderScene, RoomScene, RoomEditorScene, RaidScene],
 };

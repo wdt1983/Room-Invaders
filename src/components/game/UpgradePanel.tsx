@@ -113,7 +113,7 @@ export function UpgradePanel() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-2 text-xs border-cyan-500 text-cyan-400 hover:bg-cyan-500/20"
+            className="h-8 px-2 text-xs border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 touch-target-expand"
             title={`Base Room Level: ${roomLevel}`}
           >
             <Shield className="mr-1.5 size-3.5" />

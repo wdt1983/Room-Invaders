@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { resolveFixture } from "@/game/fixtures/npc-rooms";
 import { RaidPrepContainer } from "@/components/game/RaidPrepContainer";
 
@@ -83,8 +84,14 @@ export default async function RaidRoutePage({
       redirect("/map");
     }
 
-    // Fetch defender placed items (viewable by authenticated users)
-    const { data: placedItemsData, error: itemsErr } = await supabase
+    // Create server-side service role client to securely bypass RLS and fetch traps/turrets
+    const supabaseService = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Fetch defender placed items (bypass RLS using service role)
+    const { data: placedItemsData, error: itemsErr } = await supabaseService
       .from("player_items")
       .select(`
           id,

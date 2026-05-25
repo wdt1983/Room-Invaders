@@ -28,6 +28,12 @@ interface UIState {
   contextMenu: ContextMenuState | null;
   openContextMenu: (payload: { x: number; y: number; spriteKey?: string; entityId?: string; gridX?: number; gridY?: number }) => void;
   closeContextMenu: () => void;
+  sfxVolume: number;
+  musicVolume: number;
+  isMuted: boolean;
+  setSfxVolume: (vol: number) => void;
+  setMusicVolume: (vol: number) => void;
+  setMuted: (muted: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -38,5 +44,11 @@ export const useUIStore = create<UIState>((set) => ({
   contextMenu: null,
   openContextMenu: (payload) => set({ contextMenu: { visible: true, ...payload } }),
   closeContextMenu: () => set({ contextMenu: null }),
+  sfxVolume: 0.7,
+  musicVolume: 0.5,
+  isMuted: false,
+  setSfxVolume: (sfxVolume) => set({ sfxVolume }),
+  setMusicVolume: (musicVolume) => set({ musicVolume }),
+  setMuted: (isMuted) => set({ isMuted }),
 }));
 

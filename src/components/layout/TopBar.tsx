@@ -148,6 +148,7 @@ export function TopBar() {
   const credits = usePlayerStore((state) => state.credits);
   const contraband = usePlayerStore((state) => state.contraband);
   const intel = usePlayerStore((state) => state.intel);
+  const activeQuestId = usePlayerStore((state) => state.activeQuestId);
   const storageCapacity = usePlayerStore((state) => state.storageCapacity ?? 500); // Storage protected cap
   const safeModeUntil = usePlayerStore((state) => state.safeModeUntil);
   const defenseRating = useRoomStore((state) => state.defenseRating);
@@ -372,7 +373,7 @@ export function TopBar() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-2 text-xs border-cyan-500/40 text-cyan-300 bg-cyan-400/10 shadow-lg shadow-cyan-500/10 animate-pulse hover:bg-cyan-400/20"
+                className="h-8 px-2 text-xs border-cyan-500/40 text-cyan-300 bg-cyan-400/10 shadow-lg shadow-cyan-500/10 animate-pulse hover:bg-cyan-400/20 touch-target-expand"
                 title={safeModeUntil ? `Ceasefire active until ${new Date(safeModeUntil).toLocaleString()}` : "Ceasefire active"}
               >
                 <Shield className="mr-1.5 size-3.5 text-cyan-400" />
@@ -472,7 +473,9 @@ export function TopBar() {
           variant="outline"
           size="sm"
           title={xpTitle}
-          className="relative h-8 overflow-hidden px-2 text-xs border-primary text-primary hover:bg-primary/20"
+          className={`relative h-8 overflow-hidden px-2 text-xs border-primary text-primary hover:bg-primary/20 touch-target-expand ${
+            activeQuestId === "tut-06" ? "animate-tutorial-glow" : ""
+          }`}
         >
           {/* XP progress fill — sits behind the label, clipped to the
               current level's progress toward the next threshold. */}
@@ -490,7 +493,7 @@ export function TopBar() {
           onClick={toggleDefenseView}
           variant="outline"
           size="sm"
-          className={`h-8 px-2 text-xs ${
+          className={`h-8 px-2 text-xs touch-target-expand ${
             isDefenseView ? 'border-cyan-400 text-cyan-300 bg-cyan-400/10' : ''
           }`}
           title={isDefenseView ? 'Exit defense coverage view' : 'Show range / trigger zones for every placed defense'}
@@ -502,7 +505,11 @@ export function TopBar() {
           onClick={toggleEditMode}
           variant="outline"
           size="sm"
-          className="h-8 px-2 text-xs"
+          className={`h-8 px-2 text-xs touch-target-expand ${
+            !isEditMode && pathname === "/room" && ["tut-02", "tut-03", "tut-07"].includes(activeQuestId || "")
+              ? "animate-tutorial-glow"
+              : ""
+          }`}
         >
           {isEditMode ? (
             <>
@@ -523,7 +530,7 @@ export function TopBar() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                className="relative size-8 border-border text-muted-foreground hover:bg-muted/10 hover:text-foreground"
+                className="relative size-8 border-border text-muted-foreground hover:bg-muted/10 hover:text-foreground touch-target-expand"
                 title="Stronghold Security Feed"
               >
                 <Bell className="size-4" />

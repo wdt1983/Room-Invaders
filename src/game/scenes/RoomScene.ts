@@ -12,6 +12,7 @@ import { entryTileFor } from '@/lib/game/entryPoints';
 import { EntitySprite } from '@/game/objects/EntitySprite';
 import { rangeTilesFor } from '@/lib/game/defense';
 import { paintRangeBand, RANGE_FILL_COLOR } from '@/game/utils/rangeDraw';
+import { SoundManager } from '@/game/objects/SoundManager';
 
 const WALL_COLOR = 0x888888;
 const WALL_THICKNESS = 6;
@@ -85,6 +86,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   create() {
+    SoundManager.getInstance().playMusic('safe_room');
     this.gridSize = useRoomStore.getState().gridSize ?? 10;
     this.gridSystem = new GridSystem(this.gridSize);
 
@@ -100,11 +102,15 @@ export class RoomScene extends Phaser.Scene {
     this.defenseViewGraphics = this.add.graphics().setDepth(0.25);
 
     // Render Floor
+    const cosmetics = useRoomStore.getState().cosmetics;
+    const floorType = cosmetics?.floorType || 'tile';
+    const floorKey = `floor_${floorType}`;
+
     for (let x = 0; x < this.gridSize; x++) {
       for (let y = 0; y < this.gridSize; y++) {
         const screenPos = IsometricEngine.worldToScreen(x, y);
         // The tile's origin will default to 0.5, 0.5
-        const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, 'iso-tile');
+        const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, floorKey);
         tile.setData('gridX', x);
         tile.setData('gridY', y);
         this.floorTiles.push(tile);
@@ -215,6 +221,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-E', () => this.rotateGrid(1));
 
     const handleChangeMode = (mode: string) => {
+      SoundManager.getInstance().playSfx('click');
       const wasDefenseView = this.defenseViewActive;
       this.currentMode = mode;
       if (mode === 'edit') {
@@ -253,16 +260,29 @@ export class RoomScene extends Phaser.Scene {
       this.scene.restart();
     };
 
+    const handleCosmeticsChanged = (payload: { wallColor: number; floorType: string }) => {
+      // 1. Redraw walls
+      this.drawWalls();
+      // 2. Swapping tile texture
+      const floorKey = `floor_${payload.floorType}`;
+      this.floorTiles.forEach((tile) => {
+        tile.setTexture(floorKey);
+      });
+    };
+
     EventBus.on('change-mode', handleChangeMode);
     EventBus.on('removal-success', handleRemovalSuccess);
     EventBus.on('rotation-success', handleRotationSuccess);
     EventBus.on('room-upgraded', handleRoomUpgraded);
+    EventBus.on('cosmetics-changed', handleCosmeticsChanged);
 
     this.events.once('shutdown', () => {
+      SoundManager.getInstance().stopMusic();
       EventBus.off('change-mode', handleChangeMode);
       EventBus.off('removal-success', handleRemovalSuccess);
       EventBus.off('rotation-success', handleRotationSuccess);
       EventBus.off('room-upgraded', handleRoomUpgraded);
+      EventBus.off('cosmetics-changed', handleCosmeticsChanged);
       this.exitDefenseView();
     });
 
@@ -491,10 +511,12 @@ export class RoomScene extends Phaser.Scene {
     this.wallGraphics.clear();
     const size = this.gridSize;
     const entryPoints = useRoomStore.getState().entryPoints;
+    const cosmetics = useRoomStore.getState().cosmetics;
+    const wallColor = cosmetics?.wallColor ?? WALL_COLOR;
 
     const colorFor = (wall: EntryPointWall, position: number): number => {
       const ep = entryPoints.find((e) => e.wall === wall && e.position === position);
-      return ep ? ENTRY_WALL_COLORS[ep.type] : WALL_COLOR;
+      return ep ? ENTRY_WALL_COLORS[ep.type] : wallColor;
     };
 
     const segment = (
@@ -547,6 +569,8 @@ export class RoomScene extends Phaser.Scene {
       duration: 100,
       ease: 'Quad.easeOut'
     });
+
+    SoundManager.getInstance().playSfx('place_item');
 
     return true;
   }

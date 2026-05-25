@@ -202,7 +202,7 @@ export function RaidPrepContainer({ target, playerLevel }: RaidPrepContainerProp
                           const val = e.target.value;
                           if (val !== "") handleAssignEntry(m.slotNumber, parseInt(val, 10));
                         }}
-                        className="w-full h-8 px-2 rounded border border-border bg-background/50 text-xs font-semibold"
+                        className="w-full h-10 px-2 rounded border border-border bg-background/50 text-xs font-semibold"
                       >
                         <option value="" disabled>-- Assign Entry Point --</option>
                         {target.entryPoints.map((ep, idx) => (
@@ -261,7 +261,7 @@ export function RaidPrepContainer({ target, playerLevel }: RaidPrepContainerProp
               {!scouted && (
                 <Button
                   size="sm"
-                  className="h-8 font-bold border border-primary/20 bg-primary/10 hover:bg-primary/20 text-primary shadow-sm"
+                  className="h-8 font-bold border border-primary/20 bg-primary/10 hover:bg-primary/20 text-primary shadow-sm touch-target-expand"
                   disabled={isPending}
                   onClick={handleScoutTarget}
                 >
