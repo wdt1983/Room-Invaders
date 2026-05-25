@@ -1,6 +1,18 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.5.1] — 2026-05-25 — Milestone 8G: Beta Operations Terminal & Feedback Tracking
+
+### Added
+- **Beta Feedback Database Migration (Task 8.0.15)**: Formulated and pushed migration `00015_beta_feedback.sql` creating the `public.beta_feedback` table with rating fields (Gameplay, Visuals, Performance), category labels, and JSONB diagnostic telemetry blocks.
+- **Tester-Centric Row-Level Security (Task 8.0.15)**: Configured RLS rules allowing authenticated accounts to `INSERT` feedback reports and strictly restrict `SELECT` access to user-owned logs, obfuscating complete arrays from database harvesting.
+- **Developer Sentry-Telemetry Alerts (Task 8.0.15)**: Programmed a secure, Sentry-wrapped Server Action `submitBetaFeedback` inside `src/app/actions/feedback.ts` that transactionally writes feedback to Supabase, fires custom console telemetries (`trackEvent`), and captures a high-priority message alert directly inside the developer operations console.
+- **Outfit-Styled Glassmorphic Dialogue Terminal (Task 8.0.15)**: Engineered the premium [FeedbackDialog.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/components/game/FeedbackDialog.tsx) component featuring:
+  - **Grid Category Selection**: Glow-bordered buttons highlighting active selection categories (Bug Report, Balance Tuning, Feature Request, General Feedback).
+  - **Evaluation Ratings Grid**: Clicking star ratings with custom hover colors and scale animations for Gameplay, Visuals, and Performance.
+  - **Diagnostic Telemetry Console**: Transparent code dashboard compiling standard environment parameters (System Level, Active URL, Resolution, UserAgent details) to bind contextually with reports.
+- **TopBar Header Integration (Task 8.0.15)**: Mounted the feedback dialogue button in the header toolbar using a glowing, pulsing amber bug icon that expands click targets to 48px to satisfy WCAG mobile touch standards.
+
 ## [0.5.0] — 2026-05-25 — Milestone 8F: Defense Repair System
 
 ### Added

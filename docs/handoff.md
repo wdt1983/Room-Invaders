@@ -16,6 +16,55 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-25 — Milestone 8G: Beta Operations Terminal & Feedback Tracking (Task 8.0.15)
+
+### Summary
+
+Successfully implemented, verified, and audited **Milestone 8G: Beta Operations Terminal & Feedback Tracking (Task 8.0.15)** across PostgreSQL migrations, secure server actions, Sentry telemetry logs, and Next.js glassmorphic dialogue interfaces. Created the `public.beta_feedback` table enabling row-level security (RLS) so authenticated testers can transmit feedback while restricting administrative data selects. Built a secure Sentry-wrapped Next.js Server Action `submitBetaFeedback` that database-commits feedback reports, fires console telemetries (`trackEvent`), and raises developer exception alerts inside Sentry. Developed the premium, Outfit-typography driven glassmorphic dialogue [FeedbackDialog.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/components/game/FeedbackDialog.tsx) integrated next to the logout button inside `TopBar.tsx`. Built with a grid category selector, ratings matrices, text details, and coordinate diagnostic telemetry grids. All files compile and typecheck with **0 errors and 0 warnings** under Next.js Turbopack build conditions, and pass local ESLint sweeps with **0 warnings**.
+
+### Work Accomplished
+
+1. **Database Schema & Row-Level Security (Task 8.0.15)**:
+   - Formulated and pushed migration `00015_beta_feedback.sql` creating `public.beta_feedback` containing ratings (Gameplay, Visuals, Performance), category labels, comments text, and JSONB diagnostic telemetry blocks.
+   - Pushed successfully to the remote database via Supabase CLI.
+   - Restructured Row-Level Security (RLS) rules: allowed authenticated users to `INSERT` feedback, and restricted `SELECT` queries to user-owned rows, obfuscating reports from unauthorized third-party harvesting.
+
+2. **Server Action & Telemetry Integration (Task 8.0.15)**:
+   - Built a secure Next.js Server Action `submitBetaFeedback` inside `src/app/actions/feedback.ts`.
+   - Wrapped operations inside Try-Catch pipelines instrumented via Sentry's `withServerActionInstrumentation` to log errors safely.
+   - Configured custom event logging (`trackEvent`) and raised developer Sentry captures (`Sentry.captureMessage`) including all ratings, details, and diagnostics.
+
+3. **Outfit-typography Glassmorphic Dialogue Terminal (Task 8.0.15)**:
+   - Created [FeedbackDialog.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/components/game/FeedbackDialog.tsx) implementing a retro-cybernetic dialogue popup.
+   - Renders a grid-category selection interface mapping active selection styles on categories (Bug Report, Balance Tuning, Feature Request, General Feedback).
+   - Designed a Ratings Matrix supporting star controls for Gameplay, Visuals, and Performance with hover-color shifts and scale animations.
+   - Built an active Coordinate Diagnostics Console displaying active environment parameters (System Level, Active URL, screen resolution, UserAgent metrics) contextually.
+   - Fully adjusted tags to use custom Radix-overrides (`render` properties on `DialogTrigger` and `DialogClose`), guaranteeing full local compatibility.
+
+4. **Touch-Target Sizing & Toolbar Integration (Task 8.0.15)**:
+   - Integrated the dialogue button inside the game layout's header bar in `src/components/layout/TopBar.tsx` next to the logout button.
+   - Rendered using an animated, pulsing amber bug icon. Applied target expanding classes `.touch-target-expand` to exceed WCAG minimum touch sizes (48px) for seamless mobile tap precision.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00015_beta_feedback.sql` | **NEW.** SQL migration adding `beta_feedback` table and RLS policies. |
+| `src/app/actions/feedback.ts` | **NEW.** Sentry-instrumented Server Action committing feedback transactionally. |
+| `src/components/game/FeedbackDialog.tsx` | **NEW.** Premium glassmorphic feedback terminal dialog with ratings and coordinates. |
+| `src/components/layout/TopBar.tsx` | **MODIFIED.** Integrated new `FeedbackDialog` component next to logout trigger. |
+| `docs/tasks.md` | Checked off Task 8.0.15 `[DONE]`. |
+| `docs/changelog.md` | Documented version `[0.5.1]` changes. |
+| `docs/handoff.md` | This entry. |
+
+### Next Steps for Phase 8: Polish & MVP Launch Prep
+
+With the beta feedback system operational and all core base-builder/PvP gameplay loops completely closed, the next best tasks are:
+1. **Task 8.0.16 — Final bug fix sprint (Recommended)**: Gather initial playtest metrics from our beta feedback system, resolve any pathfinding boundary crashes, or adjust mobile PWA scaling.
+2. **Future Phases Backlog**: Address backlog features including Mapbox geo-located maps, clan coordination banks, joint real-time cooperative raids, or battle pass systems.
+
+---
+
 ## 2026-05-25 — Milestone 8F: Defense Repair System (Task 4.0.3)
 
 ### Summary

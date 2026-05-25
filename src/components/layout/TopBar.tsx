@@ -57,6 +57,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { UpgradePanel } from "@/components/game/UpgradePanel";
+import { FeedbackDialog } from "@/components/game/FeedbackDialog";
 
 /**
  * Top Bar — game header component.
@@ -714,6 +715,8 @@ export function TopBar() {
             />
           </SheetContent>
         </Sheet>
+
+        <FeedbackDialog />
 
         <form action={logout}>
           <Button

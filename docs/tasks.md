@@ -241,7 +241,7 @@
 - [DONE] 8.0.12 — Analytics: track key events (registration, first_raid, first_defense_placed, retention_d1/d7)
 - [DONE] 8.0.13 — Create landing page (marketing): game description, screenshots, install CTA. Redesigned root page with glassmorphic Outfit typography, dynamic CTA session gates, generated gameplay mockups, and client-side PWA install controllers.
 - [DONE] 8.0.14 — Write Terms of Service, Privacy Policy. Created `/terms` and `/privacy` Next.js sub-pages styled with clean cyber-retro aesthetics.
-- [TODO] 8.0.15 — Beta test: invite 10-20 testers, collect feedback, iterate
+- [DONE] 8.0.15 — Beta test: invite 10-20 testers, collect feedback, iterate. Built a premium glassmorphic "Beta Operations Terminal" feedback dialogue overlay next to the TopBar's logout trigger. Attaches standard diagnostics (player level, path, resolution) and lets testers rate overall experience and write detailed bug/balance reports. Created backend server action `submitBetaFeedback` securely committing Sentry-telemetry events and Supabase database insertions. Applied RLS policies to database migrations.
 - [TODO] 8.0.16 — Final bug fix sprint based on beta feedback
 - [DONE] 8.0.17 — Tech Debt: Refactor Next.js 16 middleware.ts to new proxy pattern. Renamed `src/middleware.ts` to `src/proxy.ts`, exporting public `proxy` function to satisfy Next.js 16 standards and clear Turbopack warnings.
 
