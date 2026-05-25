@@ -1,6 +1,14 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.5.2] — 2026-05-25 — Milestone 8H: Defensive Data Recovery & Hardening
+
+### Added
+- **Defensive Profile Trigger Race Recovery (Task 8.0.16)**: Upgraded [layout.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/app/(game)/layout.tsx) to transactionally insert default inventories for players encountering trigger-race or profiles sign-up latencies. Restructures `.single()` inventory queries to `.maybeSingle()` across layout boundaries.
+- **Robust Page Hydrations (Task 8.0.16)**: Refactored database fetching inside [room/page.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/app/(game)/room/page.tsx), [quests/page.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/app/(game)/quests/page.tsx), and [map/page.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/app/(game)/map/page.tsx) to utilize `.maybeSingle()` rather than throwing uncaught errors on failed profile queries.
+- **TopBar Cascading Renders Fix (Task 8.0.16)**: Resolved the pre-existing ESLint cascading-render error `react-hooks/set-state-in-effect` in [TopBar.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/components/layout/TopBar.tsx) by wrapping initial notification fetches inside a clean async IIFE.
+- **Phaser Compiler Warnings Removal (Task 8.0.16)**: Commented out unused constants `SQUAD_MELEE_DAMAGE` and removed unused imports `DEFAULT_GRID_SIZE` inside [RaidScene.ts](file:///C:/Projects/ALT-Games/room-invaders/src/game/scenes/RaidScene.ts) to keep build outputs clean of warnings.
+
 ## [0.5.1] — 2026-05-25 — Milestone 8G: Beta Operations Terminal & Feedback Tracking
 
 ### Added

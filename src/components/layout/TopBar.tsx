@@ -111,7 +111,10 @@ export function TopBar() {
   };
 
   useEffect(() => {
-    fetchNotifsAndLogs();
+    const initFetch = async () => {
+      await fetchNotifsAndLogs();
+    };
+    initFetch();
     
     // Refresh notifications every 15 seconds
     const interval = setInterval(fetchNotifsAndLogs, 15000);

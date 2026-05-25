@@ -1,5 +1,4 @@
 import * as Phaser from 'phaser';
-import { DEFAULT_GRID_SIZE } from '@/game/utils/constants';
 import { IsometricEngine } from '@/game/systems/IsometricEngine';
 import { GridSystem } from '@/game/systems/GridSystem';
 import { FurnitureSprite } from '@/game/objects/FurnitureSprite';
@@ -55,7 +54,7 @@ const BARRICADE_HP_BY_SPRITE_KEY: Record<string, number> = {
 };
 
 /** Squad melee damage per hit against destructible placed items. */
-const SQUAD_MELEE_DAMAGE = 10;
+// const SQUAD_MELEE_DAMAGE = 10;
 /** Milliseconds between melee hits while the squad is adjacent to the
  *  target. 1000ms = 1 hit/second. */
 const SQUAD_MELEE_RATE_MS = 1000;

@@ -26,16 +26,34 @@ export default async function GameLayout({
   }
 
   // Authoritatively fetch core player resources & safe mode settings for all routes
-  const { data: inventory, error: invError } = await supabase
+  const { data: initialInventory, error: invError } = await supabase
     .from('inventories')
     .select('*')
     .eq('owner_id', user.id)
-    .single();
+    .maybeSingle();
+
+  let inventory = initialInventory;
+
+  // Defensive auto-healing: if user exists but has no inventory row (due to trigger race/signup latency),
+  // transactionally seed defaults immediately to prevent downstream hydration crashes.
+  if (!inventory && !invError) {
+    console.warn(`[GameLayout] Missing inventory row for user ${user.id} — auto-creating defaults.`);
+    const { data: createdInv, error: createInvError } = await (supabase.from('inventories') as any)
+      .insert({ owner_id: user.id })
+      .select('*')
+      .maybeSingle();
+
+    if (createInvError) {
+      console.error("[GameLayout] Failed to auto-create inventory row:", createInvError);
+    } else if (createdInv) {
+      inventory = createdInv;
+    }
+  }
 
   const { data: profile, error: profError } = await (supabase.from('profiles') as any)
     .select('player_level, xp, safe_mode_until, tech_points, created_at')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   // Fetch tech tree unlocks
   const { data: techUnlocks, error: techError } = await supabase

@@ -25,7 +25,7 @@ export default async function QuestsPage() {
   const { data: profile } = await (supabase.from("profiles") as any)
     .select("player_level")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   const playerLevel = profile?.player_level ?? 1;
 

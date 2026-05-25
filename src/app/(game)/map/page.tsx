@@ -24,7 +24,7 @@ export default async function MapPage() {
   const { data: ownProfile } = await (supabase.from("profiles") as any)
     .select("id, username, player_level")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   const playerProfile = {
     id: user.id,

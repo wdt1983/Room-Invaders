@@ -31,13 +31,13 @@ export default async function RoomPage() {
     .from('inventories')
     .select('*')
     .eq('owner_id', user.id)
-    .single();
+    .maybeSingle();
 
   const { data: roomData, error: roomError } = await supabase
     .from('rooms')
     .select('grid_size, entry_points, room_level, defense_rating, cosmetics')
     .eq('owner_id', user.id)
-    .single();
+    .maybeSingle();
 
   const { data: placedItemsData, error: itemsError } = await supabase
     .from('player_items')
@@ -54,7 +54,7 @@ export default async function RoomPage() {
   const { data: profileData } = await (supabase.from('profiles') as any)
     .select('player_level, xp, safe_mode_until')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   const { data: catalogData } = await (supabase.from('items') as any)
     .select('id, name, type, sprite_key, unlock_level, cost, stats, tech_tree_node')
