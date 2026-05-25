@@ -2,14 +2,14 @@ import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 /**
- * Next.js Middleware
+ * Next.js Proxy
  *
  * Runs on every matched request to:
  * 1. Refresh the Supabase auth session (token rotation)
  * 2. Redirect unauthenticated users away from game routes → /login
  * 3. Redirect authenticated users away from auth routes → /room
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 

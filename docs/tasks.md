@@ -155,8 +155,8 @@
 - [DONE] 4.0.12 — Implement tutorial UI overlay: ceasefire briefing overlay. Created the **Safe Mode Briefing Card** on `/quests` that opens a custom dialogue explaining ceasefire terms and level 5 storage overflows. Confirming the briefing completes the final tutorial quest `tut-08`.
 - [PARTIAL] 4.0.13 — Player level-up: `upgradePlayerLevel` server action + TopBar button exist (pay scrap → level++). XP thresholds, notifications, unlock-message UX still TODO.
 - [DONE] 4.0.14 — Room Level Upgrades: Implemented premium stronghold room level upgrades up to Level 20! Added the `upgradeRoomLevel` server action that validates resource upgrade costs (scrap and components scaling per tier), transactionally updates the `rooms` and `inventories` tables (adjusting `room_level`, `grid_size`, `entry_points`, and `storage_capacity`), and recomputes the player's defense slots and rating dynamically. Developed a gorgeous glassmorphic **Upgrade Stronghold** sheet dialogue highlighting current vs next stats (Grid Sizing, Defense Slots, Protected Capacity, and unlocked Entry Points like the L5 West Skylight, L10 North Breach Wall, L15 South Second Window, and L20 East Tunnel). Phaser's `RoomScene` and `RoomEditorScene` were upgraded to dynamically scale grids and trigger EventBus restarts upon upgrading, seamlessly expanding the player's canvas.
-- [TODO] 4.0.15 — Daily quest refresh: server-side via pg_cron, 3 new dailies at midnight UTC
-- [TODO] 4.0.16 — Weekly quest refresh: 3 new weeklies on Monday 00:00 UTC
+- [DONE] 4.0.15 — Daily quest refresh: server-side via pg_cron, 3 new dailies at midnight UTC. Created `public.refresh_daily_quests()` PL/pgSQL stored procedure, enabled the `pg_cron` extension, and scheduled midnight UTC refresh sweeps.
+- [DONE] 4.0.16 — Weekly quest refresh: 3 new weeklies on Monday 00:00 UTC. Created `public.refresh_weekly_quests()` PL/pgSQL stored procedure and scheduled Monday 00:00 UTC refresh sweeps.
 
 **Exit Criteria:** Player earns resources from raids, spends them on room upgrades and items. Quest board shows tutorial + daily + weekly quests. Completing quests grants rewards. Player can level up.
 
@@ -239,11 +239,11 @@
 - [DONE] 8.0.10 — Accessibility pass: color contrast, font sizes, touch target sizes (48px min)
 - [DONE] 8.0.11 — Error handling: graceful fallbacks, user-friendly error messages, Sentry coverage
 - [DONE] 8.0.12 — Analytics: track key events (registration, first_raid, first_defense_placed, retention_d1/d7)
-- [TODO] 8.0.13 — Create landing page (marketing): game description, screenshots, install CTA
-- [TODO] 8.0.14 — Write Terms of Service, Privacy Policy
+- [DONE] 8.0.13 — Create landing page (marketing): game description, screenshots, install CTA. Redesigned root page with glassmorphic Outfit typography, dynamic CTA session gates, generated gameplay mockups, and client-side PWA install controllers.
+- [DONE] 8.0.14 — Write Terms of Service, Privacy Policy. Created `/terms` and `/privacy` Next.js sub-pages styled with clean cyber-retro aesthetics.
 - [TODO] 8.0.15 — Beta test: invite 10-20 testers, collect feedback, iterate
 - [TODO] 8.0.16 — Final bug fix sprint based on beta feedback
-- [TODO] 8.0.17 — Tech Debt: Refactor Next.js 16 middleware.ts to new proxy pattern
+- [DONE] 8.0.17 — Tech Debt: Refactor Next.js 16 middleware.ts to new proxy pattern. Renamed `src/middleware.ts` to `src/proxy.ts`, exporting public `proxy` function to satisfy Next.js 16 standards and clear Turbopack warnings.
 
 **Exit Criteria:** Game is publicly shippable. Smooth onboarding, consistent art, sound, solid performance on mobile, security hardened, analytics tracking.
 

@@ -46,34 +46,42 @@ export default async function QuestsPage() {
     await seedInitialQuests(supabase, user.id);
   }
 
-  // B. Seed daily quests matching player level
-  const dailyQuestsToSeed = questsData.daily.filter(
-    (q) => !existingIds.has(q.id) && playerLevel >= q.requiredLevel
-  );
-  if (dailyQuestsToSeed.length > 0) {
-    const dailyInserts = dailyQuestsToSeed.map((q) => ({
-      player_id: user.id,
-      quest_id: q.id,
-      status: "active",
-      progress: 0,
-      target_value: q.targetValue,
-    }));
-    await (supabase.from("player_quests") as any).insert(dailyInserts);
+  // B. Seed daily quests matching player level (only if user has 0 daily quests in history)
+  const hasDailies = (existingQuests ?? []).some((q: any) => q.quest_id.startsWith("daily-"));
+  if (!hasDailies) {
+    const dailyQuestsToSeed = questsData.daily
+      .filter((q) => playerLevel >= q.requiredLevel)
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 3);
+      
+    if (dailyQuestsToSeed.length > 0) {
+      const dailyInserts = dailyQuestsToSeed.map((q: any) => ({
+        player_id: user.id,
+        quest_id: q.id,
+        status: "active",
+        progress: 0,
+        target_value: q.targetValue,
+      }));
+      await (supabase.from("player_quests") as any).insert(dailyInserts);
+    }
   }
 
-  // C. Seed weekly quests matching player level
-  const weeklyQuestsToSeed = questsData.weekly.filter(
-    (q) => !existingIds.has(q.id) && playerLevel >= q.requiredLevel
-  );
-  if (weeklyQuestsToSeed.length > 0) {
-    const weeklyInserts = weeklyQuestsToSeed.map((q) => ({
-      player_id: user.id,
-      quest_id: q.id,
-      status: "active",
-      progress: 0,
-      target_value: q.targetValue,
-    }));
-    await (supabase.from("player_quests") as any).insert(weeklyInserts);
+  // C. Seed weekly quests matching player level (only if user has 0 weekly quests in history)
+  const hasWeeklies = (existingQuests ?? []).some((q: any) => q.quest_id.startsWith("weekly-"));
+  if (!hasWeeklies) {
+    const weeklyQuestsToSeed = questsData.weekly.filter(
+      (q) => playerLevel >= q.requiredLevel
+    );
+    if (weeklyQuestsToSeed.length > 0) {
+      const weeklyInserts = weeklyQuestsToSeed.map((q: any) => ({
+        player_id: user.id,
+        quest_id: q.id,
+        status: "active",
+        progress: 0,
+        target_value: q.targetValue,
+      }));
+      await (supabase.from("player_quests") as any).insert(weeklyInserts);
+    }
   }
 
   // 4. Refetch full dynamic quest data to pass to Client Dashboard

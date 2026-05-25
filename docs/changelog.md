@@ -1,6 +1,17 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.4.9] — 2026-05-25 — Milestone 8E: Production Ready, Quest Schedulers & PWA Landing Page
+
+### Added
+- **Next.js 16 Proxy Pattern Migration (Task 8.0.17)**: Converted the deprecated `src/middleware.ts` to `src/proxy.ts` exporting a `proxy` handler, aligning our Supabase session-refresh validations to modern Turbopack standards and clearing build warning logs.
+- **Premium Glassmorphic Landing Page (Task 8.0.13)**: Overwrote the boilerplate `/` route with an Outfit-typography driven dark cybernetic dashboard. Dynamically evaluates session credentials to toggle guest vs authenticated CTAs ("Return to Base").
+- **Client-Side Active PWA Install CTA (Task 8.0.13)**: Built the [PwaInstallCTA.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/components/layout/PwaInstallCTA.tsx) component, intercepting browser install prompts and showing custom iOS Safari share-sheet step-by-step guidance overlays.
+- **Visual Asset Screenshots (Task 8.0.13)**: Generated 3 premium isometric/cyber screenshots representing the room customization (`room_editor.png`), map scanners (`recon_map.png`), and active breach raiding (`active_raid.png`) placed in a glassmorphic hover-responsive grid layout.
+- **PL/pgSQL Daily & Weekly Quest Resets (Tasks 4.0.15 & 4.0.16)**: Built database-native stored procedures `public.refresh_daily_quests()` and `public.refresh_weekly_quests()` that clear active/claimed quest histories and randomly seed three fresh, level-matching daily and weekly tasks automatically.
+- **Supabase pg_cron Integration (Tasks 4.0.15 & 4.0.16)**: Pushed migration `00013_quest_refresh_cron.sql`, enabling the `pg_cron` extension and scheduling two background cron triggers running at midnight UTC (and weekly on Mondays at 00:00 UTC) to invoke stored resets transactionally.
+- **Calibrated Seeding Checks (Tasks 4.0.15 & 4.0.16)**: Calibrated [page.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/app/(game)/quests/page.tsx) to only defensively seed dailies/weeklies if the player's database quest histories are completely empty, preventing quest collisions or duplicate clutter.
+
 ## [0.4.8] — 2026-05-25 — Milestone 8D: Robust Error Handling & Analytics Telemetry
 
 ### Added

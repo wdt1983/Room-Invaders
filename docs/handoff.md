@@ -16,6 +16,65 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-25 — Milestone 8E Sprints: Next.js Proxy Refactor, Premium Landing Page, & pg_cron Quest Resets (Tasks 8.0.17, 8.0.13, 8.0.14, 4.0.15, 4.0.16)
+
+### Summary
+
+Successfully implemented and verified **Milestone 8E: Production Ready, Quest Schedulers & PWA Landing Page** sweeps across database schemas, Next.js routes, and background cron schedulers. Migrated the deprecated `src/middleware.ts` to the new Next.js 16 `src/proxy.ts` pattern, resolving Turbopack production warnings. Constructed a stunning, Outfit-typography driven glassmorphic marketing landing page (`/`) featuring dynamic session CTA gates, 3 generated visual gameplay screenshots, and a client-side active PWA installer (`PwaInstallCTA.tsx`). Formulated high-tech themed legal compliance pages for Terms of Service (`/terms`) and Privacy Policy (`/privacy`). Implemented database-native stored PL/pgSQL procedures `public.refresh_daily_quests()` and `public.refresh_weekly_quests()` driven by Supabase `pg_cron` background triggers running at midnight UTC (and weekly on Mondays) to automatically clear active/claimed quest histories and randomly seed three fresh, level-matching daily and weekly tasks. Calibrated the Next.js `quests/page.tsx` seeding logic to use robust array searches that prevent quest collisions or duplicates. All systems compile strictly with **0 errors and 0 warnings**.
+
+### Work Accomplished
+
+1. **Next.js 16 Proxy Migration (Task 8.0.17)**:
+   - Deleted the deprecated top-level `src/middleware.ts` file convention.
+   - Created the new standard `src/proxy.ts` file, exporting the renamed `proxy` handler wrapping our Supabase session cookie updates to conform with Next.js 16 and resolve Turbopack warning logs.
+
+2. **Premium Marketing Landing Page & Active PWA Installer (Task 8.0.13)**:
+   - Overwrote the root page `src/app/page.tsx` with a highly aesthetic Outfit typography-driven glassmorphic layout, using radial neon keyframe glows and high-tech command overlays.
+   - Integrated Server Component session checks on `/` to dynamically swap guest actions with a glowing `"Return to Base"` CTA button for authenticated players.
+   - Generated 3 gorgeous cybernetic isometric mockups (`room_editor.png`, `recon_map.png`, `active_raid.png`) representing Room Invaders' primary phases, placed inside a glassmorphic card showcase grid.
+   - Built the client-side installer component [PwaInstallCTA.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/components/layout/PwaInstallCTA.tsx), intercepting browser install events, providing custom iOS Safari share-sheet walkthrough guidelines, and outputting green checkmarks when already running standalone.
+
+3. **Legal Compliance Sub-Pages (Task 8.0.14)**:
+   - Created `/terms/page.tsx` detailing Intellectual Property parameters, account guidelines, and strict server-side **anti-cheat and hack detection clauses** in a readable glassmorphic layout.
+   - Created `/privacy/page.tsx` outlining standard credentials storage (Supabase Auth), game inventory logging, Sentry telemetry details, and account deletion procedures.
+   - Linked both documents inside the root landing page's cybernetic footer.
+
+4. **pg_cron & PL/pgSQL Daily/Weekly Quest Resets (Tasks 4.0.15 & 4.0.16)**:
+   - Created database stored procedure `public.refresh_daily_quests()` that clears active/claimed daily quests (`quest_id LIKE 'daily-%'`), while safely preserving completed but unclaimed ones from yesterday, and inserts 3 random level-matching active daily quests for all users.
+   - Created database stored procedure `public.refresh_weekly_quests()` that clears active/claimed weekly quests (`quest_id LIKE 'weekly-%'`) and seeds up to 3 weeklies matching each user's level.
+   - Appended Supabase database migration `00013_quest_refresh_cron.sql`, enabling the `pg_cron` extension natively, safely unscheduling previous jobs, and registering schedules for midnight UTC (`0 0 * * *`) and Mondays (`0 0 * * 1`) to trigger stored resets transactionally.
+   - Pushed successfully to the remote Supabase database using Supabase CLI.
+
+5. **Calibrated Quest Seeding Page**:
+   - Calibrated [page.tsx](file:///C:/Projects/ALT-Games/room-invaders/src/app/(game)/quests/page.tsx) to check existing quest array states directly. It now seeds daily and weekly quests defensively *only* if the player's database quest history is completely empty, eliminating any duplicate quest clutter or collisions with pg_cron resets.
+   - Added `export const dynamic = "force-dynamic"` to the root landing page to prevent dynamic cookies build-time pre-render exceptions, keeping Next.js logs pristine.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/middleware.ts` | **DELETED.** Removed deprecated middleware file. |
+| `src/proxy.ts` | **NEW.** Conforms to Next.js 16 proxy convention and handler standards. |
+| `src/app/page.tsx` | **MODIFIED.** Premium Outfit glassmorphic landing page with dynamic CTAs. |
+| `src/components/layout/PwaInstallCTA.tsx` | **NEW.** Responsive active PWA installation helper with iOS/Chromium routing. |
+| `public/screenshots/` | **NEW.** Added `room_editor.png`, `recon_map.png`, and `active_raid.png` mockups. |
+| `src/app/terms/page.tsx` | **NEW.** Glassmorphic, dark cybernetic themed Terms of Service. |
+| `src/app/privacy/page.tsx` | **NEW.** Glassmorphic, dark cybernetic themed Privacy Policy. |
+| `supabase/migrations/00013_quest_refresh_cron.sql` | **NEW.** SQL stored procedures and pg_cron triggers for quest resets. |
+| `src/app/(game)/quests/page.tsx` | **MODIFIED.** Calibrated defensive seeding to prevent pg_cron quest duplicate collisions. |
+| `docs/tasks.md` | Marked Tasks 8.0.13, 8.0.14, 8.0.17, 4.0.15, and 4.0.16 `[DONE]`. |
+| `docs/changelog.md` | Documented version `[0.4.9]` changes. |
+| `docs/handoff.md` | This entry. |
+
+### Next Steps for Phase 8: Polish & MVP Launch Prep
+
+With quest schedulers, visual landing pages, legal compliance documents, error handling, and analytics fully completed, the next best strategic tasks are:
+1. **Task 4.0.3 — Repair System (Recommended)**: Implement the defense repair system, where defenses damaged after being raided require scrap to restore their operational status.
+2. **Task 8.0.15 — Beta test**: Invite 10-20 alpha/beta testers to the live production deployment, compile gameplay logs, and collect UI/UX feedback.
+3. **Task 8.0.16 — Final bug fix sprint**: Address tester feedback, adjust pathfinding details, or resolve visual Phaser scaling bugs before the core public launch.
+
+---
+
 ## 2026-05-25 — Milestone 8D Sprints: Robust Error Handling & Analytics Telemetry (Tasks 8.0.11, 8.0.12)
 
 ### Summary
