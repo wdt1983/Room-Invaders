@@ -1,6 +1,19 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.5.0] — 2026-05-25 — Milestone 8F: Defense Repair System
+
+### Added
+- **Damaged Defense Database Schema (Task 4.0.3)**: Added `is_damaged BOOLEAN NOT NULL DEFAULT FALSE` to `player_items` via migration `00014_defense_repair_system.sql` with partial indexing for fast lookup.
+- **Server-Authoritative Raid Damage Resolution (Task 4.0.3)**: Updated the `resolve-raid` Deno Edge Function to parse the raid's `actionLog`, flag traps triggered, turrets fired, or barricades/guards attacked as `is_damaged = true` in the defender's room, and dynamically recompute the defender's `defense_rating` while omitting damaged items.
+- **Raid and Replay Filtering (Task 4.0.3)**: Refactored `validate-defense` Edge Function and Next.js raid/replay loaders to filter out damaged items (`is_damaged = false`), ensuring they do not spawn in active raids or ghost replays.
+- **Server Action Repair Pipeline (Task 4.0.3)**: Added the `repairPlacedItem(gridX, gridY)` Next.js server action in `room/actions.ts` to validate costs, transactionally deduct Scrap (40% of original item cost, min 5 Scrap), clear the `is_damaged` flag, and recompute the base stats.
+- **Phaser Rusty-Red Visual Tint & Animations (Task 4.0.3)**: Configured Phaser `FurnitureSprite.ts` to render damaged items with a custom dark rusty-red tint (`0x664444`) and reduced opacity (`setAlpha(0.7)`). On successful repair, `RoomScene` and `RoomEditorScene` clear the tint and restore original alpha with micro-animations.
+- **React ContextMenu & HUD Badging (Task 4.0.3)**:
+  - Added a glowing green/yellow `"🔧 Repair Base (X Scrap)"` option inside the `ContextMenu` component.
+  - Implemented a pulsing red warning badge `[X Broken]` in `TopBar.tsx` resource bar showing the active count of damaged items.
+  - Wired `GameBridge.tsx` to handle the `"request-repair"` trigger, invoke server actions, sync inventories, and emit `'repair-success'` back to Phaser.
+
 ## [0.4.9] — 2026-05-25 — Milestone 8E: Production Ready, Quest Schedulers & PWA Landing Page
 
 ### Added

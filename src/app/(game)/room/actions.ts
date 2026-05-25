@@ -48,7 +48,7 @@ async function recomputeDefenseState(
   roomLevel: number,
 ): Promise<{ defenseRating: number; defenseSlotsUsed: number; defenseSlotsCap: number }> {
   const { data: placedRows } = await (supabase.from('player_items') as any)
-    .select('items ( type, stats )')
+    .select('is_damaged, items ( type, stats )')
     .eq('owner_id', userId)
     .eq('placed_in_room', true);
 
@@ -59,7 +59,9 @@ async function recomputeDefenseState(
     const itemData = Array.isArray(row.items) ? row.items[0] : row.items;
     const type = itemData?.type as string | undefined;
     const stats = itemData?.stats;
-    defenseRating += defenseValueFor(type, stats);
+    if (!row.is_damaged) {
+      defenseRating += defenseValueFor(type, stats);
+    }
     if (slotCategoryFor(type) === 'defense') {
       defenseSlotsUsed += 1;
     }
@@ -569,4 +571,98 @@ export async function saveRoomCosmetics(cosmetics: { wallColor: number; floorTyp
   }
 
   return { success: true as const };
+}
+
+export async function repairPlacedItem(gridX: number, gridY: number) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false as const, error: 'Unauthorized' };
+    }
+
+    // 1. Find the placed item at gridX, gridY that is damaged
+    const { data: placed, error: findError } = await (supabase.from('player_items') as any)
+      .select('id, is_damaged, item_id, items ( cost, name )')
+      .eq('owner_id', user.id)
+      .eq('placed_in_room', true)
+      .contains('grid_position', { x: gridX, y: gridY })
+      .single();
+
+    if (findError || !placed) {
+      return { success: false as const, error: 'Placed item not found' };
+    }
+
+    if (!placed.is_damaged) {
+      return { success: false as const, error: 'Item is not damaged' };
+    }
+
+    // 2. Calculate repair cost (40% of original scrap cost, minimum of 5 scrap)
+    const itemData = (Array.isArray(placed.items) ? placed.items[0] : placed.items) as any;
+    const originalScrapCost = (itemData?.cost?.scrap as number) || 0;
+    const repairCost = Math.max(5, Math.floor(originalScrapCost * 0.4));
+
+    // 3. Get player inventory
+    const { data: inventory, error: invError } = await (supabase.from('inventories') as any)
+      .select('scrap')
+      .eq('owner_id', user.id)
+      .single();
+
+    if (invError || !inventory) {
+      return { success: false as const, error: 'Inventory not found' };
+    }
+
+    if (inventory.scrap < repairCost) {
+      return { success: false as const, error: `Not enough scrap. Requires ${repairCost} scrap.` };
+    }
+
+    // 4. Deduct scrap and mark as repaired
+    const newScrap = inventory.scrap - repairCost;
+    
+    const { error: updateInvError } = await (supabase.from('inventories') as any)
+      .update({ scrap: newScrap })
+      .eq('owner_id', user.id);
+
+    if (updateInvError) {
+      console.error('Failed to deduct scrap for repair:', updateInvError);
+      return { success: false as const, error: 'Failed to deduct resources' };
+    }
+
+    const { error: updateItemError } = await (supabase.from('player_items') as any)
+      .update({ is_damaged: false })
+      .eq('id', placed.id);
+
+    if (updateItemError) {
+      console.error('Failed to update item repair status:', updateItemError);
+      return { success: false as const, error: 'Failed to complete repair' };
+    }
+
+    // 5. Recompute defense rating / stats
+    const { data: room } = await (supabase.from('rooms') as any)
+      .select('room_level')
+      .eq('owner_id', user.id)
+      .single();
+    const roomLevel = room?.room_level ?? 1;
+    const defenseState = await recomputeDefenseState(supabase, user.id, roomLevel);
+
+    // Track quest progress for spending resources
+    await trackQuestProgress(supabase, user.id, 'spend_resources', repairCost);
+
+    return {
+      success: true as const,
+      newScrap,
+      repairCost,
+      name: itemData?.name ?? 'Defense',
+      ...defenseState,
+    };
+
+  } catch (err: any) {
+    console.error("[repairPlacedItem] Exception caught:", err);
+    Sentry.captureException(err, {
+      tags: { action: "repairPlacedItem" },
+      extra: { gridX, gridY },
+    });
+    return { success: false as const, error: err.message || 'An unexpected error occurred repairing item.' };
+  }
 }

@@ -16,6 +16,69 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-25 — Milestone 8F: Defense Repair System (Task 4.0.3)
+
+### Summary
+
+Successfully implemented, audited, and verified **Milestone 8F: Defense Repair System (Task 4.0.3)** across database migrations, Deno Edge Functions, Next.js page loaders/server actions, Zustand stores, React overlays, and Phaser isometric engine subsystems. Raided player defenses (traps, turrets, barricades, guards) damaged or triggered during PvP raids are authoritatively flagged as `is_damaged = true` in the defender's room. Damaged defenses contribute **0** to the defender's `defense_rating`, and do not spawn in active raids or replays. Restoring them requires Scrap (40% of original cost, rounded down, minimum 5 Scrap). The UI displays damaged defenses in a rusty-red tint and translucent opacity, adds a glowing repair option in the ContextMenu, displays a pulsing warning badge `[X Broken]` in the HUD top bar, and handles micro-animations upon successful repair. Typechecks and Next.js production builds compile cleanly with **0 errors and 0 warnings**.
+
+### Work Accomplished
+
+1. **Database Schema & Indexing (Task 4.0.3)**:
+   - Formulated and pushed migration `00014_defense_repair_system.sql` introducing `is_damaged BOOLEAN NOT NULL DEFAULT FALSE` to `player_items`.
+   - Created a partial index `idx_player_items_damaged` on `player_items(is_damaged) WHERE is_damaged = true` for lightning-fast queries and counts.
+
+2. **Server-Authoritative Edge Function Resolution (Task 4.0.3)**:
+   - Modified the `resolve-raid` Deno Edge Function to parse client-reported PvP `actionLog` arrays. Any trap triggered (`trap_triggered`), turret fired (`turret_fired`), or barricade/guard damaged/destroyed is authoritatively flagged as `is_damaged = true` in the defender's room.
+   - Refactored `validate-defense` Deno Edge Function to filter out damaged items from active defense ratings, returning `is_damaged` states to callers. Both Edge Functions were deployed successfully to remote Supabase via CLI.
+
+3. **Raid & Replay Security (Task 4.0.3)**:
+   - Refactored Server Component routes `raid/[id]/page.tsx` and `raid/replay/[historyId]/page.tsx` to omit damaged defenses (`is_damaged = false`), ensuring no ghost sprites spawn in subsequent raids or active replays.
+
+4. **Next.js Server Actions & State Hydration (Task 4.0.3)**:
+   - Added the `repairPlacedItem(gridX, gridY)` Server Action in `src/app/(game)/room/actions.ts` to validate player ownership, calculate repair cost (40% original Scrap cost, min 5 Scrap), transactionally charge Scrap, clear `is_damaged`, and recompute global defense ratings.
+   - Hydrated `isDamaged` values into `useRoomStore.ts` and `useUIStore.ts` state layers on Next.js server pre-renders.
+
+5. **Phaser Engine Visuals & Event Triggers (Task 4.0.3)**:
+   - Upgraded `FurnitureSprite.ts` constructor to support `isDamaged`. If damaged, sprite is tinted `0x664444` and set to `0.7` alpha.
+   - Wired `'repair-success'` in `RoomScene.ts` and `RoomEditorScene.ts` to clear tints (`clearTint`), restore alpha (`setAlpha(1)`), and execute clean visual updates.
+
+6. **React UI contextual controls & HUD (Task 4.0.3)**:
+   - Updated `ContextMenu.tsx` to read `isDamaged`, calculate cost, and present the glowing yellow-green `"🔧 Repair (X Scrap)"` action.
+   - Updated `GameBridge.tsx` to catch `"request-repair"`, fire Server Actions, deduct local Scrap, and emit `'repair-success'` to Phaser.
+   - Updated `TopBar.tsx` to scan `placedItems` and render a pulsing red `[X Broken]` badge next to the Scrap count when damaged items exist.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00014_defense_repair_system.sql` | **NEW.** SQL migration adding `is_damaged` column and partial index. |
+| `supabase/functions/resolve-raid/index.ts` | **MODIFIED.** Parses PvP raid log to mark triggered/damaged items as damaged, recomputing defense ratings. |
+| `supabase/functions/validate-defense/index.ts` | **MODIFIED.** Excludes damaged items from rating calculations. |
+| `src/app/(game)/room/actions.ts` | **MODIFIED.** Added `repairPlacedItem` Server Action, recomputing ratings. |
+| `src/app/(game)/room/page.tsx` | **MODIFIED.** Maps `is_damaged` from database join to page props. |
+| `src/app/(game)/raid/[id]/page.tsx` | **MODIFIED.** Filters out damaged items from active PvP raids. |
+| `src/app/(game)/raid/replay/[historyId]/page.tsx` | **MODIFIED.** Filters out damaged items from active PvP replays. |
+| `src/lib/store/useRoomStore.ts` | **MODIFIED.** Tracks `isDamaged` on placed items, adds `repairPlacedItemAt` mutation. |
+| `src/lib/store/useUIStore.ts` | **MODIFIED.** Adds `isDamaged` to context menu state. |
+| `src/game/objects/FurnitureSprite.ts` | **MODIFIED.** Applies tints and alpha on damaged items. |
+| `src/game/scenes/RoomScene.ts` | **MODIFIED.** Subscribes to `'repair-success'` EventBus and passes isDamaged to React. |
+| `src/game/scenes/RoomEditorScene.ts` | **MODIFIED.** Subscribes to `'repair-success'` EventBus and passes isDamaged to React. |
+| `src/components/game/ContextMenu.tsx` | **MODIFIED.** Implements Repair action visual styling and cost calculation. |
+| `src/components/game/GameBridge.tsx` | **MODIFIED.** Maps `"request-repair"` to Server Action trigger, emitting `'repair-success'`. |
+| `src/components/layout/TopBar.tsx` | **MODIFIED.** Dynamic broken-defense badging next to resource bar. |
+| `docs/tasks.md` | Checked off Task 4.0.3 `[DONE]`. |
+| `docs/changelog.md` | Documented version `[0.5.0]` changes. |
+| `docs/handoff.md` | This entry. |
+
+### Next Steps for Phase 8: Polish & MVP Launch Prep
+
+With the core Base-Builder game loop completely closed (including resource generation, upgrades, defense rating, safe mode, PvP, scouting, replays, and now the **defense repair resource sink**), the remaining Phase 8 tasks are:
+1. **Task 8.0.15 — Beta test (Recommended)**: Invite 10-20 alpha/beta testers to the live production deployment, compile gameplay logs, and collect UI/UX feedback.
+2. **Task 8.0.16 — Final bug fix sprint**: Address tester feedback, adjust pathfinding details, or resolve visual Phaser scaling bugs before the core public launch.
+
+---
+
 ## 2026-05-25 — Milestone 8E Sprints: Next.js Proxy Refactor, Premium Landing Page, & pg_cron Quest Resets (Tasks 8.0.17, 8.0.13, 8.0.14, 4.0.15, 4.0.16)
 
 ### Summary

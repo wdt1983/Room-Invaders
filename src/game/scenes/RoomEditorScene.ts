@@ -155,6 +155,7 @@ export class RoomEditorScene extends Phaser.Scene {
           (f) => f.gridX === worldCoords.x && f.gridY === worldCoords.y,
         );
         const spriteKey = targetFurniture?.texture.key ?? 'placed_item';
+        const isDamaged = targetFurniture ? targetFurniture.isDamaged : false;
         const screenPos = IsometricEngine.worldToScreen(
           worldCoords.x, worldCoords.y,
           roomScene.currentRotation,
@@ -166,6 +167,7 @@ export class RoomEditorScene extends Phaser.Scene {
           y: screenPos.y + roomScene.offsetY,
           gridX: worldCoords.x,
           gridY: worldCoords.y,
+          isDamaged,
         });
       }
     });

@@ -20,6 +20,7 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
   public hp: number | null = null;
   /** Authored max HP (or `null` for indestructible items). */
   public maxHp: number | null = null;
+  public isDamaged: boolean = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -28,9 +29,10 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
     textureKey: string,
     footprintW: number,
     footprintH: number,
-    options: { hp?: number | null } = {},
+    options: { hp?: number | null; isDamaged?: boolean } = {},
   ) {
     super(scene, 0, 0, textureKey);
+    this.isDamaged = !!options.isDamaged;
 
     // Anchor to the bottom center so it sits correctly on the grid floor
     this.setOrigin(0.5, 1);

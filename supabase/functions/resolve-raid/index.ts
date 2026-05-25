@@ -89,6 +89,77 @@ function resolveSpawnForEntryPoint(ep: EntryPoint, gridSize: number): { x: numbe
   }
 }
 
+function slotCategoryFor(type: string | null | undefined): "defense" | "furniture" | "none" {
+  if (!type) return "none";
+  if (["trap", "turret", "barricade", "guard"].includes(type)) return "defense";
+  if (type === "furniture") return "furniture";
+  return "none";
+}
+
+function defenseValueFor(type: string | null | undefined, stats: any): number {
+  if (!type) return 0;
+  const damage = Number(stats?.damage) || 0;
+  const range = Number(stats?.range) || 0;
+  const hp = Number(stats?.hp) || 0;
+  const stun = Number(stats?.stun_duration) || 0;
+  const immobilize = Number(stats?.immobilize_duration) || 0;
+  const alert = Number(stats?.alert_radius) || 0;
+  const uses = Number(stats?.uses) || 1;
+  const emp = Number(stats?.emp_duration) || 0;
+  const fireRate = Number(stats?.fire_rate) || 1.0;
+  const chainTargets = Number(stats?.chain_targets) || 1;
+  const decoyRadius = Number(stats?.decoy_radius) || 0;
+
+  switch (type) {
+    case "trap":
+      return (damage * Math.min(3, uses)) + 
+             Math.round(stun * 6) + 
+             Math.round(immobilize * 4) + 
+             Math.round(emp * 3) + 
+             Math.round(alert * 2.5);
+    case "turret":
+      const fireRateFactor = fireRate > 0 ? (1.0 / fireRate) : 1.0;
+      return Math.round(damage * fireRateFactor * Math.max(1, range) * chainTargets);
+    case "barricade":
+      return Math.floor(hp / 8);
+    case "guard":
+      return Math.floor(hp / 5) + 
+             Math.round(damage * 2.5) + 
+             (range * 2) + 
+             (decoyRadius * 10);
+    default:
+      return 0;
+  }
+}
+
+async function recomputeDefenderDefenseState(
+  supabase: any,
+  defenderId: string,
+): Promise<void> {
+  const { data: placedRows } = await supabase
+    .from("player_items")
+    .select("is_damaged, items ( type, stats )")
+    .eq("owner_id", defenderId)
+    .eq("placed_in_room", true);
+
+  let defenseRating = 0;
+
+  for (const row of placedRows ?? []) {
+    const itemData = Array.isArray(row.items) ? row.items[0] : row.items;
+    const type = itemData?.type as string | undefined;
+    const stats = itemData?.stats;
+    if (!row.is_damaged) {
+      defenseRating += defenseValueFor(type, stats);
+    }
+  }
+
+  await supabase
+    .from("rooms")
+    .update({ defense_rating: defenseRating })
+    .eq("owner_id", defenderId);
+}
+
+
 // deno-lint-ignore no-explicit-any
 async function trackRaidQuestProgress(supabase: any, userId: string): Promise<void> {
   try {
@@ -353,6 +424,43 @@ Deno.serve(async (req: Request) => {
 
       if (shieldErr) {
         console.error("[resolve-raid] Failed to update defender shield:", shieldErr);
+      }
+    }
+
+    // Parse actionLog to identify which of the defender's defenses were damaged
+    if (body.actionLog && body.actionLog.length > 0) {
+      const damagedCoords = new Set<string>();
+      for (const event of body.actionLog) {
+        if (
+          ["trap_triggered", "turret_fired", "barricade_attacked", "defense_destroyed"].includes(
+            event.type
+          )
+        ) {
+          const x = event.data?.gridX;
+          const y = event.data?.gridY;
+          if (typeof x === "number" && typeof y === "number") {
+            damagedCoords.add(`${x},${y}`);
+          }
+        }
+      }
+
+      if (damagedCoords.size > 0) {
+        console.log(`[resolve-raid] Flagging ${damagedCoords.size} defenses as damaged for defender ${defenderId}`);
+        for (const coord of damagedCoords) {
+          const [x, y] = coord.split(",").map(Number);
+          const { error: damageErr } = await (supabase.from("player_items") as any)
+            .update({ is_damaged: true })
+            .eq("owner_id", defenderId)
+            .eq("placed_in_room", true)
+            .contains("grid_position", { x, y });
+
+          if (damageErr) {
+            console.error(`[resolve-raid] Failed to mark defense at ${x},${y} as damaged:`, damageErr);
+          }
+        }
+        
+        // Recompute the defender's defense rating after their defenses are damaged
+        await recomputeDefenderDefenseState(supabase, defenderId);
       }
     }
 

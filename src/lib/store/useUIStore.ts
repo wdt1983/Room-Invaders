@@ -8,6 +8,7 @@ interface ContextMenuState {
   gridY?: number;
   entityId?: string;
   spriteKey?: string;
+  isDamaged?: boolean;
 }
 
 export type UIMode = 'view' | 'edit' | 'defense-view';
@@ -26,7 +27,7 @@ interface UIState {
   selectedItemKey: string | null;
   setSelectedItemKey: (key: string | null) => void;
   contextMenu: ContextMenuState | null;
-  openContextMenu: (payload: { x: number; y: number; spriteKey?: string; entityId?: string; gridX?: number; gridY?: number }) => void;
+  openContextMenu: (payload: { x: number; y: number; spriteKey?: string; entityId?: string; gridX?: number; gridY?: number; isDamaged?: boolean }) => void;
   closeContextMenu: () => void;
   sfxVolume: number;
   musicVolume: number;

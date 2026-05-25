@@ -7,6 +7,7 @@ import {
   buyAndPlaceFurniture,
   removePlacedItem,
   rotatePlacedItem,
+  repairPlacedItem,
 } from "@/app/(game)/room/actions";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { useRoomStore, CatalogItem } from "@/lib/store/useRoomStore";
@@ -93,21 +94,46 @@ export function GameBridge() {
           y: payload.y,
           rotation: result.rotation,
         });
-        // No success toast — the sprite visually rotates and the player
-        // already saw the ContextMenu they just clicked. Would be noise.
       } else {
         toast.error("Rotate failed", { description: result.error });
+      }
+    };
+
+    const handleRepairRequest = async (payload: { x: number; y: number }) => {
+      const placed = useRoomStore
+        .getState()
+        .placedItems.find((p) => p.gridX === payload.x && p.gridY === payload.y);
+      const displayName = placed ? catalogInfo(placed.spriteKey).name : "Item";
+
+      const toastId = toast.loading(`Repairing ${displayName}...`);
+      const result = await repairPlacedItem(payload.x, payload.y);
+
+      toast.dismiss(toastId);
+      if (result.success) {
+        if (typeof result.newScrap === "number") {
+          usePlayerStore.getState().setInventory({ scrap: result.newScrap });
+        }
+        syncDefenseStats(result);
+        useRoomStore.getState().repairPlacedItemAt(payload.x, payload.y);
+        EventBus.emit("repair-success", payload);
+        toast.success(`Repaired ${displayName}`, {
+          description: `−${result.repairCost} Scrap. Base operational!`,
+        });
+      } else {
+        toast.error("Repair failed", { description: result.error });
       }
     };
 
     EventBus.on("request-placement", handlePlacementRequest);
     EventBus.on("request-removal", handleRemovalRequest);
     EventBus.on("request-rotation", handleRotationRequest);
+    EventBus.on("request-repair", handleRepairRequest);
 
     return () => {
       EventBus.off("request-placement", handlePlacementRequest);
       EventBus.off("request-removal", handleRemovalRequest);
       EventBus.off("request-rotation", handleRotationRequest);
+      EventBus.off("request-repair", handleRepairRequest);
     };
   }, []);
 

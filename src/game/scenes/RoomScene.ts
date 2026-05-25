@@ -208,10 +208,15 @@ export class RoomScene extends Phaser.Scene {
             item.gridY,
             item.spriteKey,
             item.footprintW,
-            item.footprintH
+            item.footprintH,
+            { isDamaged: item.isDamaged }
         );
         sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
         sprite.setFurnitureRotation(item.rotation ?? 0);
+        if (item.isDamaged) {
+          sprite.setTint(0x664444);
+          sprite.setAlpha(0.7);
+        }
         this.furnitureItems.push(sprite);
       }
     });
@@ -270,11 +275,24 @@ export class RoomScene extends Phaser.Scene {
       });
     };
 
+    const handleRepairSuccess = (payload: { x: number; y: number }) => {
+      const sprite = this.furnitureItems.find(
+        (f) => f.gridX === payload.x && f.gridY === payload.y,
+      );
+      if (sprite) {
+        sprite.isDamaged = false;
+        sprite.clearTint();
+        sprite.setAlpha(1.0);
+        SoundManager.getInstance().playSfx('place_item');
+      }
+    };
+
     EventBus.on('change-mode', handleChangeMode);
     EventBus.on('removal-success', handleRemovalSuccess);
     EventBus.on('rotation-success', handleRotationSuccess);
     EventBus.on('room-upgraded', handleRoomUpgraded);
     EventBus.on('cosmetics-changed', handleCosmeticsChanged);
+    EventBus.on('repair-success', handleRepairSuccess);
 
     this.events.once('shutdown', () => {
       SoundManager.getInstance().stopMusic();
@@ -283,6 +301,7 @@ export class RoomScene extends Phaser.Scene {
       EventBus.off('rotation-success', handleRotationSuccess);
       EventBus.off('room-upgraded', handleRoomUpgraded);
       EventBus.off('cosmetics-changed', handleCosmeticsChanged);
+      EventBus.off('repair-success', handleRepairSuccess);
       this.exitDefenseView();
     });
 
@@ -323,6 +342,7 @@ export class RoomScene extends Phaser.Scene {
               this.playerEntity.walkPath(path, this.offsetX, this.offsetY, this.currentRotation, () => {
                   const targetFurniture = this.furnitureItems.find(f => f.gridX === worldCoords.x && f.gridY === worldCoords.y);
                   const spriteKey = targetFurniture ? targetFurniture.texture.key : 'placed_item';
+                  const isDamaged = targetFurniture ? targetFurniture.isDamaged : false;
                   const screenPos = IsometricEngine.worldToScreen(worldCoords.x, worldCoords.y, this.currentRotation);
                   
                   EventBus.emit('open-context-menu', {
@@ -330,7 +350,8 @@ export class RoomScene extends Phaser.Scene {
                       x: screenPos.x + this.offsetX,
                       y: screenPos.y + this.offsetY,
                       gridX: worldCoords.x,
-                      gridY: worldCoords.y
+                      gridY: worldCoords.y,
+                      isDamaged
                   });
               });
               this.focusCameraOnPlayer();

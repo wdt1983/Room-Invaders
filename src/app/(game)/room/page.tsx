@@ -45,6 +45,7 @@ export default async function RoomPage() {
         id,
         grid_position,
         rotation,
+        is_damaged,
         items ( sprite_key, footprint, type )
     `)
     .eq('owner_id', user.id)
@@ -121,6 +122,7 @@ export default async function RoomPage() {
       footprintW: itemData?.footprint?.w ?? 1,
       footprintH: itemData?.footprint?.h ?? 1,
       rotation: ((storedRotation % 4) + 4) % 4,
+      isDamaged: !!dbItem.is_damaged,
     };
   });
 

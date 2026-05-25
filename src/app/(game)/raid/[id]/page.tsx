@@ -97,6 +97,7 @@ export default async function RaidRoutePage({
           id,
           grid_position,
           rotation,
+          is_damaged,
           items ( sprite_key, footprint, type )
       `)
       .eq("owner_id", defenderId)
@@ -107,20 +108,22 @@ export default async function RaidRoutePage({
     }
 
     // Parse placed item data
-    const mappedItems = (placedItemsData || []).map((dbItem: any) => {
-      const itemData = Array.isArray(dbItem.items) ? dbItem.items[0] : dbItem.items;
-      const storedRotation = Number.isInteger(dbItem.rotation) ? dbItem.rotation : 0;
-      return {
-        id: dbItem.id,
-        spriteKey: itemData?.sprite_key || "bed_basic",
-        gridX: dbItem.grid_position?.x ?? 0,
-        gridY: dbItem.grid_position?.y ?? 0,
-        footprintW: itemData?.footprint?.w ?? 1,
-        footprintH: itemData?.footprint?.h ?? 1,
-        rotation: ((storedRotation % 4) + 4) % 4,
-        type: itemData?.type || "furniture",
-      };
-    });
+    const mappedItems = (placedItemsData || [])
+      .filter((dbItem: any) => !dbItem.is_damaged)
+      .map((dbItem: any) => {
+        const itemData = Array.isArray(dbItem.items) ? dbItem.items[0] : dbItem.items;
+        const storedRotation = Number.isInteger(dbItem.rotation) ? dbItem.rotation : 0;
+        return {
+          id: dbItem.id,
+          spriteKey: itemData?.sprite_key || "bed_basic",
+          gridX: dbItem.grid_position?.x ?? 0,
+          gridY: dbItem.grid_position?.y ?? 0,
+          footprintW: itemData?.footprint?.w ?? 1,
+          footprintH: itemData?.footprint?.h ?? 1,
+          rotation: ((storedRotation % 4) + 4) % 4,
+          type: itemData?.type || "furniture",
+        };
+      });
 
     const gridSize = defenderRoom.grid_size ?? 10;
     const roomLevel = defenderRoom.room_level ?? 1;

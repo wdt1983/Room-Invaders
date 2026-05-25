@@ -6,6 +6,7 @@ import { EventBus } from '@/game/EventBus';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Trash2, RotateCw } from 'lucide-react';
+import { useRoomStore } from '@/lib/store/useRoomStore';
 
 export function ContextMenu() {
   const { contextMenu, openContextMenu, closeContextMenu } = useUIStore();
@@ -19,6 +20,7 @@ export function ContextMenu() {
       entityId?: string;
       gridX?: number;
       gridY?: number;
+      isDamaged?: boolean;
     }) => {
       openContextMenu(payload);
     };
@@ -31,6 +33,11 @@ export function ContextMenu() {
   }, [openContextMenu]);
 
   if (!contextMenu?.visible) return null;
+
+  const catalog = useRoomStore((state) => state.catalog);
+  const catalogItem = catalog.find((c) => c.sprite_key === contextMenu.spriteKey);
+  const originalScrapCost = Number(catalogItem?.cost?.scrap) || 0;
+  const repairCost = Math.max(5, Math.floor(originalScrapCost * 0.4));
 
   const canRemove =
     mode === 'edit' &&
@@ -55,6 +62,23 @@ export function ContextMenu() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-0 flex flex-col gap-2">
+            {contextMenu.isDamaged && typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && (
+              <Button
+                size="sm"
+                variant="default"
+                className="w-full justify-start border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 animate-pulse font-bold"
+                onClick={() => {
+                  EventBus.emit('request-repair', {
+                    x: contextMenu.gridX,
+                    y: contextMenu.gridY,
+                  });
+                  closeContextMenu();
+                }}
+              >
+                <span className="mr-2">🔧</span>
+                Repair ({repairCost} Scrap)
+              </Button>
+            )}
             {canRemove ? (
               <>
                 <Button

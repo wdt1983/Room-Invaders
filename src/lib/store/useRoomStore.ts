@@ -24,6 +24,7 @@ export interface PlacedItem {
   footprintH: number;
   /** Discrete 90° rotation step: 0=0°, 1=90°, 2=180°, 3=270°. */
   rotation: number;
+  isDamaged?: boolean;
 }
 
 export interface Cosmetics {
@@ -64,6 +65,7 @@ interface RoomState {
   setCosmetics: (cosmetics: Partial<Cosmetics>) => void;
   removePlacedItemAt: (gridX: number, gridY: number) => void;
   rotatePlacedItemAt: (gridX: number, gridY: number, rotation: number) => void;
+  repairPlacedItemAt: (gridX: number, gridY: number) => void;
 }
 
 export const useRoomStore = create<RoomState>((set) => ({
@@ -97,6 +99,12 @@ export const useRoomStore = create<RoomState>((set) => ({
     set((state) => ({
       placedItems: state.placedItems.map((p) =>
         p.gridX === gridX && p.gridY === gridY ? { ...p, rotation } : p,
+      ),
+    })),
+  repairPlacedItemAt: (gridX, gridY) =>
+    set((state) => ({
+      placedItems: state.placedItems.map((p) =>
+        p.gridX === gridX && p.gridY === gridY ? { ...p, isDamaged: false } : p,
       ),
     })),
 }));

@@ -170,6 +170,7 @@ Deno.serve(async (req: Request) => {
       id,
       grid_position,
       rotation,
+      is_damaged,
       items ( id, type, name, footprint, stats, tech_tree_node )
     `)
     .eq("owner_id", user.id)
@@ -247,7 +248,9 @@ Deno.serve(async (req: Request) => {
     if (slotCategory === "defense") {
       defenseSlotsUsed++;
     }
-    computedDefenseRating += defenseValueFor(item.type, item.stats);
+    if (!placed.is_damaged) {
+      computedDefenseRating += defenseValueFor(item.type, item.stats);
+    }
 
     // 3. Occupied tile scans, double placement checks, and entry point violations
     for (let dy = 0; dy < h; dy++) {

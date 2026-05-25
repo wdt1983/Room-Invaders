@@ -154,6 +154,8 @@ export function TopBar() {
   const defenseRating = useRoomStore((state) => state.defenseRating);
   const defenseSlotsUsed = useRoomStore((state) => state.defenseSlotsUsed);
   const defenseSlotsCap = useRoomStore((state) => state.defenseSlotsCap);
+  const placedItems = useRoomStore((state) => state.placedItems);
+  const damagedCount = placedItems.filter((p) => p.isDamaged).length;
 
   const formatTimeRemaining = (targetDateStr: string) => {
     const target = new Date(targetDateStr).getTime();
@@ -361,6 +363,15 @@ export function TopBar() {
             · {defenseSlotsUsed}/{defenseSlotsCap}
           </span>
         </div>
+        {damagedCount > 0 && (
+          <div
+            className="flex shrink-0 items-center gap-1 text-xs bg-red-500/10 border border-red-500/30 text-red-300 px-1.5 py-0.5 rounded font-semibold animate-pulse cursor-pointer"
+            title={`${damagedCount} damaged defense${damagedCount > 1 ? 's' : ''} require repair! Click any damaged item to repair.`}
+          >
+            <AlertTriangle className="size-3.5 text-red-400 shrink-0" />
+            <span>{damagedCount} Broken</span>
+          </div>
+        )}
       </div>
 
       {/* Edit Mode & Logout */}
