@@ -1,6 +1,20 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.4.8] — 2026-05-25 — Milestone 8D: Robust Error Handling & Analytics Telemetry
+
+### Added
+- **Root-Level Operating System Reboot Boundary (Task 8.0.11)**: Created [global-error.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/app/global-error.tsx) to catch unhandled root layout crashes, rendering a system dashboard reboot overlay and dispatching exception captures to Sentry.
+- **Glassmorphic Game Shell Boundary (Task 8.0.11)**: Created [error.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/app/(game)/error.tsx) displaying a detailed error accordion trace, a pulsing alert warning, and an interactive `"Sync Coordinates"` button to retarget current coordinates without a manual page refresh.
+- **WebGL & Phaser Scene Error Recovery (Task 8.0.11)**: Integrated canvas-specific error listeners in [GameCanvas.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/game/GameCanvas.tsx) to recover scenes inline, presenting a `"Phaser Engine Disrupted"` notification and allowing a clean visualizer reboot without page refresh.
+- **Sentry-Wrapped Secure Server Actions (Task 8.0.11)**: Secured all critical database operations (`buyAndPlaceFurniture`, `removePlacedItem`, `rotatePlacedItem`, `upgradeRoomLevel`) in [actions.ts](file:///c:/Projects/ALT-Games/room-invaders/src/app/(game)/room/actions.ts) inside try-catch tunnels, safely reporting database exceptions to Sentry while returning clean status parameters to clients.
+- **Lightweight Telemetry Event Engine (Task 8.0.12)**: Developed [analytics.ts](file:///c:/Projects/ALT-Games/room-invaders/src/lib/game/analytics.ts) providing offline-ready event capturing scoped to console in development and logged to Sentry as structured breadcrumbs and capture tags in production.
+- **Wired Telemetry Hooks (Task 8.0.12)**:
+  - **Account Registration (`registration`)**: Dispatches on successful signup in [actions.ts](file:///c:/Projects/ALT-Games/room-invaders/src/app/auth/actions.ts).
+  - **First Defense Placement (`first_defense_placed`)**: Tracks when a user places their first trap, turret, or barricade in their room in [actions.ts](file:///c:/Projects/ALT-Games/room-invaders/src/app/(game)/room/actions.ts).
+  - **First Completed Raid (`first_raid`)**: Tracks on PvP/PvE victory or defeat events inside [RaidResolver.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/game/RaidResolver.tsx) upon querying database history.
+  - **Retention Cohorts (`retention_d1` / `retention_d7`)**: Dispatches at 24–48 hours (D1) or 7–8 days (D7) early gameplay brackets inside [PlayerStoreInitializer.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/store/PlayerStoreInitializer.tsx) using persistent local storage deduplication.
+
 ## [0.4.7] — 2026-05-25 — Milestone 8C: Performance, PWA, & Security Audits
 
 ### Added

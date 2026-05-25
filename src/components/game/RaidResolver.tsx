@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import { useRaidStore } from "@/lib/store/useRaidStore";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { resolveRaid } from "@/lib/game/resolveRaid";
+import { createClient } from "@/lib/supabase/client";
+import { trackEvent } from "@/lib/game/analytics";
+
 
 /**
  * RaidResolver — fires the `resolve-raid` Edge Function once per raid
@@ -76,6 +79,27 @@ export function RaidResolver() {
           intel: res.newIntel,
           contraband: res.newContraband,
         });
+
+        // Track first completed raid telemetry
+        const clientSupabase = createClient();
+        clientSupabase
+          .from("raid_history")
+          .select("id", { count: "exact", head: true })
+          .then(
+            ({ count }) => {
+              if (count !== null && count <= 1) {
+                trackEvent("first_raid", {
+                  fixtureId: res.fixtureId,
+                  outcome: res.outcome,
+                  xpGained: res.xpGained,
+                });
+              }
+            },
+            (err: any) => {
+              console.error("[RaidResolver] Failed to fetch raid_history count:", err);
+            }
+          );
+
         // Task 3.0.19: apply server-authoritative XP + level, then
         // fire a level-up toast if the threshold was crossed. The
         // server has already persisted `player_level` when

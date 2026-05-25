@@ -16,6 +16,55 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-25 — Milestone 8D Sprints: Robust Error Handling & Analytics Telemetry (Tasks 8.0.11, 8.0.12)
+
+### Summary
+
+Successfully implemented and verified **Milestone 8D: Robust Error Handling (Task 8.0.11)** and **Analytics & Telemetry (Task 8.0.12)** sweeps. Designed Next.js App Router root-level (`global-error.tsx`) and layout-level (`(game)/error.tsx`) boundaries featuring premium cybernetic and glassmorphic designs. Integrated client-side canvas boundaries in Phaser to capture and recover from WebGL/scene disruptions inline. Secured all room placement server actions inside try-catch tunnels reporting database exceptions to Sentry. Developed an offline-ready, performance-compliant Sentry telemetry engine inside `src/lib/game/analytics.ts`, wiring event hooks to auth registration, first defense placement, first completed raid, and dynamic Day 1/Day 7 retention cohort tracking. Next.js production builds and TypeScript typechecks compile with **0 errors and 0 warnings**.
+
+### Work Accomplished
+
+1. **Robust Next.js Route Error Boundaries (Task 8.0.11)**:
+   - Created [global-error.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/app/global-error.tsx) to catch base HTML/layout crashes. Renders a standalone cyber-alert reboot dashboard with exception stacks and an interactive `"Reboot Stronghold"` reset CTA, capturing issues to Sentry as a `global-root` boundary event.
+   - Developed [error.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/app/(game)/error.tsx) inside the game shell layout. Displays a premium glassmorphic positioning error card, exception accordion details, a `"Sync Coordinates"` retry CTA, and a `"Return to Base"` fallback.
+
+2. **Phaser Canvas Recovery & Sentry Actions (Task 8.0.11)**:
+   - Configured custom error interception inside [GameCanvas.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/game/GameCanvas.tsx) targeting WebGL or Phaser runtime failures. Renders a local React `"Phaser Engine Disrupted"` overlay, letting users trigger a visualizer reboot seamlessly without reloading the page.
+   - Wrapped room server actions (`buyAndPlaceFurniture`, `removePlacedItem`, `rotatePlacedItem`, `upgradeRoomLevel`) inside secure try-catch blocks in `src/app/(game)/room/actions.ts` to log Postgres database exceptions to Sentry via `Sentry.captureException` and return safe status responses.
+
+3. **Offline-Compliant Sentry Analytics Engine (Task 8.0.12)**:
+   - Created [analytics.ts](file:///c:/Projects/ALT-Games/room-invaders/src/lib/game/analytics.ts) exposing a lightweight `trackEvent` function. Prints JSON logs to the console in development and records telemetry as Sentry breadcrumbs and captured messages carrying searchable tag criteria in production.
+
+4. **Integrated Telemetry Event Hooks (Task 8.0.12)**:
+   - **Signup Registration (`registration`)**: Fired on successful account registrations in `src/app/auth/actions.ts`.
+   - **First Defense Placement (`first_defense_placed`)**: Wired inside room actions to track when a player places their first trap, turret, or barricade.
+   - **First Completed Raid (`first_raid`)**: Wired inside `RaidResolver.tsx` checking DB history counts on Edge Function resolutions to log the first victory/defeat raid.
+   - **Retention Cohorts (`retention_d1` / `retention_d7`)**: Wired inside `PlayerStoreInitializer.tsx` reading the profile's `created_at` timestamp. Tracks D1 (24h–48h) or D7 (7d–8d) cohorts exactly once using persistent local storage deduplication.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/app/global-error.tsx` | **NEW.** Base HTML root error boundary with cybernetic reboot cards. |
+| `src/app/(game)/error.tsx` | **NEW.** Glassmorphic game-shell navigation layout error boundary. |
+| `src/components/game/GameCanvas.tsx` | Integrated WebGL/Phaser canvas window-error listeners and React recovery overlays. |
+| `src/app/(game)/room/actions.ts` | Secured actions in try-catch Sentry tunnels and wired `first_defense_placed`. |
+| `src/lib/game/analytics.ts` | **NEW.** Lightweight, zero-dependency Sentry-backed game telemetry utility. |
+| `src/app/auth/actions.ts` | Wired `registration` analytics hook on successful signups. |
+| `src/components/game/RaidResolver.tsx` | Wired `first_raid` history-count analytics hook on raid completions. |
+| `src/components/store/PlayerStoreInitializer.tsx` | Wired `retention_d1` and `retention_d7` cohort telemetry calculation. |
+| `src/app/(game)/layout.tsx` | Selected `created_at` in profile queries and passed it to store initializers. |
+| `docs/tasks.md` | Marked Tasks 8.0.11 and 8.0.12 `[DONE]`. |
+| `docs/changelog.md` | Documented version `[0.4.8]` changes. |
+| `docs/handoff.md` | This entry. |
+
+### Next Steps for Phase 8: Polish & MVP Launch Prep
+
+With robust error boundaries and analytics engines fully checked off, the next best strategic tasks are:
+1. **Task 8.0.17 — Tech Debt (Recommended)**: Refactor legacy Next.js 16 `middleware.ts` to the new official proxy pattern as warned in Next.js Turbopack compilation logs: `⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.` Resolving this ensures full compatibility with Next.js Turbopack and prevents deprecation build issues down the line.
+2. **Task 8.0.13 — Marketing Landing Page**: Create a responsive landing page (`/` route) showcasing game descriptions, screenshots, and active install CTAs.
+3. **Task 8.0.14 — Compliance Documents**: Formulate shippable Terms of Service and Privacy Policy templates.
+
 ## 2026-05-25 — Milestone 8C Sprints: Performance, PWA, & Security Audits (Tasks 8.0.6, 8.0.7, 8.0.9)
 
 ### Summary

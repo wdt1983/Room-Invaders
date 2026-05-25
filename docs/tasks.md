@@ -237,8 +237,8 @@
 - [DONE] 8.0.8 — Responsive design audit: test 320px–1440px widths
 - [DONE] 8.0.9 — Security audit: RLS policies, Edge Function input validation, rate limiting
 - [DONE] 8.0.10 — Accessibility pass: color contrast, font sizes, touch target sizes (48px min)
-- [TODO] 8.0.11 — Error handling: graceful fallbacks, user-friendly error messages, Sentry coverage
-- [TODO] 8.0.12 — Analytics: track key events (registration, first_raid, first_defense_placed, retention_d1/d7)
+- [DONE] 8.0.11 — Error handling: graceful fallbacks, user-friendly error messages, Sentry coverage
+- [DONE] 8.0.12 — Analytics: track key events (registration, first_raid, first_defense_placed, retention_d1/d7)
 - [TODO] 8.0.13 — Create landing page (marketing): game description, screenshots, install CTA
 - [TODO] 8.0.14 — Write Terms of Service, Privacy Policy
 - [TODO] 8.0.15 — Beta test: invite 10-20 testers, collect feedback, iterate

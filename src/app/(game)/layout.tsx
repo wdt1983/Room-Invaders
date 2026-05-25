@@ -33,7 +33,7 @@ export default async function GameLayout({
     .single();
 
   const { data: profile, error: profError } = await (supabase.from('profiles') as any)
-    .select('player_level, xp, safe_mode_until, tech_points')
+    .select('player_level, xp, safe_mode_until, tech_points, created_at')
     .eq('id', user.id)
     .single();
 
@@ -78,6 +78,7 @@ export default async function GameLayout({
     xp: 0,
     safe_mode_until: null,
     tech_points: 1,
+    created_at: new Date().toISOString(),
   };
 
   // If squadRows is empty, dynamically seed the database with 4 default squad members
@@ -111,6 +112,7 @@ export default async function GameLayout({
         unlockedTechs={unlockedNodes}
         squad={squad}
         activeQuestId={activeQuestId}
+        createdAt={(finalProfile as any).created_at}
       />
       <TopBar />
       <main className="relative flex-1 overflow-hidden">

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { trackEvent } from "@/lib/game/analytics";
 
 /**
  * Server Action: Log in with email and password.
@@ -51,6 +52,9 @@ export async function signup(formData: FormData) {
   if (error) {
     redirect(`/register?error=${encodeURIComponent(error.message)}`);
   }
+
+  // Track the successful registration event
+  trackEvent("registration", { email, username });
 
   redirect("/login?message=Check your email");
 }
