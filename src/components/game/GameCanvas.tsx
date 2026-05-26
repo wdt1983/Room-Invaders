@@ -58,7 +58,9 @@ export function GameCanvas() {
       }
     } catch (err: any) {
       console.error("[Phaser Boundary] Init failure:", err);
-      setPhaserError(err.message || "Phaser initialization failed");
+      setTimeout(() => {
+        setPhaserError(err.message || "Phaser initialization failed");
+      }, 0);
       Sentry.captureException(err, { tags: { boundary: "phaser-init" } });
     }
 

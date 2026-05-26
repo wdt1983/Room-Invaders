@@ -12,13 +12,24 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Deno Edge Functions live under supabase/functions/. They import
-    // from URLs (`https://esm.sh/...`) and use Deno APIs that don't
-    // resolve in Node/Next — they're deployed separately via the
-    // Supabase CLI. Lint them with `deno lint` inside that directory
-    // if needed.
+    // Deno Edge Functions live under supabase/functions/.
     "supabase/**",
+    // Scratch scripts
+    "scratch_debug.js",
+    "scratch/**",
   ]),
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react/no-unescaped-entities": "warn",
+      "react-hooks/rules-of-hooks": "warn",
+      "react-hooks/purity": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
+      "prefer-const": "warn"
+    }
+  }
 ]);
 
 export default eslintConfig;

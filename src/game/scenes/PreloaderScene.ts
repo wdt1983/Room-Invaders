@@ -172,9 +172,18 @@ export class PreloaderScene extends Phaser.Scene {
 
     // Handle Resize events to keep everything perfectly centered
     this.scale.on("resize", this.handleResize, this);
+
+    this.events.once("shutdown", () => this.shutdown());
+    this.events.once("destroy", () => this.shutdown());
   }
 
   private handleResize(gameSize: Phaser.Structs.Size) {
+    if (!this.titleText || !this.titleText.active) return;
+    if (!this.percentText || !this.percentText.active) return;
+    if (!this.pwaText || !this.pwaText.active) return;
+    if (!this.borderGraphics || !this.borderGraphics.active) return;
+    if (!this.loreText || !this.loreText.active) return;
+
     const w = gameSize.width;
     const h = gameSize.height;
 
@@ -201,6 +210,7 @@ export class PreloaderScene extends Phaser.Scene {
   shutdown() {
     if (this.loreTimer) {
       this.loreTimer.remove(false);
+      this.loreTimer = undefined as unknown as Phaser.Time.TimerEvent;
     }
     this.scale.off("resize", this.handleResize, this);
   }

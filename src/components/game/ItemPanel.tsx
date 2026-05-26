@@ -6,7 +6,7 @@ import { EventBus } from '@/game/EventBus';
 import { Card } from '@/components/ui/card';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
-import { Lock, Cpu, Hammer, Palette } from 'lucide-react';
+import { Lock, Cpu, Hammer, Palette, Target, Zap, Shield, Wrench } from 'lucide-react';
 import { saveRoomCosmetics } from "@/app/(game)/room/actions";
 import { toast } from "sonner";
 
@@ -25,6 +25,37 @@ const FLOOR_MATERIAL_PRESETS = [
   { id: 'carpet', name: 'Carpet', icon: '🧶', desc: 'Cozy dark stipple grid' },
   { id: 'concrete', name: 'Concrete', icon: '🪨', desc: 'Cold cracked concrete slabs' },
 ] as const;
+
+const TYPE_STYLES = {
+  turret: {
+    activeBorder: 'border-red-500 bg-red-950/20 ring-1 ring-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)]',
+    activeText: 'text-red-400',
+    hoverBg: 'hover:border-red-500/40 hover:bg-red-950/5',
+    badgeBg: 'bg-red-500/10 border-red-500/20 text-red-400',
+    icon: Target,
+  },
+  trap: {
+    activeBorder: 'border-amber-500 bg-amber-950/20 ring-1 ring-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.25)]',
+    activeText: 'text-amber-400',
+    hoverBg: 'hover:border-amber-500/40 hover:bg-amber-950/5',
+    badgeBg: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+    icon: Zap,
+  },
+  barricade: {
+    activeBorder: 'border-emerald-500 bg-emerald-950/20 ring-1 ring-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.25)]',
+    activeText: 'text-emerald-400',
+    hoverBg: 'hover:border-emerald-500/40 hover:bg-emerald-950/5',
+    badgeBg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+    icon: Shield,
+  },
+  furniture: {
+    activeBorder: 'border-cyan-500 bg-cyan-950/20 ring-1 ring-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.25)]',
+    activeText: 'text-cyan-400',
+    hoverBg: 'hover:border-cyan-500/40 hover:bg-cyan-950/5',
+    badgeBg: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',
+    icon: Wrench,
+  },
+} as const;
 
 export function ItemPanel() {
   const mode = useUIStore((state) => state.mode);
@@ -106,6 +137,9 @@ export function ItemPanel() {
               const isTechLocked = !!(item.tech_tree_node && !unlockedIdsSet.has(item.tech_tree_node));
               const isLocked = isLevelLocked || isTechLocked;
               const scrapCost = item.cost?.scrap || 0;
+              const styleKey = (item.type in TYPE_STYLES) ? (item.type as keyof typeof TYPE_STYLES) : 'furniture';
+              const typeStyle = TYPE_STYLES[styleKey];
+              const IconComponent = typeStyle.icon;
 
               return (
                 <Card
@@ -120,13 +154,15 @@ export function ItemPanel() {
                       });
                     }
                   }}
-                  className={`min-w-[100px] cursor-pointer border-2 transition-all p-2 flex flex-col items-center gap-1.5 relative ${
-                    selectedItemKey === item.sprite_key ? 'border-primary bg-primary/5' : 'border-transparent bg-background/40'
-                  } ${isLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted'}`}
+                  className={`min-w-[110px] cursor-pointer border transition-all duration-300 p-2.5 flex flex-col items-center gap-2 relative rounded-xl bg-background/30 backdrop-blur-sm select-none ${
+                    selectedItemKey === item.sprite_key 
+                      ? `${typeStyle.activeBorder} scale-[1.03]` 
+                      : `border-border/20 ${typeStyle.hoverBg} hover:scale-[1.02] hover:-translate-y-0.5`
+                  } ${isLocked ? 'opacity-40 cursor-not-allowed filter grayscale-[30%]' : ''}`}
                   title={isTechLocked ? "Research Node Required in Squad & Tech Core" : undefined}
                 >
                   {isLocked && (
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-lg z-10">
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl z-10">
                       {isTechLocked ? (
                         <Cpu className="w-5 h-5 text-cyan-400 drop-shadow-md animate-pulse" />
                       ) : (
@@ -134,14 +170,16 @@ export function ItemPanel() {
                       )}
                     </div>
                   )}
-                  {/* Procedural icon standin */}
-                  <div className="w-7 h-7 bg-muted-foreground/10 border border-muted/20 rounded flex items-center justify-center">
-                    <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-tighter">
-                      {item.sprite_key.substring(0, 3)}
-                    </span>
+                  {/* Premium Glowing Icon Badge */}
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-all duration-300 ${
+                    selectedItemKey === item.sprite_key
+                      ? `${typeStyle.badgeBg} border-transparent scale-105 shadow-[inset_0_0_8px_rgba(255,255,255,0.05)]`
+                      : 'bg-muted-foreground/5 border-border/20 text-muted-foreground hover:text-foreground'
+                  }`}>
+                    <IconComponent className="size-4.5" />
                   </div>
                   <div className="text-center w-full">
-                    <p className="text-[9.5px] font-bold truncate w-[85px] text-foreground/90" title={item.name}>
+                    <p className="text-[9.5px] font-bold truncate w-[90px] text-foreground/90" title={item.name}>
                       {item.name}
                     </p>
                     {scrapCost > 0 ? (
@@ -151,7 +189,7 @@ export function ItemPanel() {
                       <p className="text-[8.5px] text-destructive font-bold">Lvl {item.unlock_level}</p>
                     )}
                     {!isLevelLocked && isTechLocked && (
-                      <p className="text-[8.5px] text-cyan-400 font-extrabold uppercase">Research</p>
+                      <p className="text-[7.5px] text-cyan-400 font-extrabold uppercase tracking-widest">Research</p>
                     )}
                   </div>
                 </Card>
@@ -175,10 +213,10 @@ export function ItemPanel() {
                       onClick={() => handleSelectColor(preset.value)}
                       style={{ backgroundColor: preset.hex }}
                       title={preset.name}
-                      className={`size-6 rounded-full transition-all border-2 relative shrink-0 ${
+                      className={`size-6 rounded-full transition-all border-2 relative shrink-0 duration-300 ${
                         isActive
-                          ? 'border-white scale-110 shadow-lg ring-2 ring-cyan-500/50'
-                          : 'border-transparent opacity-75 hover:opacity-100 hover:scale-105'
+                          ? `border-white scale-115 shadow-lg ${preset.glow} ring-2 ring-cyan-400/60 -translate-y-0.5`
+                          : 'border-background/50 opacity-75 hover:opacity-100 hover:scale-110 hover:-translate-y-0.5'
                       }`}
                     >
                       {isActive && (
@@ -203,10 +241,10 @@ export function ItemPanel() {
                       key={mat.id}
                       onClick={() => handleSelectFloor(mat.id)}
                       title={mat.desc}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-left min-w-[110px] transition-all bg-background/40 hover:bg-muted/10 ${
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-left min-w-[120px] transition-all duration-300 bg-background/30 backdrop-blur-sm cursor-pointer hover:-translate-y-0.5 hover:scale-[1.02] ${
                         isActive
-                          ? 'border-cyan-400 text-cyan-300 bg-cyan-400/5 shadow-md shadow-cyan-500/5'
-                          : 'border-border/60 text-muted-foreground'
+                          ? 'border-cyan-500 text-cyan-300 bg-cyan-500/10 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                          : 'border-border/40 text-muted-foreground hover:border-border/80 hover:text-foreground'
                       }`}
                     >
                       <span className="text-sm shrink-0">{mat.icon}</span>

@@ -155,3 +155,14 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
 
 ('guard', 'Decoy Dummy Sentry', 'Holographic projector attracting squad movement paths by simulating stashes.', 2,
   '{"scrap": 30, "components": 15}', '{"hp": 120, "decoy_radius": 3}', '{"w": 1, "h": 1}', 'guard_decoy', 6, 'def_unlock_laser_grid');
+
+-- ============================================
+-- COOPERATIVE DISTRICT ITEMS
+-- ============================================
+
+INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite_key, unlock_level) VALUES
+('turret', 'Defense Power Node', 'District power generator that projects +15% Rate of Fire and +1 range grid boosts across shared room boundaries.', 3,
+  '{"scrap": 150, "components": 50}',
+  '{"energy_boost": 15, "range": 2}',
+  '{"w": 1, "h": 1}', 'turret_power_node', 8);
+

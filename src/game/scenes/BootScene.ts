@@ -249,6 +249,9 @@ export class BootScene extends Phaser.Scene {
       y: depthTiles * (TILE_H / 2)
     };
 
+    const centerX = (ptTop.x + ptBottom.x) / 2;
+    const centerY = (ptTop.y + ptBottom.y) / 2;
+
     const darken = (c: number, f: number) => {
       const r = Math.floor(((c >> 16) & 0xff) * f);
       const g = Math.floor(((c >> 8) & 0xff) * f);
@@ -301,68 +304,380 @@ export class BootScene extends Phaser.Scene {
 
     // 2. TECH GRAPHICS / DETAILED TEXTURES ON TOP FACE
     if (isFurniture) {
-      // Draw smooth, sleek grid subdivisions to look like premium textured surfaces
-      graphics.lineStyle(1, darken(color, 0.5), 0.25);
-      for (let f = 0.33; f <= 0.67; f += 0.33) {
-        // Left-to-right division lines
+      if (key === 'furniture_bed_twin') {
+        // Draw wood frame border
+        graphics.lineStyle(2, 0x3d2b1f, 1);
         graphics.beginPath();
-        graphics.moveTo(ptTop.x + (ptLeft.x - ptTop.x) * f, ptTop.y + (ptLeft.y - ptTop.y) * f);
-        graphics.lineTo(ptRight.x + (ptBottom.x - ptRight.x) * f, ptRight.y + (ptBottom.y - ptRight.y) * f);
+        graphics.moveTo(ptTop.x, ptTop.y);
+        graphics.lineTo(ptRight.x, ptRight.y);
+        graphics.lineTo(ptBottom.x, ptBottom.y);
+        graphics.lineTo(ptLeft.x, ptLeft.y);
+        graphics.closePath();
         graphics.strokePath();
 
-        // Right-to-left division lines
+        // Draw mattress (inset off-white polygon)
+        graphics.fillStyle(0xdddddd, 1);
         graphics.beginPath();
-        graphics.moveTo(ptTop.x + (ptRight.x - ptTop.x) * f, ptTop.y + (ptRight.y - ptTop.y) * f);
-        graphics.lineTo(ptLeft.x + (ptBottom.x - ptLeft.x) * f, ptLeft.y + (ptBottom.y - ptLeft.y) * f);
+        graphics.moveTo(ptTop.x * 0.9 + ptBottom.x * 0.1, ptTop.y * 0.9 + ptBottom.y * 0.1);
+        graphics.lineTo(ptRight.x * 0.9 + ptLeft.x * 0.1, ptRight.y * 0.9 + ptLeft.y * 0.1);
+        graphics.lineTo(ptBottom.x * 0.95 + ptTop.x * 0.05, ptBottom.y * 0.95 + ptTop.y * 0.05);
+        graphics.lineTo(ptLeft.x * 0.9 + ptRight.x * 0.1, ptLeft.y * 0.9 + ptRight.y * 0.1);
+        graphics.closePath();
+        graphics.fillPath();
+
+        // Draw pillow
+        graphics.fillStyle(0x06b6d4, 1);
+        graphics.beginPath();
+        graphics.moveTo(ptTop.x * 0.75 + ptBottom.x * 0.25, ptTop.y * 0.75 + ptBottom.y * 0.25);
+        graphics.lineTo(ptRight.x * 0.75 + ptLeft.x * 0.25, ptRight.y * 0.75 + ptLeft.y * 0.25);
+        graphics.lineTo(ptRight.x * 0.5 + ptLeft.x * 0.5, ptRight.y * 0.5 + ptLeft.y * 0.5);
+        graphics.lineTo(ptTop.x * 0.5 + ptBottom.x * 0.5, ptTop.y * 0.5 + ptBottom.y * 0.5);
+        graphics.closePath();
+        graphics.fillPath();
+
+        // Draw blanket cover (cyan)
+        graphics.fillStyle(0x0891b2, 0.85);
+        graphics.beginPath();
+        graphics.moveTo(ptTop.x * 0.4 + ptBottom.x * 0.6, ptTop.y * 0.4 + ptBottom.y * 0.6);
+        graphics.lineTo(ptRight.x * 0.4 + ptLeft.x * 0.6, ptRight.y * 0.4 + ptLeft.y * 0.6);
+        graphics.lineTo(ptBottom.x * 0.95, ptBottom.y * 0.95);
+        graphics.lineTo(ptLeft.x * 0.9 + ptRight.x * 0.1, ptLeft.y * 0.9 + ptRight.y * 0.1);
+        graphics.closePath();
+        graphics.fillPath();
+      } 
+      else if (key === 'furniture_desk_wooden' || key === 'furniture_table_folding') {
+        // Draw wood planks
+        graphics.lineStyle(1, 0x4a3b32, 0.8);
+        for (let f = 0.25; f <= 0.75; f += 0.25) {
+          graphics.beginPath();
+          graphics.moveTo(ptTop.x + (ptLeft.x - ptTop.x) * f, ptTop.y + (ptLeft.y - ptTop.y) * f);
+          graphics.lineTo(ptRight.x + (ptBottom.x - ptRight.x) * f, ptRight.y + (ptBottom.y - ptRight.y) * f);
+          graphics.strokePath();
+        }
+        
+        if (key === 'furniture_desk_wooden') {
+          // Draw a glowing keyboard/laptop in the center
+          graphics.fillStyle(0x00ffff, 0.9);
+          graphics.fillRect(centerX - 8, centerY - 4, 16, 8);
+          graphics.lineStyle(1.5, 0xffffff, 0.9);
+          graphics.strokeRect(centerX - 8, centerY - 4, 16, 8);
+        }
+      }
+      else if (key === 'furniture_chair_office') {
+        // Draw steel pole and star base
+        graphics.lineStyle(2, 0xbababa, 1);
+        graphics.beginPath();
+        graphics.moveTo(centerX, centerY);
+        graphics.lineTo(centerX, centerY + 12);
         graphics.strokePath();
+
+        // Draw star spokes
+        graphics.lineStyle(1.5, 0x333333, 1);
+        for (let i = 0; i < 5; i++) {
+          const angle = (i * Math.PI * 2) / 5;
+          graphics.beginPath();
+          graphics.moveTo(centerX, centerY + 12);
+          graphics.lineTo(centerX + Math.cos(angle) * 8, centerY + 12 + Math.sin(angle) * 4);
+          graphics.strokePath();
+        }
+
+        // Draw seat back cushion
+        graphics.fillStyle(0x374151, 1);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY - 6, 8, 0, Math.PI * 2);
+        graphics.fillPath();
+
+        // Draw backrest
+        graphics.fillStyle(0x1f2937, 1);
+        graphics.fillRect(centerX - 4, centerY - 18, 8, 12);
+      }
+      else if (key === 'furniture_dresser_wooden') {
+        // Dresser dividers and details
+        graphics.lineStyle(2, 0x3d2b1f, 1);
+        graphics.beginPath();
+        graphics.moveTo(ptTop.x, ptTop.y);
+        graphics.lineTo(ptRight.x, ptRight.y);
+        graphics.lineTo(ptBottom.x, ptBottom.y);
+        graphics.lineTo(ptLeft.x, ptLeft.y);
+        graphics.closePath();
+        graphics.strokePath();
+      }
+      else if (key === 'furniture_tv_flatscreen') {
+        // Draw flat TV display bezel
+        graphics.fillStyle(0x111827, 1);
+        graphics.fillRect(centerX - 24, centerY - 16, 48, 24);
+        
+        // Glowing screen showing static matrix lines
+        graphics.fillStyle(0x8b5cf6, 0.8);
+        graphics.fillRect(centerX - 22, centerY - 14, 44, 20);
+        graphics.lineStyle(1.5, 0xa78bfa, 0.95);
+        graphics.strokeRect(centerX - 22, centerY - 14, 44, 20);
+
+        graphics.lineStyle(1, 0xd8b4fe, 0.4);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 22, centerY - 4);
+        graphics.lineTo(centerX + 22, centerY - 4);
+        graphics.moveTo(centerX - 10, centerY - 14);
+        graphics.lineTo(centerX - 10, centerY + 6);
+        graphics.strokePath();
+      }
+      else if (key === 'furniture_rug_area') {
+        // Glowing neon concentric rug outline diamonds
+        for (let i = 0.2; i <= 0.8; i += 0.2) {
+          graphics.lineStyle(1.5, neonColor, 0.8 - i * 0.5);
+          graphics.beginPath();
+          graphics.moveTo(ptTop.x * (1-i) + ptBottom.x * i, ptTop.y * (1-i) + ptBottom.y * i);
+          graphics.lineTo(ptRight.x * (1-i) + ptLeft.x * i, ptRight.y * (1-i) + ptLeft.y * i);
+          graphics.lineTo(ptBottom.x * (1-i) + ptTop.x * i, ptBottom.y * (1-i) + ptTop.y * i);
+          graphics.lineTo(ptLeft.x * (1-i) + ptRight.x * i, ptLeft.y * (1-i) + ptRight.y * i);
+          graphics.closePath();
+          graphics.strokePath();
+        }
+      }
+      else if (key === 'furniture_lamp_floor') {
+        // Draw soft lighting circle
+        graphics.fillStyle(0xfef08a, 0.35);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY, 24, 0, Math.PI * 2);
+        graphics.fillPath();
+
+        // Draw central stand and glowing base
+        graphics.fillStyle(0xfac20a, 0.9);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY, 5, 0, Math.PI * 2);
+        graphics.fillPath();
+      }
+      else if (key === 'furniture_plant_potted') {
+        // Draw terra-cotta pot
+        graphics.fillStyle(0xb45309, 1);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY, 6, 0, Math.PI * 2);
+        graphics.fillPath();
+
+        // Overlapping rich green leaves
+        graphics.fillStyle(0x15803d, 0.9);
+        graphics.beginPath();
+        graphics.arc(centerX - 4, centerY - 2, 5, 0, Math.PI * 2);
+        graphics.arc(centerX + 4, centerY - 3, 4, 0, Math.PI * 2);
+        graphics.arc(centerX, centerY - 6, 6, 0, Math.PI * 2);
+        graphics.fillPath();
+
+        graphics.fillStyle(0x22c55e, 1);
+        graphics.beginPath();
+        graphics.arc(centerX - 1, centerY - 3, 3, 0, Math.PI * 2);
+        graphics.fillPath();
+      }
+      else {
+        // Draw standard sleek grid divisions for base furniture
+        graphics.lineStyle(1, darken(color, 0.5), 0.25);
+        for (let f = 0.33; f <= 0.67; f += 0.33) {
+          graphics.beginPath();
+          graphics.moveTo(ptTop.x + (ptLeft.x - ptTop.x) * f, ptTop.y + (ptLeft.y - ptTop.y) * f);
+          graphics.lineTo(ptRight.x + (ptBottom.x - ptRight.x) * f, ptRight.y + (ptBottom.y - ptRight.y) * f);
+          graphics.strokePath();
+
+          graphics.beginPath();
+          graphics.moveTo(ptTop.x + (ptRight.x - ptTop.x) * f, ptTop.y + (ptRight.y - ptTop.y) * f);
+          graphics.lineTo(ptLeft.x + (ptBottom.x - ptLeft.x) * f, ptLeft.y + (ptBottom.y - ptLeft.y) * f);
+          graphics.strokePath();
+        }
       }
     } else if (isTrap) {
-      // Traps get diagonal warning lines (hazard strip style!)
-      graphics.lineStyle(2, neonColor, 0.4);
-      for (let f = 0.2; f <= 0.8; f += 0.2) {
-        // Draw diagonal hazard lines crossing from left wall to right wall
+      if (key === 'trap_pressure_plate') {
+        // concentric orange circles
+        graphics.lineStyle(2, 0xf97316, 0.95);
         graphics.beginPath();
-        graphics.moveTo(ptLeft.x + (ptTop.x - ptLeft.x) * f, ptLeft.y + (ptTop.y - ptLeft.y) * f);
-        graphics.lineTo(ptBottom.x + (ptRight.x - ptBottom.x) * f, ptBottom.y + (ptRight.y - ptBottom.y) * f);
+        graphics.arc(centerX, centerY, 8, 0, Math.PI * 2);
+        graphics.strokePath();
+        graphics.fillStyle(0xf97316, 0.5);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY, 4, 0, Math.PI * 2);
+        graphics.fillPath();
+      } 
+      else if (key === 'trap_spike_strip') {
+        // sharp steel spikes
+        graphics.fillStyle(0x9ca3af, 1);
+        graphics.lineStyle(1, 0x4b5563, 1);
+        for (let sx = -16; sx <= 16; sx += 8) {
+          for (let sy = -8; sy <= 8; sy += 4) {
+            graphics.beginPath();
+            graphics.moveTo(centerX + sx, centerY + sy);
+            graphics.lineTo(centerX + sx + 4, centerY + sy - 10);
+            graphics.lineTo(centerX + sx + 8, centerY + sy);
+            graphics.closePath();
+            graphics.fillPath();
+            graphics.strokePath();
+          }
+        }
+      }
+      else if (key === 'trap_shock_pad') {
+        // electrical shock wire spirals
+        graphics.lineStyle(1.5, 0x06b6d4, 1);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY, 12, 0, Math.PI * 2);
+        graphics.strokePath();
+
+        graphics.lineStyle(1, 0xffffff, 0.9);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 8, centerY - 8);
+        graphics.lineTo(centerX + 8, centerY + 8);
+        graphics.moveTo(centerX + 8, centerY - 8);
+        graphics.lineTo(centerX - 8, centerY + 8);
         graphics.strokePath();
       }
-      
-      // Draw central warning plate outline
-      graphics.lineStyle(2, neonColor, 0.85);
-      graphics.beginPath();
-      graphics.moveTo(ptTop.x * 0.7 + ptBottom.x * 0.3, ptTop.y * 0.7 + ptBottom.y * 0.3);
-      graphics.lineTo(ptRight.x * 0.7 + ptLeft.x * 0.3, ptRight.y * 0.7 + ptLeft.y * 0.3);
-      graphics.lineTo(ptBottom.x * 0.7 + ptTop.x * 0.3, ptBottom.y * 0.7 + ptTop.y * 0.3);
-      graphics.lineTo(ptLeft.x * 0.7 + ptRight.x * 0.3, ptLeft.y * 0.7 + ptRight.y * 0.3);
-      graphics.closePath();
-      graphics.strokePath();
+      else if (key === 'trap_glue') {
+        // yellow gooey sludge puddle
+        graphics.fillStyle(0xf59e0b, 0.7);
+        graphics.fillEllipse(centerX, centerY, 36, 18);
+
+        // draw bubble circles inside
+        graphics.fillStyle(0xfef08a, 0.9);
+        graphics.beginPath();
+        graphics.arc(centerX - 4, centerY - 2, 2, 0, Math.PI * 2);
+        graphics.arc(centerX + 6, centerY + 2, 3, 0, Math.PI * 2);
+        graphics.fillPath();
+      }
+      else if (key === 'trap_tripwire_alarm') {
+        // draw small posts on side edges
+        graphics.fillStyle(0x374151, 1);
+        graphics.fillRect(ptLeft.x + 2, ptLeft.y - 12, 4, 12);
+        graphics.fillRect(ptRight.x - 6, ptRight.y - 12, 4, 12);
+
+        // red glowing tripwire laser
+        graphics.lineStyle(2.0, 0xef4444, 0.95);
+        graphics.beginPath();
+        graphics.moveTo(ptLeft.x + 4, ptLeft.y - 8);
+        graphics.lineTo(ptRight.x - 4, ptRight.y - 8);
+        graphics.strokePath();
+      }
+      else {
+        // Traps get diagonal warning lines (hazard strip style!)
+        graphics.lineStyle(2, neonColor, 0.4);
+        for (let f = 0.2; f <= 0.8; f += 0.2) {
+          graphics.beginPath();
+          graphics.moveTo(ptLeft.x + (ptTop.x - ptLeft.x) * f, ptLeft.y + (ptTop.y - ptLeft.y) * f);
+          graphics.lineTo(ptBottom.x + (ptRight.x - ptBottom.x) * f, ptBottom.y + (ptRight.y - ptBottom.y) * f);
+          graphics.strokePath();
+        }
+        
+        graphics.lineStyle(2, neonColor, 0.85);
+        graphics.beginPath();
+        graphics.moveTo(ptTop.x * 0.7 + ptBottom.x * 0.3, ptTop.y * 0.7 + ptBottom.y * 0.3);
+        graphics.lineTo(ptRight.x * 0.7 + ptLeft.x * 0.3, ptRight.y * 0.7 + ptLeft.y * 0.3);
+        graphics.lineTo(ptBottom.x * 0.7 + ptTop.x * 0.3, ptBottom.y * 0.7 + ptTop.y * 0.3);
+        graphics.lineTo(ptLeft.x * 0.7 + ptRight.x * 0.3, ptLeft.y * 0.7 + ptRight.y * 0.3);
+        graphics.closePath();
+        graphics.strokePath();
+      }
     } else if (isTurret) {
-      // Turrets get a high-tech glowing energy core circle in the center!
-      graphics.fillStyle(neonColor, 0.9);
-      graphics.lineStyle(1.5, 0xffffff, 0.85);
-      
-      const centerX = (ptTop.x + ptBottom.x) / 2;
-      const centerY = (ptTop.y + ptBottom.y) / 2;
-      
-      graphics.beginPath();
-      graphics.arc(centerX, centerY, 6, 0, Math.PI * 2);
-      graphics.fillPath();
-      graphics.strokePath();
-      
-      // Draw aiming HUD vectors
-      graphics.lineStyle(1, neonColor, 0.5);
-      graphics.beginPath();
-      graphics.moveTo(centerX - 12, centerY);
-      graphics.lineTo(centerX + 12, centerY);
-      graphics.moveTo(centerX, centerY - 6);
-      graphics.lineTo(centerX, centerY + 6);
-      graphics.strokePath();
+      // Swivel turret base
+      graphics.fillStyle(0x374151, 1);
+      graphics.fillEllipse(centerX, centerY, 24, 12);
+
+      if (key === 'turret_nailgun') {
+        // Draw dual barrels pointing forward
+        graphics.lineStyle(3, 0x4b5563, 1);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 3, centerY);
+        graphics.lineTo(centerX - 3, centerY - 18);
+        graphics.moveTo(centerX + 3, centerY);
+        graphics.lineTo(centerX + 3, centerY - 18);
+        graphics.strokePath();
+      }
+      else if (key === 'turret_taser') {
+        // Taser spikes emitting blue arcs
+        graphics.lineStyle(2, 0x06b6d4, 1);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 4, centerY);
+        graphics.lineTo(centerX - 6, centerY - 14);
+        graphics.moveTo(centerX + 4, centerY);
+        graphics.lineTo(centerX + 6, centerY - 14);
+        graphics.strokePath();
+
+        // blue arcs
+        graphics.lineStyle(1.5, 0xffffff, 0.9);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 6, centerY - 14);
+        graphics.lineTo(centerX, centerY - 20);
+        graphics.lineTo(centerX + 6, centerY - 14);
+        graphics.strokePath();
+      }
+      else if (key === 'turret_tesla') {
+        // tesla coil tower layers
+        graphics.fillStyle(0x4b5563, 1);
+        graphics.fillRect(centerX - 4, centerY - 20, 8, 20);
+
+        graphics.fillStyle(0x9ca3af, 1);
+        graphics.fillEllipse(centerX, centerY - 8, 20, 10);
+        graphics.fillEllipse(centerX, centerY - 16, 16, 8);
+
+        // Giant purple/pink sphere on top
+        graphics.fillStyle(0xa855f7, 0.95);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY - 24, 7, 0, Math.PI * 2);
+        graphics.fillPath();
+        graphics.lineStyle(1.5, 0xffffff, 0.9);
+        graphics.strokePath();
+      }
+      else if (key === 'turret_autocannon') {
+        // Massive double long barrels pointing out
+        graphics.lineStyle(4, 0x1f2937, 1);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 4, centerY);
+        graphics.lineTo(centerX - 6, centerY - 26);
+        graphics.moveTo(centerX + 4, centerY);
+        graphics.lineTo(centerX + 6, centerY - 26);
+        graphics.strokePath();
+        
+        // thick armor drum box
+        graphics.fillStyle(0x111827, 1);
+        graphics.fillRect(centerX - 8, centerY - 2, 16, 10);
+      }
+      else if (key === 'turret_shotgun') {
+        // Squat wide box with 3 small shotgun barrels spreading in a fan
+        graphics.lineStyle(2.5, 0x1f2937, 1);
+        graphics.beginPath();
+        graphics.moveTo(centerX, centerY);
+        graphics.lineTo(centerX, centerY - 16);
+        graphics.moveTo(centerX, centerY);
+        graphics.lineTo(centerX - 8, centerY - 14);
+        graphics.moveTo(centerX, centerY);
+        graphics.lineTo(centerX + 8, centerY - 14);
+        graphics.strokePath();
+      }
+      else {
+        // standard glowing energy core
+        graphics.fillStyle(neonColor, 0.9);
+        graphics.lineStyle(1.5, 0xffffff, 0.85);
+        graphics.beginPath();
+        graphics.arc(centerX, centerY, 6, 0, Math.PI * 2);
+        graphics.fillPath();
+        graphics.strokePath();
+      }
     } else if (isEntity) {
+      if (key === 'entity_drone') {
+        // Quadcopter drone rotors
+        graphics.lineStyle(2, 0x9ca3af, 1);
+        graphics.beginPath();
+        graphics.moveTo(centerX - 10, centerY - 10);
+        graphics.lineTo(centerX + 10, centerY + 10);
+        graphics.moveTo(centerX + 10, centerY - 10);
+        graphics.lineTo(centerX - 10, centerY + 10);
+        graphics.strokePath();
+
+        // 4 small rotor circles
+        graphics.fillStyle(0x06b6d4, 0.8);
+        graphics.beginPath();
+        graphics.arc(centerX - 10, centerY - 10, 3, 0, Math.PI * 2);
+        graphics.arc(centerX + 10, centerY - 10, 3, 0, Math.PI * 2);
+        graphics.arc(centerX - 10, centerY + 10, 3, 0, Math.PI * 2);
+        graphics.arc(centerX + 10, centerY + 10, 3, 0, Math.PI * 2);
+        graphics.fillPath();
+      }
+      
       // Drone or Stash: Draw beautiful glowing inner cores
       graphics.fillStyle(0xffffff, 0.95);
       graphics.lineStyle(1.5, neonColor, 0.9);
-      const centerX = (ptTop.x + ptBottom.x) / 2;
-      const centerY = (ptTop.y + ptBottom.y) / 2;
       graphics.beginPath();
       graphics.arc(centerX, centerY, 5, 0, Math.PI * 2);
       graphics.fillPath();
@@ -398,27 +713,68 @@ export class BootScene extends Phaser.Scene {
 
       // Draw specialized side panel textures
       if (isBarricade) {
-        // Draw heavy metallic horizontal slats across barricade sides!
-        graphics.lineStyle(2, darken(color, 0.25), 0.7);
-        for (let offset = 0.2; offset <= 0.8; offset += 0.2) {
-          const hOffset = Math.floor(heightPixels * offset);
-          // Right side slat
+        if (key === 'barricade_bookshelf') {
+          // Draw fallen bookshelf with vertical partitions
+          graphics.lineStyle(2, 0x4a3b32, 1);
           graphics.beginPath();
-          graphics.moveTo(ptRight.x, ptRight.y + hOffset);
-          graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+          graphics.moveTo(ptLeft.x, ptLeft.y);
+          graphics.lineTo(ptRight.x, ptRight.y);
           graphics.strokePath();
 
-          // Left side slat
+          // draw book colors inside right face
+          graphics.fillStyle(0xef4444, 0.95); // red book
+          graphics.fillRect(centerX - 12, centerY + 2, 4, 10);
+          graphics.fillStyle(0x3b82f6, 0.95); // blue book
+          graphics.fillRect(centerX - 6, centerY + 2, 4, 10);
+          graphics.fillStyle(0x10b981, 0.95); // green book
+          graphics.fillRect(centerX, centerY + 2, 4, 10);
+        }
+        else if (key === 'barricade_flipped_table') {
+          // Draw table face standing vertically, legs sticking out
+          graphics.lineStyle(3, 0x78350f, 1);
           graphics.beginPath();
-          graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
-          graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+          graphics.moveTo(centerX, centerY);
+          graphics.lineTo(centerX - 10, centerY - 14);
+          graphics.moveTo(centerX, centerY);
+          graphics.lineTo(centerX + 10, centerY - 14);
           graphics.strokePath();
+        }
+        else if (key === 'barricade_sandbags') {
+          // overlapping rounded sandbags
+          graphics.fillStyle(0xd1d5db, 1);
+          graphics.lineStyle(1.5, 0x6b7280, 1);
+          
+          // Row 1 sandbags (bottom)
+          graphics.fillEllipse(centerX - 10, centerY + heightPixels - 6, 24, 12);
+          graphics.strokeEllipse(centerX - 10, centerY + heightPixels - 6, 24, 12);
+          graphics.fillEllipse(centerX + 10, centerY + heightPixels - 6, 24, 12);
+          graphics.strokeEllipse(centerX + 10, centerY + heightPixels - 6, 24, 12);
+
+          // Row 2 sandbags (top)
+          graphics.fillStyle(0x9ca3af, 1);
+          graphics.fillEllipse(centerX, centerY + 6, 28, 14);
+          graphics.strokeEllipse(centerX, centerY + 6, 28, 14);
+        }
+        else {
+          // Heavy horizontal slats
+          graphics.lineStyle(2, darken(color, 0.25), 0.7);
+          for (let offset = 0.2; offset <= 0.8; offset += 0.2) {
+            const hOffset = Math.floor(heightPixels * offset);
+            graphics.beginPath();
+            graphics.moveTo(ptRight.x, ptRight.y + hOffset);
+            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+            graphics.strokePath();
+
+            graphics.beginPath();
+            graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
+            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+            graphics.strokePath();
+          }
         }
       } else if (isTurret) {
         // Turrets get glowing heat-vent vertical lines
         graphics.lineStyle(1.5, neonColor, 0.4);
         for (let f = 0.25; f <= 0.75; f += 0.25) {
-          // Right side vent vertical lines
           const rx = ptRight.x + (ptBottom.x - ptRight.x) * f;
           const ry = ptRight.y + (ptBottom.y - ptRight.y) * f;
           graphics.beginPath();
@@ -426,7 +782,6 @@ export class BootScene extends Phaser.Scene {
           graphics.lineTo(rx, ry + heightPixels - 4);
           graphics.strokePath();
 
-          // Left side vent vertical lines
           const lx = ptLeft.x + (ptBottom.x - ptLeft.x) * f;
           const ly = ptLeft.y + (ptBottom.y - ptLeft.y) * f;
           graphics.beginPath();
@@ -434,11 +789,42 @@ export class BootScene extends Phaser.Scene {
           graphics.lineTo(lx, ly + heightPixels - 4);
           graphics.strokePath();
         }
+      } else if (isFurniture) {
+        if (key === 'furniture_dresser_wooden') {
+          // Drawer horizontal panel lines on dresser sides
+          graphics.lineStyle(2.0, 0x3d2b1f, 1);
+          for (let offset = 0.33; offset <= 0.67; offset += 0.33) {
+            const hOffset = Math.floor(heightPixels * offset);
+            graphics.beginPath();
+            graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
+            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+            graphics.strokePath();
+
+            // draw tiny handle dots (gold/cyan)
+            graphics.fillStyle(0xfac20a, 1);
+            const midX = (ptLeft.x + ptBottom.x) / 2;
+            const midY = (ptLeft.y + ptBottom.y) / 2 + hOffset - 4;
+            graphics.beginPath();
+            graphics.arc(midX, midY, 1.5, 0, Math.PI * 2);
+            graphics.fillPath();
+          }
+        }
+        else if (key === 'furniture_shelf_metal') {
+          // Open steel grid framing lines
+          graphics.lineStyle(1.5, 0x4b5563, 0.85);
+          for (let offset = 0.25; offset <= 0.75; offset += 0.25) {
+            const hOffset = Math.floor(heightPixels * offset);
+            graphics.beginPath();
+            graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
+            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+            graphics.lineTo(ptRight.x, ptRight.y + hOffset);
+            graphics.strokePath();
+          }
+        }
       }
     }
 
     // 5. GLOWING NEON HIGHLIGHT EDGES (AESTHETIC UPGRADE)
-    // Draw thick glowing overlay under primary thin outline for double outline neon bloom!
     graphics.lineStyle(4, neonColor, 0.35); // outer thick glow
     graphics.beginPath();
     graphics.moveTo(ptTop.x, ptTop.y);

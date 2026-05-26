@@ -16,7 +16,8 @@ import {
   DEFAULT_FIXTURE_ID,
 } from '@/game/fixtures/npc-rooms';
 import type { EntryPointType, EntryPointWall } from '@/lib/store/useRoomStore';
-import { applyDamageToPlaced, DEFAULT_SQUAD_HP, heal } from '@/game/systems/CombatSystem';
+import { applyDamage, applyDamageToPlaced, DEFAULT_SQUAD_HP, heal } from '@/game/systems/CombatSystem';
+import { createClient } from '@/lib/supabase/client';
 import { TrapSystem, type TrapTriggeredPayload } from '@/game/systems/TrapSystem';
 import { TurretAI, type TurretFiredPayload } from '@/game/systems/DefenseAI';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
@@ -143,6 +144,10 @@ export class RaidScene extends Phaser.Scene {
   private pathDebugGraphics!: Phaser.GameObjects.Graphics;
   private trapSystem: TrapSystem | null = null;
   private turretAI: TurretAI | null = null;
+  private realtimeChannel: any = null;
+  private hostileEntities: EntitySprite[] = [];
+  private guardAiTimer: Phaser.Time.TimerEvent | null = null;
+  private simulatedDefenderTimer: Phaser.Time.TimerEvent | null = null;
 
   /** Active barricade-attack state. `null` when the squad is not
    *  attacking. Set by {@link startBarricadeAttack}; cleared by
@@ -337,6 +342,13 @@ export class RaidScene extends Phaser.Scene {
 
     // ── Squad unit — spawn multiple squad members based on prep selection ──
     const prepMembers = useRaidStore.getState().prepSquadMembers || [];
+    const isJointRaid = useRaidStore.getState().isJointRaid;
+    const allyBonusHp = useRaidStore.getState().allyBonusHp;
+    const allyBonusDamage = useRaidStore.getState().allyBonusDamage;
+
+    const hpBonusPerMember = isJointRaid && prepMembers.length > 0 ? Math.round(allyBonusHp / prepMembers.length) : 0;
+    const dmgBonusPerMember = isJointRaid && prepMembers.length > 0 ? Math.round(allyBonusDamage / prepMembers.length) : 0;
+
     this.squadEntities = [];
     this.activeSquadIndex = 0;
 
@@ -347,13 +359,20 @@ export class RaidScene extends Phaser.Scene {
         const sprite = new EntitySprite(this, spawn.x, spawn.y, 'entity_drone', {
           entityId: `member_${index}`,
           name: member.name,
-          maxHp: Math.round(DEFAULT_SQUAD_HP * (usePlayerStore.getState().activeEffects.squadHpMult ?? 1.0)),
+          maxHp: Math.round(DEFAULT_SQUAD_HP * (usePlayerStore.getState().activeEffects.squadHpMult ?? 1.0)) + hpBonusPerMember,
           speed: 1.0 * (usePlayerStore.getState().activeEffects.squadSpeedMult ?? 1.0),
           activeAbility: member.activeAbility,
           passiveGear: member.passiveGear,
           weapon: member.weapon || null,
           armor: member.armor || null,
         });
+
+        if (isJointRaid) {
+          sprite.meleeDamage += dmgBonusPerMember;
+          // Apply neon blue glow (tint)
+          sprite.setTint(0x33ffff);
+        }
+
         sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
         this.squadEntities.push(sprite);
       });
@@ -473,6 +492,24 @@ export class RaidScene extends Phaser.Scene {
       if (st.phase === 'active') {
         const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
         st.appendAction({ t: elapsed, type: 'move', data: { entityId: payload.entityId, gridX: payload.x, gridY: payload.y } });
+
+        const entity = this.squadEntities[memberIndex];
+        this.broadcastOperationalEvent(`[${elapsed}s] ${entity.name} advanced to sector tile (${payload.x}, ${payload.y})`);
+
+        // Real-time broadcast to defender
+        if (this.realtimeChannel) {
+          this.realtimeChannel.send({
+            type: 'broadcast',
+            event: 'attacker-moved',
+            payload: {
+              memberIndex,
+              x: payload.x,
+              y: payload.y,
+              hp: entity.hp,
+              maxHp: entity.maxHp
+            }
+          });
+        }
       }
 
       const s = this.fixture.stash;
@@ -508,6 +545,88 @@ export class RaidScene extends Phaser.Scene {
     // ── Replay or Countdown Timer ──
     SoundManager.getInstance().playMusic('combat_tension');
     useRaidStore.getState().beginActivePhase();
+
+    this.hostileEntities = [];
+
+    // ── PvP Real-Time Channels & AI Systems ──
+    const lobbyId = useRaidStore.getState().jointLobbyId;
+    if (!this.isReplayMode) {
+      if (lobbyId) {
+        try {
+          const supabaseClient = createClient();
+          const channelName = `joint-raid-live:${lobbyId}`;
+          this.realtimeChannel = supabaseClient.channel(channelName, {
+            config: {
+              broadcast: { self: true }
+            }
+          });
+          this.realtimeChannel.subscribe();
+        } catch (err) {
+          console.error("[RaidScene] Failed to mount joint raid live channel:", err);
+        }
+      } else if (target?.isPvP && target?.id) {
+        try {
+          const supabaseClient = createClient();
+          const channelName = `pvp-raid:${target.id}`;
+          this.realtimeChannel = supabaseClient.channel(channelName, {
+            config: {
+              broadcast: { self: false }
+            }
+          });
+
+          this.realtimeChannel.on('broadcast', { event: 'defender-action' }, (payload: any) => {
+            const action = payload.payload;
+            if (!action || !action.type) return;
+            
+            if (action.type === 'overcharge') {
+              this.handleOvercharge(action.x, action.y);
+            } else if (action.type === 'spawn-drone') {
+              this.handleSpawnDrone(action.x, action.y);
+            } else if (action.type === 'security-lock') {
+              this.handleSecurityLock();
+            }
+          });
+
+          this.realtimeChannel.subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') {
+              const currentMembers = useRaidStore.getState().prepSquadMembers || [];
+              this.realtimeChannel.send({
+                type: 'broadcast',
+                event: 'breach-started',
+                payload: {
+                  squadMembers: currentMembers.map((m: any, idx: number) => ({
+                    entityId: `member_${idx}`,
+                    name: m.name,
+                    hp: m.hp || DEFAULT_SQUAD_HP,
+                    maxHp: m.maxHp || DEFAULT_SQUAD_HP
+                  })),
+                  targetId: target.id
+                }
+              });
+            }
+          });
+        } catch (err) {
+          console.error("[RaidScene] Failed to mount Supabase Realtime channel:", err);
+        }
+      } else {
+        // Offline / Sandbox Mode: Spin up Simulated Defender AI agent triggering overrides every 15s
+        this.simulatedDefenderTimer = this.time.addEvent({
+          delay: 15000,
+          loop: true,
+          callback: () => this.tickSimulatedDefender(),
+          callbackScope: this
+        });
+      }
+
+      // Live Active Guard Patrol AI ticker (1.5 seconds delay)
+      this.guardAiTimer = this.time.addEvent({
+        delay: 1500,
+        loop: true,
+        callback: () => this.tickHostileGuardDrones(),
+        callbackScope: this
+      });
+    }
+
     if (this.isReplayMode) {
       this.replayElapsedSeconds = 0;
       this.timerEvent = this.time.addEvent({
@@ -561,6 +680,23 @@ export class RaidScene extends Phaser.Scene {
           type: 'damage',
           data: { entityId: payload.entityId, hp: payload.hp, maxHp: payload.maxHp, amount: payload.amount },
         });
+
+        this.broadcastOperationalEvent(`[${elapsed}s] WARNING: ${sprite.name} took ${payload.amount} damage! (${payload.hp}/${payload.maxHp} HP)`);
+
+        // Real-time broadcast to defender on damage
+        if (this.realtimeChannel) {
+          this.realtimeChannel.send({
+            type: 'broadcast',
+            event: 'attacker-moved',
+            payload: {
+              memberIndex,
+              x: sprite.currentGridX,
+              y: sprite.currentGridY,
+              hp: payload.hp,
+              maxHp: payload.maxHp
+            }
+          });
+        }
       }
     };
     this.onEntityKilled = (payload) => {
@@ -579,6 +715,9 @@ export class RaidScene extends Phaser.Scene {
           };
           st.setPrepSquadMembers(currentPrepMembers);
         }
+
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        this.broadcastOperationalEvent(`[${elapsed}s] CRITICAL: ${sprite.name} was ELIMINATED!`);
 
         // Check if all squad members are eliminated
         const anySquadAlive = this.squadEntities.some(s => s.hp > 0);
@@ -600,7 +739,6 @@ export class RaidScene extends Phaser.Scene {
           }
         }
 
-        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
         st.appendAction({
           t: elapsed,
           type: 'entity_killed',
@@ -628,6 +766,9 @@ export class RaidScene extends Phaser.Scene {
         type: 'defense_destroyed',
         data: { gridX: payload.gridX, gridY: payload.gridY, spriteKey: payload.spriteKey, maxHp: payload.maxHp },
       });
+
+      const defenseName = payload.spriteKey.replace('barricade_', '').replace('turret_', '').replace('_', ' ');
+      this.broadcastOperationalEvent(`[${elapsed}s] SECURE BREAKTHROUGH: enemy ${defenseName} destroyed at (${payload.gridX}, ${payload.gridY})!`);
     };
     EventBus.on('entity-damaged', this.onEntityDamaged);
     EventBus.on('entity-killed', this.onEntityKilled);
@@ -920,6 +1061,24 @@ export class RaidScene extends Phaser.Scene {
     const store = useRaidStore.getState();
     if (store.phase === 'results') return;
 
+    this.broadcastOperationalEvent(`[System] Operation finished: ${outcome.toUpperCase()} - ${reason}`);
+
+    if (this.realtimeChannel) {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'raid-completed',
+        payload: { outcome, reason }
+      });
+
+      if (store.isJointRaid) {
+        this.realtimeChannel.send({
+          type: 'broadcast',
+          event: 'raid_completed',
+          payload: { outcome, reason }
+        });
+      }
+    }
+
     SoundManager.getInstance().stopMusic();
     SoundManager.getInstance().playSfx(outcome === 'victory' ? 'victory' : 'defeat');
 
@@ -963,6 +1122,24 @@ export class RaidScene extends Phaser.Scene {
   private teardown(): void {
     SoundManager.getInstance().stopMusic();
     this.stopTimer();
+
+    if (this.guardAiTimer) {
+      this.guardAiTimer.remove(false);
+      this.guardAiTimer = null;
+    }
+    if (this.simulatedDefenderTimer) {
+      this.simulatedDefenderTimer.remove(false);
+      this.simulatedDefenderTimer = null;
+    }
+    if (this.realtimeChannel) {
+      this.realtimeChannel.unsubscribe();
+      this.realtimeChannel = null;
+    }
+    this.hostileEntities.forEach(drone => {
+      if (drone && drone.active) drone.destroy();
+    });
+    this.hostileEntities = [];
+
     if (this.onRaidComplete) {
       EventBus.off('raid-complete', this.onRaidComplete);
       this.onRaidComplete = null;
@@ -1152,6 +1329,10 @@ export class RaidScene extends Phaser.Scene {
         exhausted: payload.exhausted,
       },
     });
+
+    const trapName = payload.spriteKey.replace('trap_', '').replace('_', ' ');
+    const memberName = this.squadEntities.find(s => s.entityId === payload.entityId)?.name || 'Squad member';
+    this.broadcastOperationalEvent(`[${secondsElapsed}s] DANGER: ${memberName} triggered ${trapName} trap at (${payload.gridX}, ${payload.gridY})!`);
   }
 
   /**
@@ -1221,6 +1402,10 @@ export class RaidScene extends Phaser.Scene {
         alerted: payload.alerted,
       },
     });
+
+    const turretName = payload.spriteKey.replace('turret_', '').replace('_', ' ');
+    const targetName = this.squadEntities.find(s => s.entityId === payload.targetEntityId)?.name || 'Squad member';
+    this.broadcastOperationalEvent(`[${secondsElapsed}s] WARNING: ${turretName} turret fired at ${targetName}!`);
   }
 
   private handleWheel(
@@ -1582,6 +1767,208 @@ export class RaidScene extends Phaser.Scene {
     return this.fixture.items;
   }
 
+  private handleOvercharge(x: number, y: number): void {
+    if (!this.turretAI) return;
+    const turret = this.turretAI.getTurret(x, y);
+    if (!turret) return;
+
+    const store = useRaidStore.getState();
+    const elapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
+    store.appendAction({
+      t: elapsed,
+      type: 'defender_overcharge',
+      data: { gridX: x, gridY: y }
+    });
+
+    const originalFireRate = turret.stats.fire_rate;
+    const originalRange = turret.stats.range;
+
+    turret.stats.fire_rate = originalFireRate / 2; // double speed!
+    turret.stats.range = originalRange + 2;
+
+    const sprite = turret.sprite;
+    if (sprite && sprite.active) {
+      sprite.setTint(0xff3333);
+      this.tweens.add({
+        targets: sprite,
+        scaleX: { from: 1.0, to: 1.25 },
+        scaleY: { from: 1.0, to: 1.25 },
+        yoyo: true,
+        repeat: 3,
+        duration: 300,
+        ease: 'Quad.easeInOut'
+      });
+
+      this.time.delayedCall(5000, () => {
+        if (turret && turret.stats) {
+          turret.stats.fire_rate = originalFireRate;
+          turret.stats.range = originalRange;
+        }
+        if (sprite && sprite.active) {
+          sprite.clearTint();
+        }
+      });
+    }
+  }
+
+  private handleSpawnDrone(x: number, y: number): void {
+    const store = useRaidStore.getState();
+    const elapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
+    store.appendAction({
+      t: elapsed,
+      type: 'defender_spawn_drone',
+      data: { gridX: x, gridY: y }
+    });
+
+    const drone = new EntitySprite(this, x, y, 'entity_drone', {
+      entityId: `hostile_drone_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      name: 'Sentinel Drone',
+      maxHp: 50,
+      speed: 0.8,
+    });
+
+    drone.setTint(0xff5555);
+    drone.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+    
+    drone.setScale(0);
+    this.tweens.add({
+      targets: drone,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 300,
+      ease: 'Back.easeOut'
+    });
+
+    this.hostileEntities.push(drone);
+    this.playEmpVfx(x, y);
+  }
+
+  private handleSecurityLock(): void {
+    const store = useRaidStore.getState();
+    const elapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
+    store.appendAction({
+      t: elapsed,
+      type: 'defender_security_lock',
+      data: {}
+    });
+
+    this.squadEntities.forEach(member => {
+      if (member.hp > 0) {
+        this.applyEntityStun(member.entityId, 3.0);
+        this.playEmpVfx(member.currentGridX, member.currentGridY);
+      }
+    });
+
+    this.cameras.main.shake(200, 0.01);
+  }
+
+  private tickHostileGuardDrones(): void {
+    if (useRaidStore.getState().phase !== 'active') return;
+
+    this.hostileEntities = this.hostileEntities.filter(drone => drone.active && drone.hp > 0);
+    const aliveSquad = this.squadEntities.filter(s => s.active && s.hp > 0);
+    if (aliveSquad.length === 0 || this.hostileEntities.length === 0) return;
+
+    for (const drone of this.hostileEntities) {
+      if (Date.now() < (drone as any).stunnedUntilMs) continue;
+
+      let closestMember: EntitySprite | null = null;
+      let minDistance = Infinity;
+
+      for (const member of aliveSquad) {
+        const dx = Math.abs(member.currentGridX - drone.currentGridX);
+        const dy = Math.abs(member.currentGridY - drone.currentGridY);
+        const dist = Math.max(dx, dy);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestMember = member;
+        }
+      }
+
+      if (!closestMember) continue;
+
+      if (minDistance <= 1) {
+        SoundManager.getInstance().playSfx('laser');
+        applyDamage(closestMember, 15, closestMember.entityId);
+        this.playEmpVfx(closestMember.currentGridX, closestMember.currentGridY);
+        this.cameras.main.shake(100, 0.003);
+      } else {
+        const path = this.gridSystem.findPath(
+          drone.currentGridX,
+          drone.currentGridY,
+          closestMember.currentGridX,
+          closestMember.currentGridY
+        );
+        if (path && path.length > 1) {
+          const step = path[1];
+          drone.walkPath([step], this.offsetX, this.offsetY, this.currentRotation);
+        } else {
+          const adjPath = this.gridSystem.findPathToAdjacent(
+            drone.currentGridX,
+            drone.currentGridY,
+            closestMember.currentGridX,
+            closestMember.currentGridY
+          );
+          if (adjPath && adjPath.length > 1) {
+            const step = adjPath[1];
+            drone.walkPath([step], this.offsetX, this.offsetY, this.currentRotation);
+          }
+        }
+      }
+    }
+  }
+
+  private tickSimulatedDefender(): void {
+    if (useRaidStore.getState().phase !== 'active') return;
+
+    const aliveSquad = this.squadEntities.filter(s => s.active && s.hp > 0);
+    if (aliveSquad.length === 0) return;
+
+    const randomMember = aliveSquad[Math.floor(Math.random() * aliveSquad.length)];
+    const targetX = randomMember.currentGridX;
+    const targetY = randomMember.currentGridY;
+
+    const actionType = Math.floor(Math.random() * 3);
+
+    if (actionType === 0 && this.turretAI && this.turretAI.registeredCount() > 0) {
+      const turrets = Array.from((this.turretAI as any).turrets.values()) as any[];
+      if (turrets.length > 0) {
+        const randomTurret = turrets[Math.floor(Math.random() * turrets.length)];
+        this.handleOvercharge(randomTurret.gridX, randomTurret.gridY);
+      } else {
+        this.handleSecurityLock();
+      }
+    } else if (actionType === 1) {
+      let spawnTile = { x: targetX, y: targetY };
+      let found = false;
+
+      for (let r = 1; r <= 2; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+          for (let dy = -r; dy <= r; dy++) {
+            const tx = targetX + dx;
+            const ty = targetY + dy;
+            if (tx >= 0 && tx < this.gridSize && ty >= 0 && ty < this.gridSize) {
+              if (this.gridSystem.isTileWalkable(tx, ty)) {
+                const occupied = this.squadEntities.some(e => e.currentGridX === tx && e.currentGridY === ty);
+                if (!occupied) {
+                  spawnTile = { x: tx, y: ty };
+                  found = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (found) break;
+        }
+        if (found) break;
+      }
+
+      this.handleSpawnDrone(spawnTile.x, spawnTile.y);
+    } else {
+      this.handleSecurityLock();
+    }
+  }
+
   /**
    * Run the chronological replay ticker at 1Hz playback speed.
    */
@@ -1719,6 +2106,27 @@ export class RaidScene extends Phaser.Scene {
         useRaidStore.getState().setSquadHp(0);
         break;
       }
+    }
+  }
+
+  private broadcastOperationalEvent(logText: string): void {
+    const st = useRaidStore.getState();
+    if (st.isJointRaid && this.realtimeChannel) {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'raid_action_log',
+        payload: { text: logText }
+      });
+
+      // Recalculate combined HP
+      const totalHp = this.squadEntities.reduce((sum, s) => sum + s.hp, 0);
+      const totalMaxHp = this.squadEntities.reduce((sum, s) => sum + s.maxHp, 0);
+      
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: 'raid_stats_update',
+        payload: { hp: totalHp, maxHp: totalMaxHp }
+      });
     }
   }
 }

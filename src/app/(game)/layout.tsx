@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import PlayerStoreInitializer from "@/components/store/PlayerStoreInitializer";
+import { ChatConsole } from "@/components/game/ChatConsole";
 
 /**
  * Game Layout — wraps all authenticated game routes in the (game) route group.
@@ -25,7 +26,37 @@ export default async function GameLayout({
     redirect('/login');
   }
 
-  // Authoritatively fetch core player resources & safe mode settings for all routes
+  // 1. Authoritatively fetch or auto-create the profiles row first.
+  // This is critical because foreign keys in inventories, player_squad, etc. reference profiles(id).
+  const profileResult = await (supabase.from('profiles') as any)
+    .select('username, player_level, xp, safe_mode_until, tech_points, created_at')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  let profile = profileResult.data;
+  const profError = profileResult.error;
+
+  if (!profile && !profError) {
+    console.warn(`[GameLayout] Missing profile row for user ${user.id} — auto-creating defaults.`);
+    const username = user.user_metadata?.username || user.email?.split('@')[0] || `user_${user.id.substring(0, 8)}`;
+    const display_name = user.user_metadata?.username || user.email?.split('@')[0] || `Survivor`;
+    const { data: createdProf, error: createProfError } = await (supabase.from('profiles') as any)
+      .insert({
+        id: user.id,
+        username,
+        display_name,
+      })
+      .select('username, player_level, xp, safe_mode_until, tech_points, created_at')
+      .maybeSingle();
+
+    if (createProfError) {
+      console.error("[GameLayout] Failed to auto-create profile row:", JSON.stringify(createProfError));
+    } else if (createdProf) {
+      profile = createdProf;
+    }
+  }
+
+  // 2. Fetch or auto-create inventories row
   const { data: initialInventory, error: invError } = await supabase
     .from('inventories')
     .select('*')
@@ -34,8 +65,6 @@ export default async function GameLayout({
 
   let inventory = initialInventory;
 
-  // Defensive auto-healing: if user exists but has no inventory row (due to trigger race/signup latency),
-  // transactionally seed defaults immediately to prevent downstream hydration crashes.
   if (!inventory && !invError) {
     console.warn(`[GameLayout] Missing inventory row for user ${user.id} — auto-creating defaults.`);
     const { data: createdInv, error: createInvError } = await (supabase.from('inventories') as any)
@@ -44,32 +73,27 @@ export default async function GameLayout({
       .maybeSingle();
 
     if (createInvError) {
-      console.error("[GameLayout] Failed to auto-create inventory row:", createInvError);
+      console.error("[GameLayout] Failed to auto-create inventory row:", JSON.stringify(createInvError));
     } else if (createdInv) {
       inventory = createdInv;
     }
   }
 
-  const { data: profile, error: profError } = await (supabase.from('profiles') as any)
-    .select('player_level, xp, safe_mode_until, tech_points, created_at')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  // Fetch tech tree unlocks
+  // 3. Fetch tech tree unlocks
   const { data: techUnlocks, error: techError } = await supabase
     .from('player_tech')
     .select('node_id')
     .eq('owner_id', user.id);
   const unlockedNodes = (techUnlocks || []).map((t: any) => t.node_id);
 
-  // Fetch squad loadout
+  // 4. Fetch squad loadout
   const { data: squadRows, error: squadError } = await supabase
     .from('player_squad')
     .select('*')
     .eq('owner_id', user.id)
     .order('slot_number');
 
-  // Fetch active tutorial quest
+  // 5. Fetch active tutorial quest
   const { data: activeTutQuests } = await (supabase.from('player_quests') as any)
     .select('quest_id')
     .eq('player_id', user.id)
@@ -77,8 +101,20 @@ export default async function GameLayout({
     .like('quest_id', 'tut-%');
   const activeQuestId = activeTutQuests && activeTutQuests.length > 0 ? activeTutQuests[0].quest_id : null;
 
+  // 6. Fetch active district ID if user belongs to one
+  const { data: currentMember } = await (supabase.from('district_members') as any)
+    .select('district_id')
+    .eq('profile_id', user.id)
+    .maybeSingle();
+  const districtId = currentMember?.district_id || null;
+
   if (invError || profError || techError || squadError) {
-    console.error("[GameLayout] Core state fetch errors:", { invError, profError, techError, squadError });
+    console.error("[GameLayout] Core state fetch errors:", { 
+      invError: invError ? JSON.stringify(invError) : null, 
+      profError: profError ? JSON.stringify(profError) : null, 
+      techError: techError ? JSON.stringify(techError) : null, 
+      squadError: squadError ? JSON.stringify(squadError) : null 
+    });
   }
 
   // Standard fallback to prevent empty initializations
@@ -92,6 +128,7 @@ export default async function GameLayout({
   };
 
   const finalProfile = profile || {
+    username: "You",
     player_level: 1,
     xp: 0,
     safe_mode_until: null,
@@ -113,7 +150,7 @@ export default async function GameLayout({
       .select();
 
     if (seedError) {
-      console.error("[GameLayout] Failed to seed default squad slots:", seedError);
+      console.error("[GameLayout] Failed to seed default squad slots:", JSON.stringify(seedError));
     } else if (seededSquad) {
       squad = seededSquad;
     }
@@ -137,6 +174,15 @@ export default async function GameLayout({
         {children}
       </main>
       <BottomNav />
+      <ChatConsole 
+        playerProfile={{ 
+          id: user.id, 
+          username: (finalProfile as any).username || "You", 
+          player_level: finalProfile.player_level 
+        }} 
+        districtId={districtId} 
+        mode="floating" 
+      />
       {/* Global toast surface for every server-action outcome — placement /
           removal / rotation / level-up success+failure are all funneled
           through here so the player gets explicit feedback instead of silent

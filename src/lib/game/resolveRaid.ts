@@ -23,6 +23,8 @@ export interface ResolveRaidRequest {
   squadHp: number;
   squadMaxHp: number;
   actionLog: RaidActionLogEntry[];
+  jointLobbyId?: string | null;
+  jointParticipantIds?: string[];
 }
 
 export interface ResolveRaidResponse {

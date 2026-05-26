@@ -59,36 +59,69 @@ export class RoomEditorScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setScrollFactor(0); // Pin to camera
 
-    EventBus.on(
-      'item-selected',
-      (payload: { key: string; type: string; stats?: ItemStats } | null) => {
-        this.currentItemKey = payload?.key ?? null;
-        this.currentItemType = payload?.type ?? null;
-        this.currentItemStats = payload?.stats ?? {};
+    const handleItemSelected = (payload: { key: string; type: string; stats?: ItemStats } | null) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      this.currentItemKey = payload?.key ?? null;
+      this.currentItemType = payload?.type ?? null;
+      this.currentItemStats = payload?.stats ?? {};
+      if (this.ghostSprite) {
+        this.ghostSprite.destroy();
+        this.ghostSprite = null;
+      }
+
+      this.rangeGraphics.clear();
+
+      if (this.currentItemKey) {
+        // Create the ghost, set alpha to 0.6
+        this.ghostSprite = this.add.image(0, 0, this.currentItemKey).setOrigin(0.5, 1).setAlpha(0.6);
+      }
+    };
+
+    const handlePlacementSuccess = (payload: { key: string, x: number, y: number }) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      const roomScene = this.scene.get('RoomScene') as RoomScene;
+      if (roomScene && roomScene.placeFurniture) {
+        roomScene.placeFurniture(payload.key, payload.x, payload.y);
+      }
+      if (this.ghostSprite) {
+        this.ghostSprite.setTint(0xff0000); 
+      }
+    };
+
+    const handleChangeMode = (mode: string) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      // Sleep on any non-edit mode, not just 'view' — otherwise defense-view
+      // (task 2.0.11) would leave the editor's pointermove/pointerdown
+      // listeners active and conflicting with RoomScene interaction.
+      if (mode !== 'edit') {
         if (this.ghostSprite) {
           this.ghostSprite.destroy();
           this.ghostSprite = null;
         }
-
-        // Any selection change invalidates the existing overlay. It'll be
-        // repopulated on the next `pointermove` once the ghost has a tile
-        // to anchor the range calculation against.
-        this.rangeGraphics.clear();
-
-        if (this.currentItemKey) {
-          // Create the ghost, set alpha to 0.6
-          this.ghostSprite = this.add.image(0, 0, this.currentItemKey).setOrigin(0.5, 1).setAlpha(0.6);
+        this.currentItemKey = null;
+        this.currentItemType = null;
+        this.currentItemStats = {};
+        if (this.rangeGraphics && this.rangeGraphics.clear) {
+          this.rangeGraphics.clear();
         }
-      },
-    );
-
-    EventBus.on('placement-success', (payload: { key: string, x: number, y: number }) => {
-      const roomScene = this.scene.get('RoomScene') as RoomScene;
-      roomScene.placeFurniture(payload.key, payload.x, payload.y);
-      if (this.ghostSprite) {
-        this.ghostSprite.setTint(0xff0000); 
+        if (this.scene && this.scene.sleep) {
+          this.scene.sleep();
+        }
       }
-    });
+    };
+
+    EventBus.on('item-selected', handleItemSelected);
+    EventBus.on('placement-success', handlePlacementSuccess);
+    EventBus.on('change-mode', handleChangeMode);
+
+    const cleanup = () => {
+      EventBus.off('item-selected', handleItemSelected);
+      EventBus.off('placement-success', handlePlacementSuccess);
+      EventBus.off('change-mode', handleChangeMode);
+    };
+
+    this.events.once('shutdown', cleanup);
+    this.events.once('destroy', cleanup);
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (!this.ghostSprite || !this.currentItemKey) return;
@@ -172,22 +205,7 @@ export class RoomEditorScene extends Phaser.Scene {
       }
     });
 
-    EventBus.on('change-mode', (mode: string) => {
-      // Sleep on any non-edit mode, not just 'view' — otherwise defense-view
-      // (task 2.0.11) would leave the editor's pointermove/pointerdown
-      // listeners active and conflicting with RoomScene interaction.
-      if (mode !== 'edit') {
-        if (this.ghostSprite) {
-          this.ghostSprite.destroy();
-          this.ghostSprite = null;
-        }
-        this.currentItemKey = null;
-        this.currentItemType = null;
-        this.currentItemStats = {};
-        this.rangeGraphics.clear();
-        this.scene.sleep();
-      }
-    });
+    // Done EventBus lifecycle bindings above
 
     this.cameras.main.centerOn(offsetX, offsetY);
   }

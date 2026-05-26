@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { useSquadStore } from "@/lib/store/useSquadStore";
 import { useRaidStore } from "@/lib/store/useRaidStore";
@@ -15,6 +15,7 @@ import { RaidHUD } from "@/components/game/RaidHUD";
 import { RaidResults } from "@/components/game/RaidResults";
 import { RaidResolver } from "@/components/game/RaidResolver";
 import { entryTileFor } from "@/lib/game/entryPoints";
+import { createClient } from "@/lib/supabase/client";
 import * as Icons from "lucide-react";
 
 interface RaidPrepContainerProps {
@@ -29,9 +30,10 @@ interface RaidPrepContainerProps {
     stash?: { x: number; y: number };
   };
   playerLevel: number;
+  lobbyId?: string | null;
 }
 
-export function RaidPrepContainer({ target, playerLevel }: RaidPrepContainerProps) {
+export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepContainerProps) {
   const [isPending, startTransition] = useTransition();
   const [phase, setPhase] = useState<"prep" | "execute">("prep");
   const [scouted, setScouted] = useState(false);
@@ -42,6 +44,64 @@ export function RaidPrepContainer({ target, playerLevel }: RaidPrepContainerProp
   const activeEffects = usePlayerStore((state) => state.activeEffects);
   const squadMembers = useSquadStore((state) => state.members);
   const isSlotLocked = useSquadStore((state) => state.isLocked);
+
+  const isJointRaid = useRaidStore((state) => state.isJointRaid);
+  const jointParticipants = useRaidStore((state) => state.jointParticipants);
+
+  // Load Joint Raid Details if active
+  useEffect(() => {
+    if (!lobbyId) return;
+    const fetchLobbyInfo = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch participants
+        const { data: parts } = await supabase
+          .from("joint_raid_participants")
+          .select("*")
+          .eq("lobby_id", lobbyId);
+
+        if (parts) {
+          const formattedParts = parts.map((p: any) => ({
+            profile_id: p.profile_id,
+            squad_hp_contribution: p.squad_hp_contribution,
+            squad_damage_bonus: p.squad_damage_bonus,
+            is_ready: p.is_ready,
+            joined_at: p.joined_at,
+          }));
+
+          const st = useRaidStore.getState();
+          st.setIsJointRaid(true);
+          st.setJointLobbyId(lobbyId);
+          st.setJointParticipants(formattedParts);
+        }
+      } catch (err) {
+        console.error("Failed to load joint raid details:", err);
+      }
+    };
+    fetchLobbyInfo();
+  }, [lobbyId]);
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setCurrentUserId(data.user.id);
+      }
+    });
+  }, []);
+
+  const { totalAllyHpBonus, totalAllyDmgBonus } = useMemo(() => {
+    if (!isJointRaid || !currentUserId) return { totalAllyHpBonus: 0, totalAllyDmgBonus: 0 };
+    const allies = jointParticipants.filter((p: any) => p.profile_id !== currentUserId);
+    const hp = allies.reduce((sum: number, p: any) => sum + p.squad_hp_contribution, 0);
+    const dmg = allies.reduce((sum: number, p: any) => sum + p.squad_damage_bonus, 0);
+    return { totalAllyHpBonus: hp, totalAllyDmgBonus: dmg };
+  }, [isJointRaid, jointParticipants, currentUserId]);
 
   // Local prep assignments: Maps slot number to index of entryPoints
   const [assignments, setAssignments] = useState<Record<number, number>>({});
@@ -125,6 +185,7 @@ export function RaidPrepContainer({ target, playerLevel }: RaidPrepContainerProp
     // Hydrate useRaidStore with the squad loadouts & entries
     const st = useRaidStore.getState();
     (st as any).prepSquadMembers = preparedSquad;
+    st.setAllyBonuses(totalAllyHpBonus, totalAllyDmgBonus);
 
     setPhase("execute");
     toast.success("Breach commenced! Good luck, Commander.");
@@ -171,6 +232,34 @@ export function RaidPrepContainer({ target, playerLevel }: RaidPrepContainerProp
           </div>
         </div>
       </div>
+
+      {/* Joint Operation banner */}
+      {isJointRaid && (
+        <div className="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4 backdrop-blur-xl flex items-center justify-between text-xs font-mono shadow-lg relative overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-1 bg-cyan-500" />
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-2 text-cyan-400">
+              <Icons.Swords className="size-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="font-bold text-white uppercase tracking-wider">Joint Cooperative Operations Active</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                Rallying <strong className="text-cyan-400">{jointParticipants.length - 1} allied raiders</strong>. Combining squad parameters for the breach vector.
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-4 border-l border-border/40 pl-4 text-right">
+            <div className="space-y-0.5">
+              <div className="text-[8px] text-muted-foreground uppercase">Ally HP Contribution</div>
+              <div className="font-black text-rose-400">+{totalAllyHpBonus} Max HP</div>
+            </div>
+            <div className="space-y-0.5">
+              <div className="text-[8px] text-muted-foreground uppercase">Ally Dmg Contribution</div>
+              <div className="font-black text-cyan-400">+{totalAllyDmgBonus} Dmg</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Side: Tactician Controls / Squad assignments (1 column) */}

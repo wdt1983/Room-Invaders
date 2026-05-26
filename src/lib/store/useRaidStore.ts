@@ -99,6 +99,17 @@ export interface RaidTarget {
   };
 }
 
+export interface JointParticipant {
+  profile_id: string;
+  squad_hp_contribution: number;
+  squad_damage_bonus: number;
+  is_ready: boolean;
+  joined_at: string;
+  profiles?: {
+    username: string;
+  };
+}
+
 interface RaidState {
   target: RaidTarget | null;
   phase: RaidPhase;
@@ -133,6 +144,17 @@ interface RaidState {
   setActiveSquadIndex: (index: number) => void;
   activeAbilityMode: string | null;
   setActiveAbilityMode: (mode: string | null) => void;
+
+  // Joint Raid fields
+  isJointRaid: boolean;
+  jointLobbyId: string | null;
+  jointParticipants: JointParticipant[];
+  allyBonusHp: number;
+  allyBonusDamage: number;
+  setIsJointRaid: (isJoint: boolean) => void;
+  setJointLobbyId: (lobbyId: string | null) => void;
+  setJointParticipants: (participants: JointParticipant[]) => void;
+  setAllyBonuses: (hp: number, damage: number) => void;
 
   /** Set the raid target + reset phase/timer. Called by `RaidInitializer` once
    *  per route load from the SSR-resolved fixture. */
@@ -184,10 +206,20 @@ const INITIAL_STATE = {
   prepSquadMembers: null,
   activeSquadIndex: 0,
   activeAbilityMode: null,
+  isJointRaid: false,
+  jointLobbyId: null,
+  jointParticipants: [],
+  allyBonusHp: 0,
+  allyBonusDamage: 0,
 };
 
 export const useRaidStore = create<RaidState>((set) => ({
   ...INITIAL_STATE,
+
+  setIsJointRaid: (isJoint) => set({ isJointRaid: isJoint }),
+  setJointLobbyId: (lobbyId) => set({ jointLobbyId: lobbyId }),
+  setJointParticipants: (participants) => set({ jointParticipants: participants }),
+  setAllyBonuses: (hp, damage) => set({ allyBonusHp: hp, allyBonusDamage: damage }),
 
   startRaid: (target) => {
     const duration = RAID_DURATION_SECONDS[target.difficulty];

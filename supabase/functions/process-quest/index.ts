@@ -224,12 +224,35 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: "Failed to grant XP reward" }, 500);
   }
 
+  // --- Battle Pass XP ---
+  let bpXpGained = 0;
+  if (body.questId.startsWith("tut-")) {
+    bpXpGained = 50;
+  } else if (body.questId.startsWith("daily-")) {
+    bpXpGained = 100;
+  } else if (body.questId.startsWith("weekly-")) {
+    bpXpGained = 250;
+  }
+
+  if (bpXpGained > 0) {
+    const { error: bpErr } = await supabase.rpc('add_battle_pass_xp', {
+      p_user_id: user.id,
+      p_xp_amount: bpXpGained,
+    });
+    if (bpErr) {
+      console.error("[process-quest] Failed to award BP XP:", bpErr);
+    } else {
+      console.log(`[process-quest] Awarded ${bpXpGained} BP XP to user ${user.id}`);
+    }
+  }
+
   console.log(`[process-quest] Successfully processed quest ${body.questId} for user ${user.id}`);
 
   return json({
     success: true,
     questId: body.questId,
     xpGained: questDef.xpReward,
+    bpXpGained,
     lootScrap: rewardScrap,
     lootComponents: rewardComponents,
     lootCredits: rewardCredits,

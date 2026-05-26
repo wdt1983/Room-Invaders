@@ -288,12 +288,25 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
     setIsDragging(false);
   };
 
-  const handleWheel = (e: WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = 0.05;
-    const nextScale = scale + (e.deltaY < 0 ? zoomFactor : -zoomFactor);
-    setScale(Math.max(0.6, Math.min(1.6, nextScale)));
-  };
+  // Imperative non-passive wheel event listener to allow preventDefault for zooming
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const preventZoom = (e: globalThis.WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = 0.05;
+      setScale(prev => {
+        const nextScale = prev + (e.deltaY < 0 ? zoomFactor : -zoomFactor);
+        return Math.max(0.6, Math.min(1.6, nextScale));
+      });
+    };
+
+    viewport.addEventListener("wheel", preventZoom, { passive: false });
+    return () => {
+      viewport.removeEventListener("wheel", preventZoom);
+    };
+  }, []);
 
   // Recenter controls
   const handleRecenter = () => {
@@ -339,7 +352,6 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
         onMouseMove={handlePointerMove}
         onMouseUp={handlePointerUp}
         onMouseLeave={handlePointerUp}
-        onWheel={handleWheel}
         className={`w-full h-full relative cursor-grab active:cursor-grabbing flex items-center justify-center`}
         style={{ perspective: "1000px" }}
       >

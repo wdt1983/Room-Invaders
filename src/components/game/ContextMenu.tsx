@@ -11,6 +11,7 @@ import { useRoomStore } from '@/lib/store/useRoomStore';
 export function ContextMenu() {
   const { contextMenu, openContextMenu, closeContextMenu } = useUIStore();
   const mode = useUIStore((state) => state.mode);
+  const catalog = useRoomStore((state) => state.catalog);
 
   useEffect(() => {
     const handleOpen = (payload: {
@@ -34,7 +35,6 @@ export function ContextMenu() {
 
   if (!contextMenu?.visible) return null;
 
-  const catalog = useRoomStore((state) => state.catalog);
   const catalogItem = catalog.find((c) => c.sprite_key === contextMenu.spriteKey);
   const originalScrapCost = Number(catalogItem?.cost?.scrap) || 0;
   const repairCost = Math.max(5, Math.floor(originalScrapCost * 0.4));
@@ -55,18 +55,19 @@ export function ContextMenu() {
         className="absolute z-50 animate-in fade-in zoom-in-95 duration-100"
         style={{ left: contextMenu.x, top: contextMenu.y }}
       >
-        <Card className="w-48 shadow-xl bg-background/95 backdrop-blur border-primary/20">
-          <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-sm font-semibold capitalize text-primary">
+        <Card className="w-52 shadow-2xl bg-background/90 backdrop-blur-lg border-2 border-primary/30 shadow-primary/5 rounded-xl overflow-hidden">
+          <CardHeader className="p-3 pb-2 border-b border-border/10 bg-muted/10">
+            <CardTitle className="text-xs font-extrabold uppercase tracking-wider text-primary drop-shadow-[0_0_8px_rgba(255,255,255,0.1)] flex items-center gap-1.5">
+              <span className="w-1 h-3 bg-primary rounded-full animate-pulse shrink-0" />
               {contextMenu.spriteKey?.replace(/_/g, ' ') || 'Object'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-3 pt-0 flex flex-col gap-2">
+          <CardContent className="p-3 pt-3 flex flex-col gap-2 bg-background/40">
             {contextMenu.isDamaged && typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && (
               <Button
                 size="sm"
                 variant="default"
-                className="w-full justify-start border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 animate-pulse font-bold"
+                className="w-full justify-start border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 hover:border-emerald-500/50 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)] animate-pulse font-bold transition-all duration-300 rounded-lg text-xs"
                 onClick={() => {
                   EventBus.emit('request-repair', {
                     x: contextMenu.gridX,
@@ -84,7 +85,7 @@ export function ContextMenu() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="w-full justify-start"
+                  className="w-full justify-start cursor-pointer border border-border/20 bg-muted/20 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300 rounded-lg text-xs group"
                   onClick={() => {
                     EventBus.emit('request-rotation', {
                       x: contextMenu.gridX,
@@ -93,13 +94,13 @@ export function ContextMenu() {
                     closeContextMenu();
                   }}
                 >
-                  <RotateCw className="mr-2 size-3.5" />
+                  <RotateCw className="mr-2 size-3.5 transition-transform duration-500 group-hover:rotate-180 text-muted-foreground group-hover:text-primary" />
                   Rotate 90°
                 </Button>
                 <Button
                   size="sm"
                   variant="destructive"
-                  className="w-full justify-start"
+                  className="w-full justify-start cursor-pointer border border-transparent hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive hover:shadow-[0_0_12px_rgba(239,68,68,0.2)] transition-all duration-300 rounded-lg text-xs group"
                   onClick={() => {
                     EventBus.emit('request-removal', {
                       x: contextMenu.gridX,
@@ -108,7 +109,7 @@ export function ContextMenu() {
                     closeContextMenu();
                   }}
                 >
-                  <Trash2 className="mr-2 size-3.5" />
+                  <Trash2 className="mr-2 size-3.5 transition-transform duration-300 group-hover:scale-115 text-destructive-foreground/60 group-hover:text-destructive" />
                   Remove (50% refund)
                 </Button>
               </>
@@ -116,7 +117,7 @@ export function ContextMenu() {
               <Button
                 size="sm"
                 variant="default"
-                className="w-full justify-start"
+                className="w-full justify-start cursor-pointer border border-border/20 bg-muted/20 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300 rounded-lg text-xs"
                 onClick={() => {
                   console.log(`Inspecting [${contextMenu.spriteKey}]`);
                   closeContextMenu();
@@ -127,8 +128,8 @@ export function ContextMenu() {
             )}
             <Button
               size="sm"
-              variant="secondary"
-              className="w-full justify-start"
+              variant="outline"
+              className="w-full justify-start cursor-pointer border border-border/20 bg-transparent hover:bg-muted/30 transition-all duration-300 rounded-lg text-xs"
               onClick={closeContextMenu}
             >
               Cancel

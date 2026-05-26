@@ -216,6 +216,13 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
             <Icons.Cpu className="size-4" />
             Tech Tree {initialPlayerLevel < 8 && <Icons.Lock className="size-3 text-muted-foreground" />}
           </button>
+          <button
+            onClick={() => router.push("/battle-pass")}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded font-bold text-xs transition-all text-muted-foreground hover:text-foreground"
+          >
+            <Icons.Trophy className="size-4 text-amber-400" />
+            Battle Pass
+          </button>
         </div>
       </div>
 

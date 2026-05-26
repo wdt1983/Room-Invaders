@@ -49,6 +49,8 @@ export function RaidResolver() {
       squadHp: state.squadHp,
       squadMaxHp: state.squadMaxHp,
       actionLog: state.actionLog,
+      jointLobbyId: state.jointLobbyId,
+      jointParticipantIds: state.jointParticipants?.map(p => p.profile_id) || undefined,
     })
       .then((res) => {
         if (!res) {

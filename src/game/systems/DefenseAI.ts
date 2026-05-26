@@ -212,6 +212,14 @@ export class TurretAI {
     return this.turrets.has(`${gridX},${gridY}`);
   }
 
+  public getTurret(gridX: number, gridY: number): any {
+    return this.turrets.get(`${gridX},${gridY}`);
+  }
+
+  public getTurrets(): Map<string, any> {
+    return this.turrets;
+  }
+
   public registeredCount(): number {
     return this.turrets.size;
   }

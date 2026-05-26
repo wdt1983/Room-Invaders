@@ -9,8 +9,10 @@ import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Map, ScanEye, User, Shield, ShieldAlert, Swords, Target, Eye, AlertTriangle } from "lucide-react";
+import { Map, ScanEye, User, Shield, ShieldAlert, Swords, Target, Eye, AlertTriangle, Compass, Share2 } from "lucide-react";
 import { NeighborhoodMap } from "./NeighborhoodMap";
+import { GeoMapScanner } from "@/components/game/GeoMapScanner";
+import { EventBus } from "@/game/EventBus";
 
 interface ScoutTarget {
   id: string;
@@ -51,7 +53,7 @@ export function MapDashboard({
   friends 
 }: MapDashboardProps) {
   const [selectedTarget, setSelectedTarget] = useState<ScoutTarget | null>(null);
-  const [viewMode, setViewMode] = useState<"map" | "scanner">("map");
+  const [viewMode, setViewMode] = useState<"map" | "scanner" | "geo">("map");
 
   const handleScout = (target: ScoutTarget) => {
     setSelectedTarget(target);
@@ -60,28 +62,39 @@ export function MapDashboard({
   return (
     <div className="space-y-6">
       {/* Visual Navigation Tabs */}
-      <div className="flex bg-background/50 border border-border/40 p-1 rounded-2xl max-w-sm shadow-md backdrop-blur">
+      <div className="flex bg-background/50 border border-border/40 p-1 rounded-2xl max-w-md shadow-md backdrop-blur">
         <button
           onClick={() => setViewMode("map")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[11px] font-bold transition-all duration-300 ${
             viewMode === "map"
               ? "bg-primary text-primary-foreground shadow-lg"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
           }`}
         >
-          <Map className="w-4 h-4" />
+          <Map className="w-3.5 h-3.5" />
           Neighborhood Grid
         </button>
         <button
           onClick={() => setViewMode("scanner")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[11px] font-bold transition-all duration-300 ${
             viewMode === "scanner"
               ? "bg-primary text-primary-foreground shadow-lg"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
           }`}
         >
-          <ScanEye className="w-4 h-4" />
+          <ScanEye className="w-3.5 h-3.5" />
           Scanner List
+        </button>
+        <button
+          onClick={() => setViewMode("geo")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[11px] font-bold transition-all duration-300 ${
+            viewMode === "geo"
+              ? "bg-primary text-primary-foreground shadow-lg"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <Compass className="w-3.5 h-3.5" />
+          Global Scanner (Geo)
         </button>
       </div>
 
@@ -91,7 +104,7 @@ export function MapDashboard({
           pvpTargets={targets} 
           friends={friends} 
         />
-      ) : (
+      ) : viewMode === "scanner" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {targets && targets.length > 0 ? (
             targets.map((target) => {
@@ -157,6 +170,13 @@ export function MapDashboard({
             </div>
           )}
         </div>
+      ) : (
+        <GeoMapScanner
+          playerProfile={playerProfile}
+          pvpTargets={targets}
+          friends={friends}
+          onScout={handleScout}
+        />
       )}
 
       {/* Interactive Scouting Detail Dialog */}
@@ -274,17 +294,42 @@ export function MapDashboard({
               </div>
             </div>
 
-            <DialogFooter className="flex flex-row gap-3 pt-3 border-t border-border/50">
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-border/50">
+              <Button 
+                onClick={() => {
+                  if (selectedTarget) {
+                    // Derive deterministic stable coordinates matching GeoMapScanner scattering
+                    let h = 0;
+                    for (let i = 0; i < selectedTarget.id.length; i++) {
+                      h = (h * 31 + selectedTarget.id.charCodeAt(i)) | 0;
+                    }
+                    const lat = 47.6062 + (Math.sin(h) * 0.007);
+                    const lng = -122.3321 + (Math.cos(h) * 0.009);
+                    
+                    EventBus.emit('broadcast-recon-coordinates', {
+                      name: selectedTarget.username,
+                      lat,
+                      lng,
+                      level: selectedTarget.player_level
+                    });
+                  }
+                }}
+                variant="outline"
+                className="flex-1 text-xs font-bold border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 gap-1.5 uppercase h-10 rounded-xl"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Broadcast Coordinates
+              </Button>
               <Button 
                 onClick={() => setSelectedTarget(null)}
                 variant="outline" 
-                className="flex-1 text-xs font-bold border-border/80 hover:bg-muted"
+                className="flex-1 text-xs font-bold border-border/80 hover:bg-muted h-10 rounded-xl"
               >
                 Close File
               </Button>
               <Link href={`/raid/${selectedTarget.id}`} className="flex-1">
                 <Button 
-                  className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] animate-pulse"
+                  className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] animate-pulse h-10 rounded-xl"
                 >
                   Launch Raid
                 </Button>

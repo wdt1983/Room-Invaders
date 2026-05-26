@@ -50,6 +50,7 @@ export class RoomScene extends Phaser.Scene {
   private defenseViewActive: boolean = false;
   private defenseViewGraphics!: Phaser.GameObjects.Graphics;
   private defenseViewTweens: Phaser.Tweens.Tween[] = [];
+  private holographicMarkers: Map<string, Phaser.GameObjects.Graphics> = new Map();
   public gridSize: number = 10;
 
   constructor() {
@@ -197,7 +198,7 @@ export class RoomScene extends Phaser.Scene {
 
     const placedItems = useRoomStore.getState().placedItems;
 
-    placedItems.forEach(item => {
+    placedItems.forEach((item, index) => {
       // Prevent placing items out of bounds just in case of stale DB state
       if (this.gridSystem.isTileWalkable(item.gridX, item.gridY)) {
         this.gridSystem.setTileState(item.gridX, item.gridY, 'occupied');
@@ -218,6 +219,20 @@ export class RoomScene extends Phaser.Scene {
           sprite.setAlpha(0.7);
         }
         this.furnitureItems.push(sprite);
+
+        // Cyber-pop staggered cascade intro animation
+        sprite.setScale(0);
+        sprite.setAlpha(0);
+        this.tweens.add({
+          targets: sprite,
+          scaleX: 1,
+          scaleY: 1,
+          alpha: item.isDamaged ? 0.7 : 1,
+          duration: 400,
+          delay: index * 40, // 40ms stagger per item
+          ease: 'Back.easeOut',
+          easeParams: [1.2]
+        });
       }
     });
 
@@ -226,6 +241,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-E', () => this.rotateGrid(1));
 
     const handleChangeMode = (mode: string) => {
+      if (!this.sys || !this.sys.isActive()) return;
       SoundManager.getInstance().playSfx('click');
       const wasDefenseView = this.defenseViewActive;
       this.currentMode = mode;
@@ -240,42 +256,74 @@ export class RoomScene extends Phaser.Scene {
     };
 
     const handleRemovalSuccess = (payload: { x: number; y: number }) => {
+      if (!this.sys || !this.sys.isActive()) return;
       const idx = this.furnitureItems.findIndex(
         (f) => f.gridX === payload.x && f.gridY === payload.y,
       );
       if (idx >= 0) {
-        this.furnitureItems[idx].destroy();
+        const sprite = this.furnitureItems[idx];
         this.furnitureItems.splice(idx, 1);
+
+        SoundManager.getInstance().playSfx('click');
+        this.tweens.add({
+          targets: sprite,
+          scaleX: 0,
+          scaleY: 0,
+          alpha: 0,
+          angle: 45,
+          duration: 250,
+          ease: 'Back.easeIn',
+          onComplete: () => {
+            sprite.destroy();
+          }
+        });
       }
       this.gridSystem.setTileState(payload.x, payload.y, this.baseTileStateFor(payload.x, payload.y));
       useRoomStore.getState().removePlacedItemAt(payload.x, payload.y);
     };
 
     const handleRotationSuccess = (payload: { x: number; y: number; rotation: number }) => {
+      if (!this.sys || !this.sys.isActive()) return;
       const sprite = this.furnitureItems.find(
         (f) => f.gridX === payload.x && f.gridY === payload.y,
       );
       if (sprite) {
         sprite.setFurnitureRotation(payload.rotation);
+
+        SoundManager.getInstance().playSfx('click');
+        sprite.setScale(1.15, 0.85);
+        this.tweens.add({
+          targets: sprite,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 300,
+          ease: 'Back.easeOut',
+          easeParams: [1.5]
+        });
       }
       useRoomStore.getState().rotatePlacedItemAt(payload.x, payload.y, payload.rotation);
     };
 
     const handleRoomUpgraded = () => {
+      if (!this.sys || !this.sys.isActive()) return;
       this.scene.restart();
     };
 
     const handleCosmeticsChanged = (payload: { wallColor: number; floorType: string }) => {
+      if (!this.sys || !this.sys.isActive()) return;
       // 1. Redraw walls
       this.drawWalls();
       // 2. Swapping tile texture
       const floorKey = `floor_${payload.floorType}`;
       this.floorTiles.forEach((tile) => {
-        tile.setTexture(floorKey);
+        if (tile && tile.scene && tile.setTexture) {
+          tile.setTexture(floorKey);
+        }
       });
     };
 
     const handleRepairSuccess = (payload: { x: number; y: number }) => {
+      if (!this.sys || !this.sys.isActive()) return;
       const sprite = this.furnitureItems.find(
         (f) => f.gridX === payload.x && f.gridY === payload.y,
       );
@@ -287,14 +335,36 @@ export class RoomScene extends Phaser.Scene {
       }
     };
 
+    const handlePvpBreachStarted = () => {
+      if (!this.sys || !this.sys.isActive()) return;
+      SoundManager.getInstance().playMusic('combat_tension');
+      SoundManager.getInstance().playSfx('alarm');
+      this.cameras.main.flash(500, 255, 0, 0);
+    };
+
+    const handlePvpAttackerMoved = (payload: { memberIndex: number; x: number; y: number }) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      this.updateHolographicMarker(payload.memberIndex, payload.x, payload.y);
+    };
+
+    const handlePvpRaidCompleted = () => {
+      if (!this.sys || !this.sys.isActive()) return;
+      SoundManager.getInstance().playMusic('safe_room');
+      this.holographicMarkers.forEach(marker => marker.destroy());
+      this.holographicMarkers.clear();
+    };
+
     EventBus.on('change-mode', handleChangeMode);
     EventBus.on('removal-success', handleRemovalSuccess);
     EventBus.on('rotation-success', handleRotationSuccess);
     EventBus.on('room-upgraded', handleRoomUpgraded);
     EventBus.on('cosmetics-changed', handleCosmeticsChanged);
     EventBus.on('repair-success', handleRepairSuccess);
+    EventBus.on('pvp-breach-started', handlePvpBreachStarted);
+    EventBus.on('pvp-attacker-moved', handlePvpAttackerMoved);
+    EventBus.on('pvp-raid-completed', handlePvpRaidCompleted);
 
-    this.events.once('shutdown', () => {
+    const cleanup = () => {
       SoundManager.getInstance().stopMusic();
       EventBus.off('change-mode', handleChangeMode);
       EventBus.off('removal-success', handleRemovalSuccess);
@@ -302,8 +372,16 @@ export class RoomScene extends Phaser.Scene {
       EventBus.off('room-upgraded', handleRoomUpgraded);
       EventBus.off('cosmetics-changed', handleCosmeticsChanged);
       EventBus.off('repair-success', handleRepairSuccess);
+      EventBus.off('pvp-breach-started', handlePvpBreachStarted);
+      EventBus.off('pvp-attacker-moved', handlePvpAttackerMoved);
+      EventBus.off('pvp-raid-completed', handlePvpRaidCompleted);
+      this.holographicMarkers.forEach(marker => marker.destroy());
+      this.holographicMarkers.clear();
       this.exitDefenseView();
-    });
+    };
+
+    this.events.once('shutdown', cleanup);
+    this.events.once('destroy', cleanup);
 
     // Instantiate Player Entity
     this.playerEntity = new EntitySprite(this, 0, 0, 'entity_drone');
@@ -582,13 +660,17 @@ export class RoomScene extends Phaser.Scene {
 
     this.furnitureItems.push(item);
 
-    // Optional: Add a placement thump tween
+    // Satisfying vertical spring squeeze/pop scale bounce
+    item.setScale(0.8, 1.25);
+    item.setAlpha(0.2);
     this.tweens.add({
       targets: item,
-      y: item.y - 10,
-      yoyo: true,
-      duration: 100,
-      ease: 'Quad.easeOut'
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 350,
+      ease: 'Back.easeOut',
+      easeParams: [2.0]
     });
 
     SoundManager.getInstance().playSfx('place_item');
@@ -616,5 +698,53 @@ export class RoomScene extends Phaser.Scene {
         }
     });
     this.pathDebugGraphics.strokePath();
+  }
+
+  private updateHolographicMarker(memberIndex: number, gridX: number, gridY: number): void {
+    const key = `marker_${memberIndex}`;
+    let marker = this.holographicMarkers.get(key);
+
+    const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
+    const targetX = screenPos.x + this.offsetX;
+    const targetY = screenPos.y + this.offsetY;
+
+    if (!marker) {
+      marker = this.add.graphics();
+      marker.setDepth(1000); // Overlay on top of everything
+      this.holographicMarkers.set(key, marker);
+
+      marker.setScale(0);
+      this.tweens.add({
+        targets: marker,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 300,
+        ease: 'Back.easeOut'
+      });
+    }
+
+    this.tweens.add({
+      targets: marker,
+      x: targetX,
+      y: targetY,
+      duration: 200,
+      ease: 'Quad.easeOut'
+    });
+
+    marker.clear();
+
+    marker.lineStyle(2, 0xff3333, 0.9);
+    marker.fillStyle(0xff3333, 0.4);
+    marker.beginPath();
+    marker.moveTo(0, -12);
+    marker.lineTo(16, 0);
+    marker.lineTo(0, 12);
+    marker.lineTo(-16, 0);
+    marker.closePath();
+    marker.fillPath();
+    marker.strokePath();
+
+    marker.lineStyle(1, 0xff5555, 0.6);
+    marker.strokeCircle(0, 0, 18);
   }
 }

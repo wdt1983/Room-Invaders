@@ -9,6 +9,7 @@ import { TickManager } from "@/components/game/TickManager";
 import { slotCategoryFor, slotsForLevel } from '@/lib/game/defense';
 
 import { ContextMenu } from "@/components/game/ContextMenu";
+import { BaseDefenseMonitor } from "@/components/game/BaseDefenseMonitor";
 import { seedInitialQuests, trackQuestProgress } from '@/lib/game/quests';
 
 export const metadata = {
@@ -186,6 +187,7 @@ export default async function RoomPage() {
       <GameWrapper />
       <ItemPanel />
       <ContextMenu />
+      <BaseDefenseMonitor user={user} />
     </div>
   );
 }

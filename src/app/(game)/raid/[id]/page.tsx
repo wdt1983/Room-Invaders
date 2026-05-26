@@ -11,8 +11,10 @@ export const metadata = {
 
 export default async function RaidRoutePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ lobbyId?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -27,6 +29,8 @@ export default async function RaidRoutePage({
   const playerLevel = (profile as any)?.player_level ?? 1;
 
   const { id } = await params;
+  const sParams = await searchParams;
+  const lobbyId = sParams?.lobbyId || null;
   
   // Check if target is a player UUID (PvP raid)
   const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
@@ -148,6 +152,7 @@ export default async function RaidRoutePage({
     return (
       <RaidPrepContainer
         playerLevel={playerLevel}
+        lobbyId={lobbyId}
         target={{
           id: defenderId,
           name: defenderProfile.username || "Survivor",
@@ -227,6 +232,7 @@ export default async function RaidRoutePage({
   return (
     <RaidPrepContainer
       playerLevel={playerLevel}
+      lobbyId={lobbyId}
       target={{
         id: isProceduralLoaded ? id : fixture.id,
         name: fixture.name,

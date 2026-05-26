@@ -430,6 +430,42 @@ CREATE TABLE tech_tree_progress (
 );
 
 -- ============================================
+-- SEASONAL BATTLE PASS (Milestone 9F)
+-- ============================================
+CREATE TABLE battle_pass_tiers (
+    season_id TEXT NOT NULL,
+    tier_number INTEGER NOT NULL CHECK (tier_number >= 1),
+    required_xp INTEGER NOT NULL CHECK (required_xp >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (season_id, tier_number)
+);
+
+CREATE TABLE player_battle_pass_progress (
+    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    season_id TEXT NOT NULL,
+    current_tier INTEGER NOT NULL DEFAULT 1 CHECK (current_tier >= 1),
+    current_xp INTEGER NOT NULL DEFAULT 0 CHECK (current_xp >= 0),
+    is_premium_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
+    claimed_free_rewards INTEGER[] NOT NULL DEFAULT '{}',
+    claimed_premium_rewards INTEGER[] NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, season_id),
+    FOREIGN KEY (season_id, current_tier) REFERENCES battle_pass_tiers(season_id, tier_number)
+);
+
+CREATE TABLE battle_pass_rewards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    season_id TEXT NOT NULL,
+    tier_number INTEGER NOT NULL,
+    is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+    reward_type TEXT NOT NULL CHECK (reward_type IN ('scrap', 'components', 'credits', 'contraband', 'intel', 'item', 'xp')),
+    reward_amount INTEGER NOT NULL DEFAULT 1 CHECK (reward_amount >= 1),
+    item_id UUID REFERENCES items(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (season_id, tier_number) REFERENCES battle_pass_tiers(season_id, tier_number) ON DELETE CASCADE
+);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 CREATE INDEX idx_rooms_owner ON rooms(owner_id);
@@ -451,6 +487,9 @@ CREATE INDEX idx_player_quests_player ON player_quests(player_id);
 | player_items | Own only | Own only | Own only | Own only |
 | raids | Participant only | Own as attacker | Participants only | Never |
 | player_quests | Own only | Own only | Own only | Own only |
+| battle_pass_tiers | Publicly readable | System managed | System managed | System managed |
+| battle_pass_rewards | Publicly readable | System managed | System managed | System managed |
+| player_battle_pass_progress | Own progress only | Own only | Own only | Never |
 
 ---
 

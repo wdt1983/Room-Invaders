@@ -214,6 +214,34 @@ async function trackRaidQuestProgress(supabase: any, userId: string): Promise<vo
   }
 }
 
+function getBpXpGained(isPvP: boolean, fixtureId: string, outcome: "victory" | "defeat"): number {
+  if (outcome === "defeat") {
+    return isPvP ? 50 : 30;
+  }
+  if (isPvP) {
+    return 150;
+  }
+  
+  // NPC victory
+  if (fixtureId.startsWith("procedural-tier-")) {
+    const match = fixtureId.match(/procedural-tier-(\d+)/);
+    const tier = match ? parseInt(match[1], 10) : 1;
+    if (tier <= 3) return 100;
+    if (tier <= 7) return 150;
+    return 200;
+  }
+  
+  const fixture = FIXTURES[fixtureId];
+  if (fixture) {
+    if (fixture.difficulty === "easy") return 100;
+    if (fixture.difficulty === "medium") return 150;
+    if (fixture.difficulty === "hard") return 200;
+  }
+  
+  return 100; // default fallback
+}
+
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
@@ -374,42 +402,118 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: "Target has reached the daily limit of incoming raids" }, 400);
     }
 
-    // Query defender inventory to calculate overflow resources
-    const { data: dInventory, error: diErr } = await (supabase.from("inventories") as any)
-      .select("scrap, components, storage_capacity")
-      .eq("owner_id", defenderId)
-      .single();
+    let plunderedScrap = 0;
+    let plunderedComponents = 0;
 
-    if (diErr || !dInventory) {
-      console.warn("[resolve-raid] Defender inventory not found:", diErr);
-      return json({ success: false, error: "Defender inventory not found" }, 500);
-    }
+    // Check if defender belongs to a cooperative district
+    const { data: districtMember } = await (supabase.from("district_members") as any)
+      .select("district_id")
+      .eq("profile_id", defenderId)
+      .maybeSingle();
 
-    const dScrap = dInventory.scrap ?? 0;
-    const dComponents = dInventory.components ?? 0;
-    const dStorageCapacity = dInventory.storage_capacity ?? 500;
+    if (districtMember?.district_id) {
+      console.log(`[resolve-raid] Defender ${defenderId} belongs to district ${districtMember.district_id}. Commencing proportional plundering...`);
+      
+      // 1. Load all members in the district
+      const { data: members } = await (supabase.from("district_members") as any)
+        .select("profile_id")
+        .eq("district_id", districtMember.district_id);
+      
+      const memberIds = (members || []).map((m: any) => m.profile_id);
 
-    const scrapOverflow = Math.max(0, dScrap - dStorageCapacity);
-    const componentsOverflow = Math.max(0, dComponents - Math.floor(dStorageCapacity * 0.25));
+      // 2. Fetch inventories for all district members
+      const { data: inventories } = await (supabase.from("inventories") as any)
+        .select("owner_id, scrap, components, storage_capacity")
+        .in("owner_id", memberIds);
 
-    // Calculate plundered assets (50% of overflows) if victory
-    const plunderedScrap = body.outcome === "victory" ? Math.floor(scrapOverflow * 0.5) : 0;
-    const plunderedComponents = body.outcome === "victory" ? Math.floor(componentsOverflow * 0.5) : 0;
+      // 3. Calculate individual overflows and compile sums
+      let totalScrapOverflow = 0;
+      let totalComponentsOverflow = 0;
+      
+      const overflows = (inventories || []).map((inv: any) => {
+        const scrap = inv.scrap ?? 0;
+        const components = inv.components ?? 0;
+        const cap = inv.storage_capacity ?? 500;
+        const sOverflow = Math.max(0, scrap - cap);
+        const cOverflow = Math.max(0, components - Math.floor(cap * 0.25));
+        totalScrapOverflow += sOverflow;
+        totalComponentsOverflow += cOverflow;
+        return {
+          owner_id: inv.owner_id,
+          scrap,
+          components,
+          scrapOverflow: sOverflow,
+          componentsOverflow: cOverflow
+        };
+      });
 
-    // Deduct stolen assets from defender inventory if victory
-    if (body.outcome === "victory" && (plunderedScrap > 0 || plunderedComponents > 0)) {
-      const { error: deductErr } = await (supabase.from("inventories") as any)
-        .update({
-          scrap: Math.max(0, dScrap - plunderedScrap),
-          components: Math.max(0, dComponents - plunderedComponents),
-          updated_at: new Date().toISOString()
-        })
-        .eq("owner_id", defenderId);
+      // 4. Calculate plundered assets (50% of the entire district's overflows)
+      plunderedScrap = body.outcome === "victory" ? Math.floor(totalScrapOverflow * 0.5) : 0;
+      plunderedComponents = body.outcome === "victory" ? Math.floor(totalComponentsOverflow * 0.5) : 0;
 
-      if (deductErr) {
-        console.error("[resolve-raid] Failed to deduct loot from defender:", deductErr);
+      // 5. Deduct plundered assets proportionally from members who contributed to the overflow
+      if (body.outcome === "victory" && (plunderedScrap > 0 || plunderedComponents > 0)) {
+        for (const over of overflows) {
+          let deductScrap = 0;
+          let deductComponents = 0;
+          if (totalScrapOverflow > 0 && over.scrapOverflow > 0) {
+            deductScrap = Math.floor(plunderedScrap * (over.scrapOverflow / totalScrapOverflow));
+          }
+          if (totalComponentsOverflow > 0 && over.componentsOverflow > 0) {
+            deductComponents = Math.floor(plunderedComponents * (over.componentsOverflow / totalComponentsOverflow));
+          }
+          if (deductScrap > 0 || deductComponents > 0) {
+            const { error: deductErr } = await (supabase.from("inventories") as any)
+              .update({
+                scrap: Math.max(0, over.scrap - deductScrap),
+                components: Math.max(0, over.components - deductComponents),
+                updated_at: new Date().toISOString()
+              })
+              .eq("owner_id", over.owner_id);
+
+            if (deductErr) {
+              console.error(`[resolve-raid] Failed to deduct proportional loot from member ${over.owner_id}:`, deductErr);
+            }
+          }
+        }
+      }
+    } else {
+      // Standard Single-Player Fallback Plundering
+      const { data: dInventory, error: diErr } = await (supabase.from("inventories") as any)
+        .select("scrap, components, storage_capacity")
+        .eq("owner_id", defenderId)
+        .single();
+
+      if (diErr || !dInventory) {
+        console.warn("[resolve-raid] Defender inventory not found:", diErr);
+        return json({ success: false, error: "Defender inventory not found" }, 500);
+      }
+
+      const dScrap = dInventory.scrap ?? 0;
+      const dComponents = dInventory.components ?? 0;
+      const dStorageCapacity = dInventory.storage_capacity ?? 500;
+
+      const scrapOverflow = Math.max(0, dScrap - dStorageCapacity);
+      const componentsOverflow = Math.max(0, dComponents - Math.floor(dStorageCapacity * 0.25));
+
+      plunderedScrap = body.outcome === "victory" ? Math.floor(scrapOverflow * 0.5) : 0;
+      plunderedComponents = body.outcome === "victory" ? Math.floor(componentsOverflow * 0.5) : 0;
+
+      if (body.outcome === "victory" && (plunderedScrap > 0 || plunderedComponents > 0)) {
+        const { error: deductErr } = await (supabase.from("inventories") as any)
+          .update({
+            scrap: Math.max(0, dScrap - plunderedScrap),
+            components: Math.max(0, dComponents - plunderedComponents),
+            updated_at: new Date().toISOString()
+          })
+          .eq("owner_id", defenderId);
+
+        if (deductErr) {
+          console.error("[resolve-raid] Failed to deduct standard loot from defender:", deductErr);
+        }
       }
     }
+
 
     // Update defender shield (8h shield granted to defender upon victory raid)
     if (body.outcome === "victory") {
@@ -692,6 +796,227 @@ Deno.serve(async (req: Request) => {
   const damageTaken = Math.max(0, body.squadMaxHp - body.squadHp);
 
   // --- Commit loot + XP ---
+  // If it's a joint raid lobby, split the rolled loot and credit all participants.
+  if (body.jointLobbyId) {
+    // 1. Verify lobby exists and is active
+    // deno-lint-ignore no-explicit-any
+    const { data: lobbyData, error: lobbyErr } = await (supabase.from("joint_raid_lobbies") as any)
+      .select("*")
+      .eq("id", body.jointLobbyId)
+      .single();
+
+    if (lobbyErr || !lobbyData) {
+      console.error("[resolve-raid] Joint lobby lookup failed:", lobbyErr);
+      return json({ success: false, error: "Joint raid lobby not found" }, 404);
+    }
+
+    if (lobbyData.status !== "active") {
+      return json({ success: false, error: "Joint raid lobby is not active" }, 400);
+    }
+
+    // 2. Fetch all participants
+    // deno-lint-ignore no-explicit-any
+    const { data: participants, error: partsErr } = await (supabase.from("joint_raid_participants") as any)
+      .select("profile_id, squad_hp_contribution, squad_damage_bonus")
+      .eq("lobby_id", body.jointLobbyId);
+
+    if (partsErr || !participants || participants.length === 0) {
+      return json({ success: false, error: "No participants found in joint raid lobby" }, 400);
+    }
+
+    const n = participants.length;
+
+    // 3. Divide base loot equally
+    const baseScrap = Math.floor(loot.scrap / n);
+    const baseComponents = Math.floor(loot.components / n);
+    const baseCredits = Math.floor(loot.credits / n);
+    const baseIntel = Math.floor(loot.intel / n);
+    const baseContraband = Math.floor(loot.contraband / n);
+    const baseXpGained = Math.floor(loot.xpGained / n);
+
+    let hostLootDetails: any = null;
+
+    // 4. Update each participant
+    for (const p of participants) {
+      const pId = p.profile_id;
+
+      // a) Load participant profile
+      // deno-lint-ignore no-explicit-any
+      const { data: pProfile } = await (supabase.from("profiles") as any)
+        .select("xp, player_level")
+        .eq("id", pId)
+        .single();
+
+      if (!pProfile) continue;
+
+      const pPrevLevel = Math.max(1, pProfile.player_level ?? 1);
+
+      // b) Load participant tech tree for multipliers
+      const { data: pTech } = await supabase
+        .from("player_tech")
+        .select("node_id")
+        .eq("owner_id", pId);
+
+      const pUnlocked = new Set((pTech || []).map((t: any) => t.node_id));
+      const pScrapMult = pUnlocked.has("util_econ_scrap_mult_1") ? 1.15 : 1.0;
+      const pContrabandMult = pUnlocked.has("util_econ_contraband_mult_1") ? 1.25 : 1.0;
+
+      // c) Compute individual multiplied share
+      const pLootScrap = Math.round(baseScrap * pScrapMult);
+      const pLootComponents = baseComponents;
+      const pLootCredits = baseCredits;
+      const pLootIntel = baseIntel;
+      const pLootContraband = Math.round(baseContraband * pContrabandMult);
+      const pXpGained = baseXpGained;
+
+      // d) Credit inventory
+      // deno-lint-ignore no-explicit-any
+      let { data: pInv } = await (supabase.from("inventories") as any)
+        .select("scrap, components, credits, intel, contraband")
+        .eq("owner_id", pId)
+        .maybeSingle();
+
+      if (!pInv) {
+        // deno-lint-ignore no-explicit-any
+        const { data: created } = await (supabase.from("inventories") as any)
+          .insert({ owner_id: pId })
+          .select("scrap, components, credits, intel, contraband")
+          .single();
+        pInv = created;
+      }
+
+      if (pInv) {
+        const pNewScrap = (pInv.scrap ?? 0) + pLootScrap;
+        const pNewComponents = (pInv.components ?? 0) + pLootComponents;
+        const pNewCredits = (pInv.credits ?? 0) + pLootCredits;
+        const pNewIntel = (pInv.intel ?? 0) + pLootIntel;
+        const pNewContraband = (pInv.contraband ?? 0) + pLootContraband;
+
+        // deno-lint-ignore no-explicit-any
+        await (supabase.from("inventories") as any)
+          .update({
+            scrap: pNewScrap,
+            components: pNewComponents,
+            credits: pNewCredits,
+            intel: pNewIntel,
+            contraband: pNewContraband,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("owner_id", pId);
+
+        // e) Credit XP & Level
+        const pNewXp = (pProfile.xp ?? 0) + baseXpGained;
+        const pDerivedLevel = levelForXp(pNewXp);
+        const pNewLevel = Math.max(pPrevLevel, pDerivedLevel);
+        const pLeveledUp = pNewLevel > pPrevLevel;
+
+        const profUpdate: any = {
+          xp: pNewXp,
+          updated_at: new Date().toISOString(),
+        };
+        if (pLeveledUp) profUpdate.player_level = pNewLevel;
+
+        // deno-lint-ignore no-explicit-any
+        await (supabase.from("profiles") as any)
+          .update(profUpdate)
+          .eq("id", pId);
+
+        // f) Record raid history for participant
+        // deno-lint-ignore no-explicit-any
+        await (supabase.from("raid_history") as any).insert({
+          player_id: pId,
+          target_id: body.fixtureId,
+          outcome: body.outcome,
+          action_log: body.actionLog,
+          squad_hp: body.squadHp,
+          seconds_elapsed: body.secondsElapsed,
+          scrap_looted: pLootScrap,
+          components_looted: pLootComponents,
+          credits_looted: pLootCredits,
+          defender_id: isPvP ? body.fixtureId : null,
+        });
+
+        // g) Quest progress
+        if (body.outcome === "victory") {
+          await trackRaidQuestProgress(supabase, pId);
+        }
+
+        // h) Battle Pass XP
+        const pBpXpGained = getBpXpGained(isPvP, body.fixtureId, body.outcome);
+        if (pBpXpGained > 0) {
+          const { error: bpErr } = await supabase.rpc('add_battle_pass_xp', {
+            p_user_id: pId,
+            p_xp_amount: pBpXpGained,
+          });
+          if (bpErr) {
+            console.error(`[resolve-raid] Failed to award BP XP to participant ${pId}:`, bpErr);
+          } else {
+            console.log(`[resolve-raid] Awarded ${pBpXpGained} BP XP to participant ${pId}`);
+          }
+        }
+
+        // Store host details to return
+        if (pId === user.id) {
+          hostLootDetails = {
+            xpGained: baseXpGained,
+            bpXpGained: pBpXpGained,
+            lootScrap: pLootScrap,
+            lootComponents: pLootComponents,
+            lootCredits: pLootCredits,
+            lootIntel: pLootIntel,
+            lootContraband: pLootContraband,
+            newScrap: pNewScrap,
+            newComponents: pNewComponents,
+            newCredits: pNewCredits,
+            newIntel: pNewIntel,
+            newContraband: pNewContraband,
+            newXp: pNewXp,
+            previousPlayerLevel: pPrevLevel,
+            newPlayerLevel: pNewLevel,
+            leveledUp: pLeveledUp,
+          };
+        }
+      }
+    }
+
+    // 5. Update Lobby status to 'completed'
+    // deno-lint-ignore no-explicit-any
+    await (supabase.from("joint_raid_lobbies") as any)
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString()
+      })
+      .eq("id", body.jointLobbyId);
+
+    // Return host's share details
+    if (hostLootDetails) {
+      return json({
+        success: true,
+        validated: true,
+        fixtureId: body.fixtureId,
+        outcome: body.outcome,
+        xpGained: hostLootDetails.xpGained,
+        lootScrap:      hostLootDetails.lootScrap,
+        lootComponents: hostLootDetails.lootComponents,
+        lootCredits:    hostLootDetails.lootCredits,
+        lootIntel:      hostLootDetails.lootIntel,
+        lootContraband: hostLootDetails.lootContraband,
+        lootSeed:       loot.seed,
+        damageTaken,
+        newScrap:       hostLootDetails.newScrap,
+        newComponents:  hostLootDetails.newComponents,
+        newCredits:     hostLootDetails.newCredits,
+        newIntel:       hostLootDetails.newIntel,
+        newContraband:  hostLootDetails.newContraband,
+        newXp:          hostLootDetails.newXp,
+        previousPlayerLevel: hostLootDetails.previousPlayerLevel,
+        newPlayerLevel: hostLootDetails.newPlayerLevel,
+        leveledUp:      hostLootDetails.leveledUp,
+      });
+    }
+  }
+
+  // --- Commit loot + XP (Solo fallback) ---
   // Fetch inventory; auto-create with defaults if missing. Older
   // accounts that predate the 00003 `on_profile_created_inventory`
   // trigger have a profile row but no inventory row, and there's no
@@ -821,12 +1146,27 @@ Deno.serve(async (req: Request) => {
     await trackRaidQuestProgress(supabase, user.id);
   }
 
+  // --- Battle Pass XP ---
+  const bpXpGained = getBpXpGained(isPvP, body.fixtureId, body.outcome);
+  if (bpXpGained > 0) {
+    const { error: bpErr } = await supabase.rpc('add_battle_pass_xp', {
+      p_user_id: user.id,
+      p_xp_amount: bpXpGained,
+    });
+    if (bpErr) {
+      console.error("[resolve-raid] Failed to award BP XP:", bpErr);
+    } else {
+      console.log(`[resolve-raid] Awarded ${bpXpGained} BP XP to user ${user.id}`);
+    }
+  }
+
   return json({
     success: true,
     validated: true,
     fixtureId: body.fixtureId,
     outcome: body.outcome,
     xpGained: loot.xpGained,
+    bpXpGained,
     lootScrap:      loot.scrap,
     lootComponents: loot.components,
     lootCredits:    loot.credits,

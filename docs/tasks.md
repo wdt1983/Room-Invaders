@@ -244,19 +244,32 @@
 - [DONE] 8.0.15 — Beta test: invite 10-20 testers, collect feedback, iterate. Built a premium glassmorphic "Beta Operations Terminal" feedback dialogue overlay next to the TopBar's logout trigger. Attaches standard diagnostics (player level, path, resolution) and lets testers rate overall experience and write detailed bug/balance reports. Created backend server action `submitBetaFeedback` securely committing Sentry-telemetry events and Supabase database insertions. Applied RLS policies to database migrations.
 - [DONE] 8.0.16 — Final bug fix sprint based on beta feedback. Implemented a highly robust auto-healing pipeline in Next.js `GameLayout` (`layout.tsx`) that transactionally auto-creates default inventories for users experiencing trigger race or signup latencies. Upgraded all `.single()` fetches on inventories, rooms, and profiles across `/room`, `/map`, and `/quests` page components to `.maybeSingle()`, preventing uncaught page crashes. Resolved pre-existing `react-hooks/set-state-in-effect` linting errors in `TopBar.tsx` using nested async IIFE wraps. Cleared `RaidScene.ts` compiler warnings by commenting out/removing unused constants (`SQUAD_MELEE_DAMAGE`, `DEFAULT_GRID_SIZE`). All checks compile cleanly with 0 typecheck and build errors.
 - [DONE] 8.0.17 — Tech Debt: Refactor Next.js 16 middleware.ts to new proxy pattern. Renamed `src/middleware.ts` to `src/proxy.ts`, exporting public `proxy` function to satisfy Next.js 16 standards and clear Turbopack warnings.
+- [DONE] 8.0.18 — Premium UI/UX Aesthetics & Animation Polish. Overhauled the React Room Editor drawer and cards with dedicated cyberpunk neon color schemes based on item type, integrated glowing Lucide icons (Target, Zap, Shield, Wrench) next to cards, and polished wall colors and floor materials preset buttons with glassmorphism and active rings. Implemented dynamic springy elastic Phaser animations in RoomScene: staggered cyber-pop cascade on room load, elastic squeeze placement pop, horizontal squash rotation, and shrink/spin-away removal before destruction.
+- [DONE] 8.0.19 — Database Security & Relationship Hardening. Created migration 00016 enabling RLS INSERT policies on profiles so new users can auto-heal/create their own profiles, resolving foreign-key constraint violations on inventories and squad slots. Refactored raid_history(player_id) foreign key to reference profiles(id) directly instead of auth.users(id), which perfectly aligns PostgREST schema relationship caches and squashes 400 Bad Request query errors.
+- [DONE] 8.0.20 — Passive Zoom, PWA SW Evaluation & Edge Function Synchronization. Bound imperative passive-safe zoom event listener to viewportRef, converted sw.js to valid vanilla JavaScript, and deployed all 5 Deno Edge Functions remote-side.
 
-**Exit Criteria:** Game is publicly shippable. Smooth onboarding, consistent art, sound, solid performance on mobile, security hardened, analytics tracking.
+**Exit Criteria:** Game is publicly shippable. Smooth onboarding, consistent art, sound, solid performance on mobile, security hardened, analytics tracking, premium UI/UX feel, and schema alignment.
 
 ---
 
+## Phase 9: Post-Launch Expansion (v0.6)
+**Goal:** Geolocation integrations, regional Mapbox maps, and advanced social systems.
+
+- [DONE] 9.0.1 — Geo-located map via Mapbox GL JS integration. Expanded map dashboards with a third navigation Compass tab, dynamic client-side Mapbox GL loaders with GPS lat/lng offset scattering, and a full interactive HTML5 Canvas Radar sonar sweep fallback when keys are missing, maintaining exact dialog overlays and raid integrations.
+- [DONE] 9.0.2 — Real-time PvP breach coordination loop. Setup Supabase Realtime Broadcast Channels inside RaidScene.ts and BaseDefenseMonitor.tsx. Implemented live holographic blips mapping, active defender stuns, overcharged turrets, sentinel drone spawns, active guard drone AI tickers, simulated offline agents, and a self-contained local Sandbox breach simulator.
+- [DONE] 9.0.8 — Interactive Global Recon Map Chat. Ephemeral real-time chat running via Supabase Broadcast channel. Side-by-side desktop layout, mobile Sheet drawer, and clickable coordinates to swoop map cameras.
+- [DONE] 9.0.12 — Cooperative Stronghold Districts. Created migration 00017 and RPC scripts for districts. visual 3x3 stronghold block page route with shared boundary conduits. Deducts plundered overflow proportionally in resolve-raid Deno Edge Function.
+- [DONE] 9.0.15 — Clan Banks & Shared District Vaults. Migrations 00018 (vault tables + RLS + auto-vault trigger), 00019 (notification INSERT policy), 00020 (transactional deposit/withdraw procedures with row-level locks and daily cap enforcement). Server Actions `depositToVault` and `withdrawFromVault` in `vault.ts` with automatic system-alert notifications on withdrawal events. Integrated glassmorphic Treasury dashboard into `/map/district` featuring vault balance cards, interactive deposit/withdrawal form with resource slider, daily cap progress meter, and live monospace transaction ledger.
+- [DONE] 9.0.21 — Joint Raids (2-4 Player Cooperative Raids). Created database schema migration 00021 establishing public `joint_raid_lobbies` and `joint_raid_participants` tables with row-level security (RLS) rules and automated cleanups. Created server actions `createJointRaidLobby`, `joinJointRaidLobby`, `readyUpForJointRaid`, `launchJointRaid`, `cancelJointRaidLobby`, and `leaveJointRaidLobby` inside `joint-raid.ts` server actions. Formulated the client-side state hooks inside `useRaidStore.ts` tracking joint raid statuses. Devised a fully responsive glassmorphic lobby UI, `JointRaidLobby.tsx`, embedded into the districts console above the treasury displaying ready status, stat pooling summaries (+50 HP / +10 Damage per member), and a live operation monitoring terminal for observing allies powered by Supabase Broadcast channels. Expanded `RaidPrepContainer.tsx`, `RaidScene.ts` and `RaidResolver.tsx` to apply stat boosts to spawned squads, broadcast live action telemetry feeds, and trigger split rewards inside Deno edge functions where base loot and XP are divided evenly among participants and individually processed with active tech tree multipliers.
+
+
 ## Future Phases (Post-Launch Backlog)
 
-- [ ] Geo-located map via Mapbox GL JS integration
-- [ ] Clan system: creation, management, clan bank, clan chat
-- [ ] Joint raids: 2-4 player cooperative raids
-- [ ] Seasonal battle pass framework
-- [ ] Real-time PvP mode (WebSocket-based)
-- [ ] Chat system (text): global, friends, clan channels
+- [x] Clan system: creation, management, clan bank, clan chat
+- [x] Joint raids: 2-4 player cooperative raids
+- [x] Seasonal battle pass framework: Designed and created the seasonal battle pass database schema, including battle_pass_tiers, player_battle_pass_progress, and battle_pass_rewards. Wrote secure atomic Postgres database functions for XP progression, reward claiming, skipped tiers, and premium pass unlocking. Integrated the battle pass XP awards dynamically inside the resolve-raid and process-quest Deno Edge Functions. Built a gorgeous glassmorphic reward track progress dashboard in /battle-pass and integrated it into /squad and the TopBar header.
+- [x] Real-time PvP mode (WebSocket-based): Integrated Supabase Broadcast channel telemetry sync, active defender drone dispatches, overcharge turret boosts, door lockdown stuns, and active intruder path markers in RoomScene.
+- [x] Chat system (text): global, friends, clan channels: Developed high-fidelity, translucent glassmorphic multi-channel ChatConsole client component with dynamic tabs (Global, cooperative District, and private deterministic Friend-to-Friend DM scoping). Mounted inside page grids and globally in the game layout shell as a floating collapsible drawer.
 - [ ] Custom image uploads for wall posters (with moderation pipeline)
 - [ ] Expanded room sizes: full apartment/house
 - [ ] Named NPC raid bosses with story quests
@@ -264,6 +277,7 @@
 - [ ] District/territory control system (clan-based)
 - [ ] Achievement system with cosmetic rewards
 - [ ] Trading system between players
+```
 ```
 
 ## Original Planning doc: docs/Planning.md
