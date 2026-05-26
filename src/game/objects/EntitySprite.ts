@@ -82,8 +82,10 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
       return;
     }
 
+    const gridSize = (this.scene as any).gridSize || (this.scene as any).grid_size || 10;
+
     const tweens: Phaser.Types.Tweens.TweenBuilderConfig[] = path.map((node, index) => {
-      const screenPos = IsometricEngine.worldToScreen(node.x, node.y, currentRotation);
+      const screenPos = IsometricEngine.worldToScreen(node.x, node.y, currentRotation, gridSize);
       return {
         targets: this,
         x: screenPos.x + offsetX,
@@ -92,7 +94,7 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
         ease: 'Linear',
         onUpdate: () => {
           // Dynamically update depth as it moves
-          const approxWorld = IsometricEngine.screenToWorld(this.x, this.y, offsetX, offsetY, currentRotation);
+          const approxWorld = IsometricEngine.screenToWorld(this.x, this.y, offsetX, offsetY, currentRotation, gridSize);
           this.setDepth(approxWorld.x + approxWorld.y + 2);
         },
         onComplete: () => {
@@ -121,7 +123,8 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
   }
 
   public updateIsometricPosition(currentRotation: number, offsetX: number, offsetY: number): void {
-    const screenPos = IsometricEngine.worldToScreen(this.currentGridX, this.currentGridY, currentRotation);
+    const gridSize = (this.scene as any).gridSize || (this.scene as any).grid_size || 10;
+    const screenPos = IsometricEngine.worldToScreen(this.currentGridX, this.currentGridY, currentRotation, gridSize);
     this.setPosition(screenPos.x + offsetX, screenPos.y + offsetY);
     this.setDepth(this.currentGridX + this.currentGridY + 2);
   }

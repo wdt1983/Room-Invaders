@@ -27,11 +27,25 @@ export class IsometricEngine {
   static worldToScreen(
     cartesianX: number,
     cartesianY: number,
-    rotation: number = 0
+    rotation: number = 0,
+    gridSize: number = DEFAULT_GRID_SIZE
   ): { x: number; y: number } {
+    let actualGridSize = gridSize;
+    if (gridSize === DEFAULT_GRID_SIZE && typeof window !== 'undefined') {
+      const game = (window as any).game;
+      if (game) {
+        const roomScene = game.scene.getScene('RoomScene');
+        const raidScene = game.scene.getScene('RaidScene');
+        const activeScene = (roomScene && roomScene.sys.isActive()) ? roomScene : ((raidScene && raidScene.sys.isActive()) ? raidScene : null);
+        if (activeScene) {
+          actualGridSize = (activeScene as any).gridSize || (activeScene as any).grid_size || gridSize;
+        }
+      }
+    }
+
     let rotX = cartesianX;
     let rotY = cartesianY;
-    const MAX = DEFAULT_GRID_SIZE - 1;
+    const MAX = actualGridSize - 1;
 
     // Map coordinates based on rotation state
     switch (rotation % 4) {
@@ -73,8 +87,22 @@ export class IsometricEngine {
     screenY: number,
     offsetX: number,
     offsetY: number,
-    rotation: number = 0
+    rotation: number = 0,
+    gridSize: number = DEFAULT_GRID_SIZE
   ): { x: number; y: number } {
+    let actualGridSize = gridSize;
+    if (gridSize === DEFAULT_GRID_SIZE && typeof window !== 'undefined') {
+      const game = (window as any).game;
+      if (game) {
+        const roomScene = game.scene.getScene('RoomScene');
+        const raidScene = game.scene.getScene('RaidScene');
+        const activeScene = (roomScene && roomScene.sys.isActive()) ? roomScene : ((raidScene && raidScene.sys.isActive()) ? raidScene : null);
+        if (activeScene) {
+          actualGridSize = (activeScene as any).gridSize || (activeScene as any).grid_size || gridSize;
+        }
+      }
+    }
+
     // Remove the visual offset first
     const adjX = screenX - offsetX;
     const adjY = screenY - offsetY;
@@ -85,7 +113,7 @@ export class IsometricEngine {
 
     const cartX = Math.round(mapX);
     const cartY = Math.round(mapY);
-    const MAX = DEFAULT_GRID_SIZE - 1;
+    const MAX = actualGridSize - 1;
 
     // Reverse the rotation mapping to get true underlying coordinates
     switch (rotation % 4) {

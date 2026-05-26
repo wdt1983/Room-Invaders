@@ -321,7 +321,7 @@ export function BaseDefenseMonitor({ user }: BaseDefenseMonitorProps) {
         pointer.manager.game.scene.keys.RoomScene.gridSystem.screenToWorld ? null : null : null; // Safe fallback
       
       // Let's resolve coordinates from screenToWorld
-      const coords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, scene.offsetX, scene.offsetY, scene.currentRotation);
+      const coords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, scene.offsetX, scene.offsetY, scene.currentRotation, scene.gridSize);
       
       const targetItem = placedItems.find(i => i.gridX === coords.x && i.gridY === coords.y);
       const targetCatalog = catalog.find(c => c.sprite_key === targetItem?.spriteKey);
@@ -393,7 +393,7 @@ export function BaseDefenseMonitor({ user }: BaseDefenseMonitorProps) {
       const scene = (window as any).game?.scene?.keys?.RoomScene;
       if (!scene) return;
 
-      const coords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, scene.offsetX, scene.offsetY, scene.currentRotation);
+      const coords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, scene.offsetX, scene.offsetY, scene.currentRotation, scene.gridSize);
 
       if (scene.gridSystem.isTileWalkable(coords.x, coords.y)) {
         executeSpawnDrone(coords.x, coords.y);
@@ -447,7 +447,7 @@ export function BaseDefenseMonitor({ user }: BaseDefenseMonitorProps) {
   };
 
   const IsoworldToScreen = (scene: any, x: number, y: number) => {
-    const pos = IsometricEngine.worldToScreen(x, y, scene.currentRotation);
+    const pos = IsometricEngine.worldToScreen(x, y, scene.currentRotation, scene.gridSize);
     return { x: pos.x + scene.offsetX, y: pos.y + scene.offsetY };
   };
 

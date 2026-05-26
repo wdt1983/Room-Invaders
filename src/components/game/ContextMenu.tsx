@@ -5,7 +5,7 @@ import { useUIStore } from '@/lib/store/useUIStore';
 import { EventBus } from '@/game/EventBus';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, RotateCw } from 'lucide-react';
+import { Trash2, RotateCw, FileImage } from 'lucide-react';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 
 export function ContextMenu() {
@@ -63,6 +63,23 @@ export function ContextMenu() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-3 flex flex-col gap-2 bg-background/40">
+            {contextMenu.spriteKey === 'furniture_custom_poster' && typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && (
+              <Button
+                size="sm"
+                variant="default"
+                className="w-full justify-start border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/25 hover:border-cyan-500/50 hover:shadow-[0_0_12px_rgba(6,182,212,0.3)] font-bold transition-all duration-300 rounded-lg text-xs group cursor-pointer"
+                onClick={() => {
+                  EventBus.emit('open-poster-dialog', {
+                    gridX: contextMenu.gridX,
+                    gridY: contextMenu.gridY,
+                  });
+                  closeContextMenu();
+                }}
+              >
+                <FileImage className="mr-2 size-3.5 text-cyan-400 group-hover:scale-110 transition-transform duration-300" />
+                Edit Custom Poster
+              </Button>
+            )}
             {contextMenu.isDamaged && typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && (
               <Button
                 size="sm"

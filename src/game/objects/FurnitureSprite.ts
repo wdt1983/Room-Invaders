@@ -63,7 +63,8 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
     offsetX: number = 0,
     offsetY: number = 0
   ): void {
-    const screenPos = IsometricEngine.worldToScreen(this.gridX, this.gridY, rotation);
+    const gridSize = (this.scene as any).gridSize || (this.scene as any).grid_size || 10;
+    const screenPos = IsometricEngine.worldToScreen(this.gridX, this.gridY, rotation, gridSize);
     this.x = screenPos.x + offsetX;
     this.y = screenPos.y + offsetY;
 

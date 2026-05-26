@@ -20,6 +20,9 @@ const FURNITURE: readonly SpriteDescriptor[] = [
   ['furniture_lamp_floor',    1, 1, 48, 0xf1c40f],
   ['furniture_plant_potted',  1, 1, 32, 0x2ecc71],
   ['furniture_table_folding', 2, 1, 20, 0xd2b48c],
+  ['furniture_custom_poster', 1, 1, 40, 0x334155],
+  ['furniture_custom_poster_pending', 1, 1, 40, 0xd97706],
+  ['furniture_custom_poster_rejected', 1, 1, 40, 0x7f1d1d],
 ];
 
 const TRAPS: readonly SpriteDescriptor[] = [
@@ -818,6 +821,102 @@ export class BootScene extends Phaser.Scene {
             graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
             graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
             graphics.lineTo(ptRight.x, ptRight.y + hOffset);
+            graphics.strokePath();
+          }
+        }
+        else if (key.startsWith('furniture_custom_poster')) {
+          // Draw a carbon border frame around the vertical Left face
+          graphics.lineStyle(2.5, 0x1e293b, 1.0);
+          graphics.beginPath();
+          graphics.moveTo(ptLeft.x + 3, ptLeft.y + 2);
+          graphics.lineTo(ptBottom.x - 3, ptBottom.y + 2);
+          graphics.lineTo(ptBottom.x - 3, ptBottom.y + heightPixels - 2);
+          graphics.lineTo(ptLeft.x + 3, ptLeft.y + heightPixels - 2);
+          graphics.closePath();
+          graphics.strokePath();
+
+          // Draw a slightly smaller inner frame on Left face
+          graphics.fillStyle(0x0f172a, 0.9);
+          graphics.beginPath();
+          graphics.moveTo(ptLeft.x + 5, ptLeft.y + 3);
+          graphics.lineTo(ptBottom.x - 5, ptBottom.y + 3);
+          graphics.lineTo(ptBottom.x - 5, ptBottom.y + heightPixels - 3);
+          graphics.lineTo(ptLeft.x + 5, ptLeft.y + heightPixels - 3);
+          graphics.closePath();
+          graphics.fillPath();
+
+          // Draw the exact same borders on the Right face
+          graphics.lineStyle(2.5, darken(0x1e293b, 0.8), 1.0);
+          graphics.beginPath();
+          graphics.moveTo(ptRight.x - 3, ptRight.y + 2);
+          graphics.lineTo(ptBottom.x + 3, ptBottom.y + 2);
+          graphics.lineTo(ptBottom.x + 3, ptBottom.y + heightPixels - 2);
+          graphics.lineTo(ptRight.x - 3, ptRight.y + heightPixels - 2);
+          graphics.closePath();
+          graphics.strokePath();
+
+          graphics.fillStyle(darken(0x0f172a, 0.8), 0.9);
+          graphics.beginPath();
+          graphics.moveTo(ptRight.x - 5, ptRight.y + 3);
+          graphics.lineTo(ptBottom.x + 5, ptBottom.y + 3);
+          graphics.lineTo(ptBottom.x + 5, ptBottom.y + heightPixels - 3);
+          graphics.lineTo(ptRight.x - 5, ptRight.y + heightPixels - 3);
+          graphics.closePath();
+          graphics.fillPath();
+
+          // Render indicators inside both faces based on the moderation state
+          if (key === 'furniture_custom_poster') {
+            // Blueprint schematics (neon cyan grid or diamond)
+            graphics.lineStyle(1.0, 0x06b6d4, 0.7);
+            graphics.beginPath();
+            graphics.moveTo((ptLeft.x + ptBottom.x) / 2, (ptLeft.y + ptBottom.y) / 2 + 6);
+            graphics.lineTo(ptBottom.x - 10, (ptLeft.y + ptBottom.y) / 2 + heightPixels / 2);
+            graphics.lineTo((ptLeft.x + ptBottom.x) / 2, (ptLeft.y + ptBottom.y) / 2 + heightPixels - 6);
+            graphics.lineTo(ptLeft.x + 10, (ptLeft.y + ptBottom.y) / 2 + heightPixels / 2);
+            graphics.closePath();
+            graphics.strokePath();
+
+            graphics.lineStyle(1.0, darken(0x06b6d4, 0.8), 0.7);
+            graphics.beginPath();
+            graphics.moveTo((ptRight.x + ptBottom.x) / 2, (ptRight.y + ptBottom.y) / 2 + 6);
+            graphics.lineTo(ptBottom.x + 10, (ptRight.y + ptBottom.y) / 2 + heightPixels / 2);
+            graphics.lineTo((ptRight.x + ptBottom.x) / 2, (ptRight.y + ptBottom.y) / 2 + heightPixels - 6);
+            graphics.lineTo(ptRight.x - 10, (ptRight.y + ptBottom.y) / 2 + heightPixels / 2);
+            graphics.closePath();
+            graphics.strokePath();
+          } else if (key === 'furniture_custom_poster_pending') {
+            // Amber glowing warning/caution stripes
+            graphics.lineStyle(1.5, 0xf59e0b, 0.75);
+            for (let d = 8; d <= 24; d += 8) {
+              graphics.beginPath();
+              graphics.moveTo(ptLeft.x + d, ptLeft.y + 6);
+              graphics.lineTo(ptLeft.x + d + 3, ptLeft.y + heightPixels - 6);
+              graphics.strokePath();
+            }
+
+            graphics.lineStyle(1.5, darken(0xf59e0b, 0.8), 0.75);
+            for (let d = 8; d <= 24; d += 8) {
+              graphics.beginPath();
+              graphics.moveTo(ptRight.x - d, ptRight.y + 6);
+              graphics.lineTo(ptRight.x - d - 3, ptRight.y + heightPixels - 6);
+              graphics.strokePath();
+            }
+          } else if (key === 'furniture_custom_poster_rejected') {
+            // Red warning X symbol
+            graphics.lineStyle(2.0, 0xef4444, 0.9);
+            graphics.beginPath();
+            graphics.moveTo(ptLeft.x + 8, ptLeft.y + 6);
+            graphics.lineTo(ptBottom.x - 8, ptBottom.y + heightPixels - 6);
+            graphics.moveTo(ptBottom.x - 8, ptBottom.y + 6);
+            graphics.lineTo(ptLeft.x + 8, ptLeft.y + heightPixels - 6);
+            graphics.strokePath();
+
+            graphics.lineStyle(2.0, darken(0xef4444, 0.8), 0.9);
+            graphics.beginPath();
+            graphics.moveTo(ptRight.x - 8, ptRight.y + 6);
+            graphics.lineTo(ptBottom.x + 8, ptBottom.y + heightPixels - 6);
+            graphics.moveTo(ptBottom.x + 8, ptBottom.y + 6);
+            graphics.lineTo(ptRight.x - 8, ptRight.y + heightPixels - 6);
             graphics.strokePath();
           }
         }

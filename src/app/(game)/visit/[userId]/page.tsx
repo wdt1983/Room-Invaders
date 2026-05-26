@@ -88,6 +88,9 @@ export default async function VisitFriendPage({ params }: PageProps) {
         id,
         grid_position,
         rotation,
+        custom_image_url,
+        moderation_status,
+        moderation_error,
         items ( sprite_key, footprint, type )
     `)
     .eq("owner_id", userId)
@@ -140,6 +143,9 @@ export default async function VisitFriendPage({ params }: PageProps) {
         footprintW: itemData?.footprint?.w ?? 1,
         footprintH: itemData?.footprint?.h ?? 1,
         rotation: ((storedRotation % 4) + 4) % 4,
+        customImageUrl: dbItem.custom_image_url,
+        moderationStatus: dbItem.moderation_status,
+        moderationError: dbItem.moderation_error,
       };
     });
 

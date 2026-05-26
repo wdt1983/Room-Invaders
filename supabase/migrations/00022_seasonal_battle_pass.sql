@@ -357,12 +357,6 @@ CREATE TRIGGER on_profile_created_battle_pass
   AFTER INSERT ON public.profiles
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_profile_battle_pass();
 
--- Backfill active users
-INSERT INTO public.player_battle_pass_progress (user_id, season_id, current_tier, current_xp)
-SELECT id, 'season_1', 1, 0
-FROM public.profiles
-ON CONFLICT (user_id, season_id) DO NOTHING;
-
 -- ============================================
 -- 6. SEED DATA (SEASON 1)
 -- ============================================
@@ -379,6 +373,13 @@ INSERT INTO public.battle_pass_tiers (season_id, tier_number, required_xp) VALUE
 ('season_1', 8, 1000),
 ('season_1', 9, 1300),
 ('season_1', 10, 1600);
+
+-- Backfill active users
+INSERT INTO public.player_battle_pass_progress (user_id, season_id, current_tier, current_xp)
+SELECT id, 'season_1', 1, 0
+FROM public.profiles
+ON CONFLICT (user_id, season_id) DO NOTHING;
+
 
 -- Seed Free & Premium Rewards
 -- Dynamic resolution of item catalog IDs

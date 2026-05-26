@@ -6,6 +6,7 @@ import { useRoomStore, PlacedItem, CatalogItem, EntryPoint } from '@/lib/store/u
 export default function StoreInitializer({
     inventory,
     gridSize,
+    roomSizeTier,
     placedItems,
     playerLevel,
     xp,
@@ -27,6 +28,7 @@ export default function StoreInitializer({
         storage_capacity: number;
     };
     gridSize: number;
+    roomSizeTier: number;
     placedItems: PlacedItem[];
     playerLevel: number;
     xp: number;
@@ -58,7 +60,7 @@ export default function StoreInitializer({
         // progress bar + RaidResolver level-up check (3.0.19) have a
         // baseline before the first post-raid resolve call.
         usePlayerStore.getState().applyXpAndLevel(xp, playerLevel);
-        useRoomStore.getState().setRoomState(gridSize, placedItems);
+        useRoomStore.getState().setRoomState(gridSize, placedItems, roomSizeTier);
         useRoomStore.getState().setCatalog(catalog);
         useRoomStore.getState().setEntryPoints(entryPoints);
         useRoomStore.getState().setDefenseStats({

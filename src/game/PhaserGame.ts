@@ -29,6 +29,9 @@ export function initGame(containerId: string): Phaser.Game | null {
     parent: containerId,
   });
 
+  // Attach to window for global access
+  (window as any).game = gameInstance;
+
   return gameInstance;
 }
 
@@ -40,6 +43,9 @@ export function destroyGame(): void {
   if (gameInstance) {
     gameInstance.destroy(true);
     gameInstance = null;
+    if (typeof window !== "undefined") {
+      delete (window as any).game;
+    }
   }
 }
 

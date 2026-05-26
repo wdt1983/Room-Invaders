@@ -31,14 +31,14 @@ export class RoomEditorScene extends Phaser.Scene {
     const size = useRoomStore.getState().gridSize ?? 10;
     for (let x = 0; x <= size; x++) {
       // Draw grid lines along Y axis
-      const startPos1 = IsometricEngine.worldToScreen(x, 0, 0);
-      const endPos1 = IsometricEngine.worldToScreen(x, size, 0);
+      const startPos1 = IsometricEngine.worldToScreen(x, 0, 0, size);
+      const endPos1 = IsometricEngine.worldToScreen(x, size, 0, size);
       graphics.moveTo(startPos1.x + offsetX, startPos1.y + offsetY);
       graphics.lineTo(endPos1.x + offsetX, endPos1.y + offsetY);
 
       // Draw grid lines along X axis
-      const startPos2 = IsometricEngine.worldToScreen(0, x, 0);
-      const endPos2 = IsometricEngine.worldToScreen(size, x, 0);
+      const startPos2 = IsometricEngine.worldToScreen(0, x, 0, size);
+      const endPos2 = IsometricEngine.worldToScreen(size, x, 0, size);
       graphics.moveTo(startPos2.x + offsetX, startPos2.y + offsetY);
       graphics.lineTo(endPos2.x + offsetX, endPos2.y + offsetY);
     }
@@ -133,7 +133,8 @@ export class RoomEditorScene extends Phaser.Scene {
         pointer.worldY,
         roomScene.offsetX,
         roomScene.offsetY,
-        roomScene.currentRotation
+        roomScene.currentRotation,
+        roomScene.gridSize
       );
 
       // Validate — type-aware (traps/barricades/furniture = floor, turrets = perimeter)
@@ -143,7 +144,7 @@ export class RoomEditorScene extends Phaser.Scene {
       this.ghostSprite.setTint(isValid ? 0x00ff00 : 0xff0000);
 
       // Project back to screen for snapping
-      const snapCoords = IsometricEngine.worldToScreen(worldCoords.x, worldCoords.y, roomScene.currentRotation);
+      const snapCoords = IsometricEngine.worldToScreen(worldCoords.x, worldCoords.y, roomScene.currentRotation, roomScene.gridSize);
       this.ghostSprite.setPosition(snapCoords.x + roomScene.offsetX, snapCoords.y + roomScene.offsetY);
 
       // Correct isometric depth for the overlay
@@ -159,7 +160,8 @@ export class RoomEditorScene extends Phaser.Scene {
       const worldCoords = IsometricEngine.screenToWorld(
         pointer.worldX, pointer.worldY,
         roomScene.offsetX, roomScene.offsetY,
-        roomScene.currentRotation
+        roomScene.currentRotation,
+        roomScene.gridSize
       );
 
       // Debug: Shift+Click traces an A* path from origin
@@ -192,6 +194,7 @@ export class RoomEditorScene extends Phaser.Scene {
         const screenPos = IsometricEngine.worldToScreen(
           worldCoords.x, worldCoords.y,
           roomScene.currentRotation,
+          roomScene.gridSize,
         );
 
         EventBus.emit('open-context-menu', {

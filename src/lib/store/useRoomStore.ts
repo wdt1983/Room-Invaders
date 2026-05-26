@@ -25,6 +25,9 @@ export interface PlacedItem {
   /** Discrete 90° rotation step: 0=0°, 1=90°, 2=180°, 3=270°. */
   rotation: number;
   isDamaged?: boolean;
+  customImageUrl?: string | null;
+  moderationStatus?: 'pending' | 'approved' | 'rejected' | null;
+  moderationError?: string | null;
 }
 
 export interface Cosmetics {
@@ -50,6 +53,7 @@ export interface DefenseStats {
 
 interface RoomState {
   gridSize: number;
+  roomSizeTier: number;
   placedItems: PlacedItem[];
   catalog: CatalogItem[];
   entryPoints: EntryPoint[];
@@ -58,7 +62,7 @@ interface RoomState {
   defenseSlotsUsed: number;
   defenseSlotsCap: number;
   cosmetics: Cosmetics;
-  setRoomState: (gridSize: number, placedItems: PlacedItem[]) => void;
+  setRoomState: (gridSize: number, placedItems: PlacedItem[], roomSizeTier?: number) => void;
   setCatalog: (catalog: CatalogItem[]) => void;
   setEntryPoints: (entryPoints: EntryPoint[]) => void;
   setDefenseStats: (stats: Partial<DefenseStats>) => void;
@@ -70,6 +74,7 @@ interface RoomState {
 
 export const useRoomStore = create<RoomState>((set) => ({
   gridSize: 10,
+  roomSizeTier: 1,
   placedItems: [],
   catalog: [],
   entryPoints: [],
@@ -81,7 +86,12 @@ export const useRoomStore = create<RoomState>((set) => ({
     wallColor: 0x888888,
     floorType: 'tile',
   },
-  setRoomState: (gridSize, placedItems) => set({ gridSize, placedItems }),
+  setRoomState: (gridSize, placedItems, roomSizeTier) =>
+    set((state) => ({
+      gridSize,
+      placedItems,
+      roomSizeTier: roomSizeTier !== undefined ? roomSizeTier : state.roomSizeTier,
+    })),
   setCatalog: (catalog) => set({ catalog }),
   setEntryPoints: (entryPoints) => set({ entryPoints }),
   setDefenseStats: (stats) => set((state) => ({ ...state, ...stats })),

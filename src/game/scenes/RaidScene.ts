@@ -251,7 +251,10 @@ export class RaidScene extends Phaser.Scene {
           footprintW: item.footprintW,
           footprintH: item.footprintH,
           rotation: item.rotation,
-          type: item.type as any
+          type: item.type as any,
+          customImageUrl: (item as any).customImageUrl,
+          moderationStatus: (item as any).moderationStatus,
+          moderationError: (item as any).moderationError,
         }))
       };
     } else {
@@ -335,6 +338,10 @@ export class RaidScene extends Phaser.Scene {
       sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
       sprite.setFurnitureRotation(item.rotation ?? 0);
       this.furnitureItems.push(sprite);
+      
+      // Dynamic custom poster rendering checks in PvP Raids / Replays
+      this.applyCustomPosterTexture(sprite, item);
+
       if (item.type !== 'trap') {
         this.gridSystem.setTileState(item.gridX, item.gridY, 'occupied');
       }
@@ -534,6 +541,9 @@ export class RaidScene extends Phaser.Scene {
     };
     EventBus.on('execute-ability', this.onExecuteAbility);
 
+    // Centering the Camera & Dynamic Zoom Auto-Scaling (Task 9.0.24)
+    const baseZoom = 10 / this.gridSize;
+    this.cameras.main.setZoom(baseZoom);
     this.cameras.main.centerOn(this.offsetX, this.offsetY);
     this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
 
@@ -1416,7 +1426,10 @@ export class RaidScene extends Phaser.Scene {
   ): void {
     const currentZoom = this.cameras.main.zoom;
     const zoomFactor = deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Phaser.Math.Clamp(currentZoom * zoomFactor, 0.5, 2.0);
+    const baseZoom = 10 / this.gridSize;
+    const minZoom = 0.5 * baseZoom;
+    const maxZoom = 2.0;
+    const newZoom = Phaser.Math.Clamp(currentZoom * zoomFactor, minZoom, maxZoom);
     this.cameras.main.zoom = newZoom;
   }
 
@@ -2128,5 +2141,70 @@ export class RaidScene extends Phaser.Scene {
         payload: { hp: totalHp, maxHp: totalMaxHp }
       });
     }
+  }
+
+  public applyCustomPosterTexture(sprite: FurnitureSprite, item: any) {
+    if (!item || item.spriteKey !== 'furniture_custom_poster') return;
+
+    if (item.moderationStatus === 'approved' && item.customImageUrl) {
+      const texKey = `custom_poster_tex_${item.id}`;
+      const imgKey = `custom_poster_img_${item.id}`;
+
+      if (this.textures.exists(texKey)) {
+        sprite.setTexture(texKey);
+        return;
+      }
+
+      if (this.textures.exists(imgKey)) {
+        this.projectPosterImage(texKey, imgKey);
+        sprite.setTexture(texKey);
+        return;
+      }
+
+      this.load.image(imgKey, item.customImageUrl);
+      this.load.once(`filecomplete-image-${imgKey}`, () => {
+        this.projectPosterImage(texKey, imgKey);
+        if (sprite.active) {
+          sprite.setTexture(texKey);
+        }
+      });
+      this.load.start();
+    } else if (item.moderationStatus === 'pending') {
+      sprite.setTexture('furniture_custom_poster_pending');
+    } else if (item.moderationStatus === 'rejected') {
+      sprite.setTexture('furniture_custom_poster_rejected');
+    } else {
+      sprite.setTexture('furniture_custom_poster');
+    }
+  }
+
+  private projectPosterImage(texKey: string, imgKey: string) {
+    if (this.textures.exists(texKey)) return;
+    const canvasTexture = this.textures.createCanvas(texKey, 64, 64);
+    if (!canvasTexture) return;
+    const ctx = canvasTexture.context;
+    
+    // Copy the base custom poster pre-rendered block onto our CanvasTexture
+    const baseTexture = this.textures.get('furniture_custom_poster').getSourceImage() as HTMLCanvasElement;
+    if (baseTexture) {
+      ctx.drawImage(baseTexture, 0, 0);
+    }
+
+    const loadedImg = this.textures.get(imgKey).getSourceImage() as HTMLImageElement;
+    if (!loadedImg) return;
+
+    // Skew and project onto Left face (facing South-East, parallel NW wall)
+    ctx.save();
+    ctx.transform(1, 0.5, 0, 1, 0, 0);
+    ctx.drawImage(loadedImg, 7, 2, 18, 18);
+    ctx.restore();
+
+    // Skew and project onto Right face (facing South-West, parallel NE wall)
+    ctx.save();
+    ctx.transform(1, -0.5, 0, 1, 0, 0);
+    ctx.drawImage(loadedImg, 39, 34, 18, 18);
+    ctx.restore();
+
+    canvasTexture.refresh();
   }
 }

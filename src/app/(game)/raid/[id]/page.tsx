@@ -102,6 +102,9 @@ export default async function RaidRoutePage({
           grid_position,
           rotation,
           is_damaged,
+          custom_image_url,
+          moderation_status,
+          moderation_error,
           items ( sprite_key, footprint, type )
       `)
       .eq("owner_id", defenderId)
@@ -126,6 +129,9 @@ export default async function RaidRoutePage({
           footprintH: itemData?.footprint?.h ?? 1,
           rotation: ((storedRotation % 4) + 4) % 4,
           type: itemData?.type || "furniture",
+          customImageUrl: dbItem.custom_image_url,
+          moderationStatus: dbItem.moderation_status,
+          moderationError: dbItem.moderation_error,
         };
       });
 

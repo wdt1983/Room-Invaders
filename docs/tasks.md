@@ -1,5 +1,5 @@
 # tasks.md — Room Invaders
-## Version: 0.4.0 | Last Updated: 2026-05-24
+## Version: 0.14.0 | Last Updated: 2026-05-26
 
 > **Reconciliation note (2026-04-13):** Task ledger was re-aligned against the actual
 > code state after drift accumulated across sessions. Tasks that were implemented in
@@ -261,6 +261,7 @@
 - [DONE] 9.0.12 — Cooperative Stronghold Districts. Created migration 00017 and RPC scripts for districts. visual 3x3 stronghold block page route with shared boundary conduits. Deducts plundered overflow proportionally in resolve-raid Deno Edge Function.
 - [DONE] 9.0.15 — Clan Banks & Shared District Vaults. Migrations 00018 (vault tables + RLS + auto-vault trigger), 00019 (notification INSERT policy), 00020 (transactional deposit/withdraw procedures with row-level locks and daily cap enforcement). Server Actions `depositToVault` and `withdrawFromVault` in `vault.ts` with automatic system-alert notifications on withdrawal events. Integrated glassmorphic Treasury dashboard into `/map/district` featuring vault balance cards, interactive deposit/withdrawal form with resource slider, daily cap progress meter, and live monospace transaction ledger.
 - [DONE] 9.0.21 — Joint Raids (2-4 Player Cooperative Raids). Created database schema migration 00021 establishing public `joint_raid_lobbies` and `joint_raid_participants` tables with row-level security (RLS) rules and automated cleanups. Created server actions `createJointRaidLobby`, `joinJointRaidLobby`, `readyUpForJointRaid`, `launchJointRaid`, `cancelJointRaidLobby`, and `leaveJointRaidLobby` inside `joint-raid.ts` server actions. Formulated the client-side state hooks inside `useRaidStore.ts` tracking joint raid statuses. Devised a fully responsive glassmorphic lobby UI, `JointRaidLobby.tsx`, embedded into the districts console above the treasury displaying ready status, stat pooling summaries (+50 HP / +10 Damage per member), and a live operation monitoring terminal for observing allies powered by Supabase Broadcast channels. Expanded `RaidPrepContainer.tsx`, `RaidScene.ts` and `RaidResolver.tsx` to apply stat boosts to spawned squads, broadcast live action telemetry feeds, and trigger split rewards inside Deno edge functions where base loot and XP are divided evenly among participants and individually processed with active tech tree multipliers.
+- [DONE] 9.0.24 — Expanded Room Sizes: full apartment/house. Created a database migration mapping sizes to room upgrade tiers. Configured base upgrade panel with a tabbed Stronghold and Grid Sizing upgrade HUD. Enabled Phaser coordinate transformations and camera zoom auto-scaling to dynamically support grid sizes up to 18x18, preserving isometric z-sorting, pathfinding, wall boundaries, and item validation checks seamlessly.
 
 
 ## Future Phases (Post-Launch Backlog)
@@ -270,8 +271,8 @@
 - [x] Seasonal battle pass framework: Designed and created the seasonal battle pass database schema, including battle_pass_tiers, player_battle_pass_progress, and battle_pass_rewards. Wrote secure atomic Postgres database functions for XP progression, reward claiming, skipped tiers, and premium pass unlocking. Integrated the battle pass XP awards dynamically inside the resolve-raid and process-quest Deno Edge Functions. Built a gorgeous glassmorphic reward track progress dashboard in /battle-pass and integrated it into /squad and the TopBar header.
 - [x] Real-time PvP mode (WebSocket-based): Integrated Supabase Broadcast channel telemetry sync, active defender drone dispatches, overcharge turret boosts, door lockdown stuns, and active intruder path markers in RoomScene.
 - [x] Chat system (text): global, friends, clan channels: Developed high-fidelity, translucent glassmorphic multi-channel ChatConsole client component with dynamic tabs (Global, cooperative District, and private deterministic Friend-to-Friend DM scoping). Mounted inside page grids and globally in the game layout shell as a floating collapsible drawer.
-- [ ] Custom image uploads for wall posters (with moderation pipeline)
-- [ ] Expanded room sizes: full apartment/house
+- [x] Custom image uploads for wall posters (with moderation pipeline)
+- [x] Expanded room sizes: full apartment/house
 - [ ] Named NPC raid bosses with story quests
 - [ ] Community event framework
 - [ ] District/territory control system (clan-based)

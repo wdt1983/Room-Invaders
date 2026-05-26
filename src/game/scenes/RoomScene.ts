@@ -109,7 +109,7 @@ export class RoomScene extends Phaser.Scene {
 
     for (let x = 0; x < this.gridSize; x++) {
       for (let y = 0; y < this.gridSize; y++) {
-        const screenPos = IsometricEngine.worldToScreen(x, y);
+        const screenPos = IsometricEngine.worldToScreen(x, y, 0, this.gridSize);
         // The tile's origin will default to 0.5, 0.5
         const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, floorKey);
         tile.setData('gridX', x);
@@ -140,7 +140,7 @@ export class RoomScene extends Phaser.Scene {
     for (const ep of entryPoints) {
       const tile = entryTileFor(ep, this.gridSize);
       if (!tile) continue;
-      const screenPos = IsometricEngine.worldToScreen(tile.x, tile.y, this.currentRotation);
+      const screenPos = IsometricEngine.worldToScreen(tile.x, tile.y, this.currentRotation, this.gridSize);
       const sprite = this.add.image(
         screenPos.x + this.offsetX,
         screenPos.y + this.offsetY,
@@ -160,7 +160,9 @@ export class RoomScene extends Phaser.Scene {
       this.entryPointSprites.push(sprite);
     }
 
-    // Centering the Camera
+    // Centering the Camera & Dynamic Zoom Auto-Scaling (Task 9.0.24)
+    const baseZoom = 10 / this.gridSize;
+    this.cameras.main.setZoom(baseZoom);
     this.cameras.main.centerOn(this.offsetX, this.offsetY);
 
     // Zoom (Mouse Wheel)
@@ -177,8 +179,10 @@ export class RoomScene extends Phaser.Scene {
         const zoomFactor = deltaY > 0 ? 0.9 : 1.1;
         let newZoom = currentZoom * zoomFactor;
 
-        // Clamp the zoom to prevent breaking the view
-        newZoom = Phaser.Math.Clamp(newZoom, 0.5, 2.0);
+        // Clamp the zoom relative to dynamic grid size to maintain base scale
+        const minZoom = 0.5 * baseZoom;
+        const maxZoom = 2.0;
+        newZoom = Phaser.Math.Clamp(newZoom, minZoom, maxZoom);
         this.cameras.main.zoom = newZoom;
       }
     );
@@ -219,6 +223,9 @@ export class RoomScene extends Phaser.Scene {
           sprite.setAlpha(0.7);
         }
         this.furnitureItems.push(sprite);
+        
+        // Dynamic custom poster rendering checks
+        this.applyCustomPosterTexture(sprite, item);
 
         // Cyber-pop staggered cascade intro animation
         sprite.setScale(0);
@@ -354,6 +361,21 @@ export class RoomScene extends Phaser.Scene {
       this.holographicMarkers.clear();
     };
 
+    const handlePosterUpdated = (payload: { id: string; gridX: number; gridY: number; customImageUrl: string; moderationStatus: string; moderationError?: string | null }) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      const sprite = this.furnitureItems.find(f => f.gridX === payload.gridX && f.gridY === payload.gridY);
+      if (sprite) {
+        const mockItem = {
+          id: payload.id,
+          spriteKey: 'furniture_custom_poster',
+          customImageUrl: payload.customImageUrl,
+          moderationStatus: payload.moderationStatus,
+          moderationError: payload.moderationError,
+        };
+        this.applyCustomPosterTexture(sprite, mockItem);
+      }
+    };
+
     EventBus.on('change-mode', handleChangeMode);
     EventBus.on('removal-success', handleRemovalSuccess);
     EventBus.on('rotation-success', handleRotationSuccess);
@@ -363,6 +385,7 @@ export class RoomScene extends Phaser.Scene {
     EventBus.on('pvp-breach-started', handlePvpBreachStarted);
     EventBus.on('pvp-attacker-moved', handlePvpAttackerMoved);
     EventBus.on('pvp-raid-completed', handlePvpRaidCompleted);
+    EventBus.on('poster-updated', handlePosterUpdated);
 
     const cleanup = () => {
       SoundManager.getInstance().stopMusic();
@@ -375,6 +398,7 @@ export class RoomScene extends Phaser.Scene {
       EventBus.off('pvp-breach-started', handlePvpBreachStarted);
       EventBus.off('pvp-attacker-moved', handlePvpAttackerMoved);
       EventBus.off('pvp-raid-completed', handlePvpRaidCompleted);
+      EventBus.off('poster-updated', handlePosterUpdated);
       this.holographicMarkers.forEach(marker => marker.destroy());
       this.holographicMarkers.clear();
       this.exitDefenseView();
@@ -390,7 +414,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.currentMode !== 'view') return;
 
-      const worldCoords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, this.offsetX, this.offsetY, this.currentRotation);
+      const worldCoords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, this.offsetX, this.offsetY, this.currentRotation, this.gridSize);
 
       const tileState = this.gridSystem.getTileState(worldCoords.x, worldCoords.y);
 
@@ -421,7 +445,7 @@ export class RoomScene extends Phaser.Scene {
                   const targetFurniture = this.furnitureItems.find(f => f.gridX === worldCoords.x && f.gridY === worldCoords.y);
                   const spriteKey = targetFurniture ? targetFurniture.texture.key : 'placed_item';
                   const isDamaged = targetFurniture ? targetFurniture.isDamaged : false;
-                  const screenPos = IsometricEngine.worldToScreen(worldCoords.x, worldCoords.y, this.currentRotation);
+                  const screenPos = IsometricEngine.worldToScreen(worldCoords.x, worldCoords.y, this.currentRotation, this.gridSize);
                   
                   EventBus.emit('open-context-menu', {
                       spriteKey: spriteKey,
@@ -458,7 +482,8 @@ export class RoomScene extends Phaser.Scene {
       const target = IsometricEngine.worldToScreen(
         gridX,
         gridY,
-        this.currentRotation
+        this.currentRotation,
+        this.gridSize
       );
 
       this.tweens.add({
@@ -485,7 +510,7 @@ export class RoomScene extends Phaser.Scene {
     this.entryPointSprites.forEach((sprite) => {
       const gridX = sprite.getData('gridX');
       const gridY = sprite.getData('gridY');
-      const target = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
+      const target = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation, this.gridSize);
       this.tweens.add({
         targets: sprite,
         x: target.x + this.offsetX,
@@ -624,8 +649,8 @@ export class RoomScene extends Phaser.Scene {
       start: { x: number; y: number },
       end: { x: number; y: number },
     ): void => {
-      const s = IsometricEngine.worldToScreen(start.x, start.y, this.currentRotation);
-      const e = IsometricEngine.worldToScreen(end.x, end.y, this.currentRotation);
+      const s = IsometricEngine.worldToScreen(start.x, start.y, this.currentRotation, this.gridSize);
+      const e = IsometricEngine.worldToScreen(end.x, end.y, this.currentRotation, this.gridSize);
       this.wallGraphics.lineStyle(WALL_THICKNESS, colorFor(wall, position), 1.0);
       this.wallGraphics.beginPath();
       this.wallGraphics.moveTo(s.x + this.offsetX, s.y + this.offsetY);
@@ -687,7 +712,7 @@ export class RoomScene extends Phaser.Scene {
 
     path.forEach((node, index) => {
         // Project grid coordinates to screen coordinates
-        const screenPos = IsometricEngine.worldToScreen(node.x, node.y, this.currentRotation);
+        const screenPos = IsometricEngine.worldToScreen(node.x, node.y, this.currentRotation, this.gridSize);
         const targetX = screenPos.x + this.offsetX;
         const targetY = screenPos.y + this.offsetY;
 
@@ -704,7 +729,7 @@ export class RoomScene extends Phaser.Scene {
     const key = `marker_${memberIndex}`;
     let marker = this.holographicMarkers.get(key);
 
-    const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation);
+    const screenPos = IsometricEngine.worldToScreen(gridX, gridY, this.currentRotation, this.gridSize);
     const targetX = screenPos.x + this.offsetX;
     const targetY = screenPos.y + this.offsetY;
 
@@ -746,5 +771,70 @@ export class RoomScene extends Phaser.Scene {
 
     marker.lineStyle(1, 0xff5555, 0.6);
     marker.strokeCircle(0, 0, 18);
+  }
+
+  public applyCustomPosterTexture(sprite: FurnitureSprite, item: any) {
+    if (!item || item.spriteKey !== 'furniture_custom_poster') return;
+
+    if (item.moderationStatus === 'approved' && item.customImageUrl) {
+      const texKey = `custom_poster_tex_${item.id}`;
+      const imgKey = `custom_poster_img_${item.id}`;
+
+      if (this.textures.exists(texKey)) {
+        sprite.setTexture(texKey);
+        return;
+      }
+
+      if (this.textures.exists(imgKey)) {
+        this.projectPosterImage(texKey, imgKey);
+        sprite.setTexture(texKey);
+        return;
+      }
+
+      this.load.image(imgKey, item.customImageUrl);
+      this.load.once(`filecomplete-image-${imgKey}`, () => {
+        this.projectPosterImage(texKey, imgKey);
+        if (sprite.active) {
+          sprite.setTexture(texKey);
+        }
+      });
+      this.load.start();
+    } else if (item.moderationStatus === 'pending') {
+      sprite.setTexture('furniture_custom_poster_pending');
+    } else if (item.moderationStatus === 'rejected') {
+      sprite.setTexture('furniture_custom_poster_rejected');
+    } else {
+      sprite.setTexture('furniture_custom_poster');
+    }
+  }
+
+  private projectPosterImage(texKey: string, imgKey: string) {
+    if (this.textures.exists(texKey)) return;
+    const canvasTexture = this.textures.createCanvas(texKey, 64, 64);
+    if (!canvasTexture) return;
+    const ctx = canvasTexture.context;
+    
+    // Copy the base custom poster pre-rendered block onto our CanvasTexture
+    const baseTexture = this.textures.get('furniture_custom_poster').getSourceImage() as HTMLCanvasElement;
+    if (baseTexture) {
+      ctx.drawImage(baseTexture, 0, 0);
+    }
+
+    const loadedImg = this.textures.get(imgKey).getSourceImage() as HTMLImageElement;
+    if (!loadedImg) return;
+
+    // Skew and project onto Left face (facing South-East, parallel NW wall)
+    ctx.save();
+    ctx.transform(1, 0.5, 0, 1, 0, 0);
+    ctx.drawImage(loadedImg, 7, 2, 18, 18);
+    ctx.restore();
+
+    // Skew and project onto Right face (facing South-West, parallel NE wall)
+    ctx.save();
+    ctx.transform(1, -0.5, 0, 1, 0, 0);
+    ctx.drawImage(loadedImg, 39, 34, 18, 18);
+    ctx.restore();
+
+    canvasTexture.refresh();
   }
 }

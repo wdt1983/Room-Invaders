@@ -1,6 +1,55 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.14.0] — 2026-05-26 — Milestone 9I: Expanded Room Sizes
+
+### Added
+- **Database Schema & Upgrade Tier Migration (`supabase/migrations/00024_expanded_room_sizes.sql`)**:
+  - Implemented migration to add `room_size_tier` to the `rooms` table with indexing.
+  - Automatically backfilled existing rooms, mapping their current `grid_size` values to the correct `room_size_tier`.
+- **Dynamic Sizing Progression Constants (`src/lib/game/defense.ts`)**:
+  - Defined `ROOM_SIZE_TIERS` mappings containing dimensions (12x12, 14x14, 16x16, 18x18), upgrade scrap and components cost thresholds, and player level requirements.
+- **Server Action for Room Sizing Upgrades (`src/app/(game)/room/actions.ts`)**:
+  - Authored the secure `upgradeRoomSizeTier` Next.js Server Action, which transactionally validates materials balances, checks level rules, processes the upgrade, and scales entry points contextually.
+  - Hardened `upgradeRoomLevel` Server Action to verify existing sizes, ensuring size upgrades are never downgraded on base level progression.
+- **Store Integration and Hydration Routing**:
+  - Bound `roomSizeTier` state variables within `useRoomStore.ts`.
+  - Configured layout hydration through `StoreInitializer.tsx` and updated rooms queries in `/room/page.tsx`.
+- **Global Phaser Game Hook (`src/game/PhaserGame.ts`)**:
+  - Mounted the Phaser game object globally to `window.game` on boot and cleared on teardown, enabling coordinate projection functions to securely query the active scene grid state.
+- **Dynamic Isometric Coordinates Scale-Up (`src/game/systems/IsometricEngine.ts`)**:
+  - Refactored Cartesian mappings (`worldToScreen` and `screenToWorld`) to dynamically scale projection offsets relative to grid bounds.
+  - Engineered an automatic fallback that queries `window.game` to resolve sizing boundaries.
+- **Tabbed Cyberpunk Base HUD upgrade sheet (`src/components/game/UpgradePanel.tsx`)**:
+  - Redesigned the constructor HUD into a tabbed dashboard supporting Stronghold Level and Grid Size upgrades side-by-side.
+  - Built glowing, progress indicator gauges showing sizing tier properties and cost cards with real-time inventory deductions.
+
+### Changed
+- **Dynamic Phaser scenes canvas scaling**:
+  - Configured camera zoom auto-scaling (`10 / gridSize`) and edge boundaries clamping across `RoomScene.ts` and `RaidScene.ts`.
+  - Refactored grid drawing, wall boundaries render paths, pathfinding boundaries, and z-sorting mappings in `RoomScene.ts`, `RoomEditorScene.ts`, `RaidScene.ts`, `FurnitureSprite.ts`, `EntitySprite.ts`, `BaseDefenseMonitor.tsx`, and `rangeDraw.ts` to dynamically scale based on active room grid sizes.
+- Bumped application version to `0.14.0`.
+
+## [0.13.0] — 2026-05-26 — Milestone 9H: Custom Image Uploads for Wall Posters with Moderation Pipeline
+
+### Added
+- **Authoritative Server Action for Poster Moderation (`src/app/actions/poster.ts`)**:
+  - Implemented session validation, item ownership checks, and automated content safety filter heuristics (checks for toxic keywords: "toxic", "rejected", "nsfw", etc. to simulate automated moderation).
+  - Transactionally updates database rows for custom images with approved/rejected/pending states.
+- **Supabase Storage posters Bucket & secure policies**:
+  - Applied owner-only isolated folder RLS policies (`00023_custom_posters.sql`) for secure client uploading to Supabase Storage.
+- **Glassmorphic Cyber-themed Upload Dialog (`src/components/game/PosterUploadDialog.tsx`)**:
+  - Direct Supabase Storage uploading with a 2-second terminal scan diagnostics scanner screen.
+  - Interactive context menu triggers "Edit Custom Poster" button upon clicking a placed custom poster.
+- **Phaser 2.5D Skew Projection & Dynamic Loading (`src/game/scenes/RoomScene.ts`, `src/game/scenes/RaidScene.ts`)**:
+  - Dynamic loading of approved custom URLs and rendering in BootScene with procedural border assets for approved, pending, and rejected states.
+  - Interactive A* projection transformation skews flat 2D images onto isometric block faces dynamically using `ctx.transform`.
+- **Social visiting and joint replay compatibility**:
+  - Ensures visitors, raids, and replays render custom posters in room visitors, raid scenes, and replays.
+
+### Changed
+- Bumped application version to `0.13.0`.
+
 ## [0.12.0] — 2026-05-25 — Milestone 9G: Multi-Channel Text Chat System & Real-Time PvP mode refinements
 
 ### Added

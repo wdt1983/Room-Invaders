@@ -10,6 +10,8 @@ import {
   slotsForLevel,
   roomUpgradeCost,
   MAX_ROOM_LEVEL,
+  ROOM_SIZE_TIERS,
+  MAX_ROOM_SIZE_TIER,
 } from "@/lib/game/defense";
 import { trackQuestProgress } from "@/lib/game/quests";
 import * as Sentry from "@sentry/nextjs";
@@ -491,8 +493,18 @@ export async function upgradeRoomLevel(currentRoomLevel: number) {
     const newComponents = inventory.components - componentsCost;
     const newRoomLevel = currentRoomLevel + 1;
 
+    const { data: room, error: roomError } = await (supabase.from('rooms') as any)
+      .select('grid_size')
+      .eq('owner_id', user.id)
+      .single();
+
+    if (roomError || !room) {
+      return { success: false as const, error: 'Room not found' };
+    }
+
+    const currentGridSize = room.grid_size ?? 10;
     const caps = slotsForLevel(newRoomLevel);
-    const newGridSize = caps.grid;
+    const newGridSize = Math.max(caps.grid, currentGridSize);
     const newEntryPoints = entryPointsForLevel(newRoomLevel, newGridSize);
     const newStorageCapacity = newRoomLevel * 500;
 
@@ -550,6 +562,113 @@ export async function upgradeRoomLevel(currentRoomLevel: number) {
       extra: { currentRoomLevel },
     });
     return { success: false as const, error: err.message || 'An unexpected error occurred upgrading room level.' };
+  }
+}
+
+export async function upgradeRoomSizeTier(currentTier: number) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false as const, error: 'Unauthorized' };
+    }
+
+    if (currentTier >= MAX_ROOM_SIZE_TIER) {
+      return { success: false as const, error: 'Already at maximum room size tier' };
+    }
+
+    const nextTier = currentTier + 1;
+    const tierInfo = ROOM_SIZE_TIERS[nextTier];
+    if (!tierInfo) {
+      return { success: false as const, error: 'Invalid size tier' };
+    }
+
+    const scrapCost = tierInfo.scrapCost;
+    const componentsCost = tierInfo.componentsCost;
+
+    // fetch inventory
+    const { data: inventory, error: invError } = await (supabase.from('inventories') as any)
+      .select('scrap, components')
+      .eq('owner_id', user.id)
+      .single();
+
+    if (invError || !inventory) {
+      return { success: false as const, error: 'Inventory not found' };
+    }
+
+    if (inventory.scrap < scrapCost || inventory.components < componentsCost) {
+      return { success: false as const, error: 'Insufficient resources' };
+    }
+
+    // fetch room to get room_level for entry points
+    const { data: room, error: roomError } = await (supabase.from('rooms') as any)
+      .select('room_level, grid_size')
+      .eq('owner_id', user.id)
+      .single();
+
+    if (roomError || !room) {
+      return { success: false as const, error: 'Room not found' };
+    }
+
+    const newScrap = inventory.scrap - scrapCost;
+    const newComponents = inventory.components - componentsCost;
+    const newGridSize = tierInfo.grid;
+
+    // Calculate new entry points based on the new grid size and current room level
+    const newEntryPoints = entryPointsForLevel(room.room_level, newGridSize);
+
+    // Deduct cost
+    const { error: invUpdateError } = await (supabase.from('inventories') as any)
+      .update({ 
+        scrap: newScrap, 
+        components: newComponents,
+        updated_at: new Date().toISOString()
+      })
+      .eq('owner_id', user.id);
+
+    if (invUpdateError) {
+      console.error('Failed to update inventory:', invUpdateError);
+      return { success: false as const, error: 'Failed to update resources' };
+    }
+
+    // Update size tier, grid size, and entry points in rooms table
+    const { error: roomUpdateError } = await (supabase.from('rooms') as any)
+      .update({
+        room_size_tier: nextTier,
+        grid_size: newGridSize,
+        entry_points: newEntryPoints,
+        updated_at: new Date().toISOString()
+      })
+      .eq('owner_id', user.id);
+
+    if (roomUpdateError) {
+      console.error('Failed to update room:', roomUpdateError);
+      return { success: false as const, error: 'Failed to upgrade room size' };
+    }
+
+    // Recompute defense stats for the room
+    const defenseState = await recomputeDefenseState(supabase, user.id, room.room_level);
+
+    // Track quest progress for spending resources
+    await trackQuestProgress(supabase, user.id, 'spend_resources', scrapCost + componentsCost);
+
+    return {
+      success: true as const,
+      newRoomSizeTier: nextTier,
+      newGridSize,
+      newEntryPoints,
+      newScrap,
+      newComponents,
+      ...defenseState,
+    };
+  } catch (err: any) {
+    console.error("[upgradeRoomSizeTier] Exception caught:", err);
+    Sentry.captureException(err, {
+      tags: { action: "upgradeRoomSizeTier" },
+      extra: { currentTier },
+    });
+    return { success: false as const, error: err.message || 'An unexpected error occurred upgrading room size.' };
   }
 }
 

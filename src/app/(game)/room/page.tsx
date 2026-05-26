@@ -9,6 +9,7 @@ import { TickManager } from "@/components/game/TickManager";
 import { slotCategoryFor, slotsForLevel } from '@/lib/game/defense';
 
 import { ContextMenu } from "@/components/game/ContextMenu";
+import { PosterUploadDialog } from "@/components/game/PosterUploadDialog";
 import { BaseDefenseMonitor } from "@/components/game/BaseDefenseMonitor";
 import { seedInitialQuests, trackQuestProgress } from '@/lib/game/quests';
 
@@ -36,7 +37,7 @@ export default async function RoomPage() {
 
   const { data: roomData, error: roomError } = await supabase
     .from('rooms')
-    .select('grid_size, entry_points, room_level, defense_rating, cosmetics')
+    .select('grid_size, entry_points, room_level, defense_rating, cosmetics, room_size_tier')
     .eq('owner_id', user.id)
     .maybeSingle();
 
@@ -47,6 +48,9 @@ export default async function RoomPage() {
         grid_position,
         rotation,
         is_damaged,
+        custom_image_url,
+        moderation_status,
+        moderation_error,
         items ( sprite_key, footprint, type )
     `)
     .eq('owner_id', user.id)
@@ -124,6 +128,9 @@ export default async function RoomPage() {
       footprintH: itemData?.footprint?.h ?? 1,
       rotation: ((storedRotation % 4) + 4) % 4,
       isDamaged: !!dbItem.is_damaged,
+      customImageUrl: dbItem.custom_image_url,
+      moderationStatus: dbItem.moderation_status,
+      moderationError: dbItem.moderation_error,
     };
   });
 
@@ -136,6 +143,7 @@ export default async function RoomPage() {
 
   const gridSize = (roomData as any)?.grid_size ?? 10;
   const roomLevel = (roomData as any)?.room_level ?? 1;
+  const roomSizeTier = (roomData as any)?.room_size_tier ?? 1;
   const defenseRating = (roomData as any)?.defense_rating ?? 0;
   const defenseSlotsCap = slotsForLevel(roomLevel).defense;
   const catalog = catalogData || [];
@@ -169,6 +177,7 @@ export default async function RoomPage() {
         <StoreInitializer
           inventory={finalInventory}
           gridSize={gridSize}
+          roomSizeTier={roomSizeTier}
           placedItems={mappedItems}
           playerLevel={playerLevel}
           xp={playerXp}
@@ -187,6 +196,7 @@ export default async function RoomPage() {
       <GameWrapper />
       <ItemPanel />
       <ContextMenu />
+      <PosterUploadDialog />
       <BaseDefenseMonitor user={user} />
     </div>
   );

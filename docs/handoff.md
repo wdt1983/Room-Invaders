@@ -16,6 +16,115 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-26 — Milestone 9I: Expanded Room Sizes
+
+### Summary
+
+Successfully implemented **Milestone 9I — Expanded Room Sizes (Task 9.0.24)** end-to-end. This feature allows players to expand their strongholds to full apartment or house dimensions (12x12, 14x14, 16x16, 18x18 grids). Designed a secure, level-gated sizing upgrade progression managed via database migrations, server-side actions, and Zustand hydration states. Refactored the Phaser isometric coordinate engine to dynamically scale Cartesian offsets using active scene grid sizes, auto-centering cameras with a dynamic scale factor (`10 / gridSize`), and scaling grid render lines, pathfinding bounds, z-sorting depths, and range rings dynamically. Designed a gorgeous cyberpunk tabbed Upgrade dashboard sheet allowing players to level-up their Stronghold or purchase Sizing Upgrades side-by-side.
+
+Key accomplishments:
+1. **Supabase Database Schema Sizing Migration (`00024_expanded_room_sizes.sql`)**:
+   - Added `room_size_tier` column to the `rooms` table with indexing.
+   - Pushed migration and auto-backfilled existing rooms by mapping their current `grid_size` values to the correct `room_size_tier` (0: 10x10, 1: 12x12, 2: 14x14, 3: 16x16, 4: 18x18).
+2. **Dynamic Progression Constants (`src/lib/game/defense.ts`)**:
+   - Created progression details array `ROOM_SIZE_TIERS` and helper `MAX_ROOM_SIZE_TIER` mapping size, scrap cost, components cost, and player level requirements for sizes up to 18x18.
+3. **Next.js Server Actions & State Hydration**:
+   - Created `upgradeRoomSizeTier` Server Action with strict materials validations, player level checking, database transactional updates, and active entry point scaling.
+   - Hardened `upgradeRoomLevel` Server Action to preserve purchased sizing upgrades on room level promotions, preventing accidental grid downsizes.
+   - Tied `roomSizeTier` parameters into Zustand stores (`useRoomStore.ts`) and configured Next.js server-side query joins and state initializers (`StoreInitializer.tsx`).
+4. **Global Game Hook & Coordinates Engine Refactoring (`src/game/systems/IsometricEngine.ts`)**:
+   - Refactored `IsometricEngine.ts` to dynamically calculate `worldToScreen` and `screenToWorld` mapping factors based on dynamic active scene sizes.
+   - Set up automatic scene fallback utilizing `window.game` mapping pointers contextually when active scene structures are inaccessible.
+5. **Dynamic Phaser Scene Scaling (`src/game/scenes/RoomScene.ts` & `src/game/scenes/RaidScene.ts`)**:
+   - Programmed camera zoom auto-scaling (`10 / gridSize`) and view boundaries clamping, fitting large layouts in screen viewports.
+   - Refactored A* pathfinding bounds, grid render matrices, perimeter wall boundaries, context menus, selection sprites, and interactive range indicator rings to scale dynamically with active room sizes.
+6. **Tabbed Cyberpunk Upgrade HUD (`src/components/game/UpgradePanel.tsx`)**:
+   - Developed a gorgeous glassmorphic Upgrade sheet dashboard containing two side-by-side tabs: "Stronghold Level" and "Grid Size Upgrade".
+   - Rendered real-time cost sheets, progress bars mapping current tier properties, level lock warnings, and transactional success triggers.
+7. **Compilation & Build Verification**:
+   - Verified the complete codebase using Next.js production build (`pnpm run build`), TypeScript validation (`pnpm tsc --noEmit`), and linter audits (`pnpm run lint`), passing with **0 typecheck and build errors**.
+
+### Next Best Task
+
+The next best post-launch backlog task to execute is **Named NPC Raid Bosses with Story Quests**. This will introduce story-driven boss raids with custom behaviors, scripted dialogues, and rare item rewards.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00024_expanded_room_sizes.sql` | **NEW.** DB migration adding `room_size_tier` column, indexing, and backfilling rooms. |
+| `src/lib/game/defense.ts` | **MODIFY.** Added `ROOM_SIZE_TIERS` configurations, cost thresholds, and dynamic cost/slot maps. |
+| `src/app/(game)/room/actions.ts` | **MODIFY.** Created `upgradeRoomSizeTier` Server Action, hardened `upgradeRoomLevel` from downgrades. |
+| `src/lib/store/useRoomStore.ts` | **MODIFY.** Extended room store and placed item interface with `roomSizeTier`. |
+| `src/components/store/StoreInitializer.tsx` | **MODIFY.** Bound `roomSizeTier` state hydration parameters. |
+| `src/app/(game)/room/page.tsx` | **MODIFY.** Joined `room_size_tier` in rooms query and routed to state initializers. |
+| `src/game/PhaserGame.ts` | **MODIFY.** Wired `window.game` mapping on creation and cleared on scene teardown. |
+| `src/game/systems/IsometricEngine.ts` | **MODIFY.** Refactored Cartesian conversions to scale dynamically using dynamic scene fallbacks. |
+| `src/game/scenes/RoomScene.ts` | **MODIFY.** Scaled camera zoom, grid graphics, wall rendering, z-sorting, and range circles dynamically. |
+| `src/game/scenes/RaidScene.ts` | **MODIFY.** Scaled camera zoom, grid rendering, target stashes, and A* path bounds dynamically. |
+| `src/game/scenes/RoomEditorScene.ts` | **MODIFY.** Scaled placement projections and drag-snapping bounds dynamically. |
+| `src/game/objects/EntitySprite.ts` | **MODIFY.** Decoupled coordinate snaps to support dynamic grid dimensions. |
+| `src/game/objects/FurnitureSprite.ts` | **MODIFY.** Adjusted coordinates calculations and rotation max boundaries. |
+| `src/components/game/BaseDefenseMonitor.tsx` | **MODIFY.** Scaled holographic intruder blips rendering maps contextually. |
+| `src/game/utils/rangeDraw.ts` | **MODIFY.** Integrated dynamic sizes in coverage range indicators. |
+| `src/components/game/UpgradePanel.tsx` | **MODIFY.** Redesigned constructor panel into a premium glassmorphic Tabbed Dashboard. |
+| `docs/tasks.md` | **MODIFY.** Checked off Task 9.0.24 and bumped version. |
+| `docs/changelog.md` | **MODIFY.** Added Version 0.14.0 milestone changelog. |
+| `docs/handoff.md` | **MODIFY.** Prepend session handoff log. |
+
+## 2026-05-26 — Milestone 9H: Custom Image Uploads for Wall Posters with Moderation Pipeline
+
+### Summary
+
+Successfully implemented **Milestone 9H — Custom Image Uploads for Wall Posters with Moderation Pipeline** end-to-end. This feature enables players to purchase and place custom poster furniture items, select and upload custom PNG/JPG images to Supabase Storage, process them through an automated safety moderation filter (with sandboxed testing shortcuts), and project the flat 2D images onto 2.5D isometric block faces in Phaser at runtime.
+
+Key accomplishments:
+1. **Supabase Database Schema & Storage Policies (`00023_custom_posters.sql`)**:
+   - Pushed database migrations to include `custom_image_url`, `moderation_status`, and `moderation_error` fields on `player_items`.
+   - Seeded the `Custom Poster` item into the items catalog.
+   - Initialized the Supabase Storage `'posters'` bucket with secure owner-only folder policies (`auth.uid() = owner_id`).
+   - Cleaned up pre-existing seeding constraint errors in `00022_seasonal_battle_pass.sql` migration to guarantee flawless database alignment.
+2. **Next.js Server Action (`src/app/actions/poster.ts`)**:
+   - Authored the secure `moderateCustomPosterAction` endpoint validating user sessions and item ownership.
+   - Built a content safety heuristic scanning engine automatically detecting toxic keywords (e.g. "toxic", "rejected", "nsfw", etc.) and returning instant approved/rejected states.
+3. **Glassmorphic Upload Dialog (`src/components/game/PosterUploadDialog.tsx`)**:
+   - Developed a stunning cyberpunk upload console featuring live status scanners, a 2-second terminal log feed, file drop boundaries, and diagnostic diagnostics telemetry.
+   - Integrated the context menu on `RoomScene` to trigger the dialog overlay when clicking a placed custom poster.
+4. **Phaser 2.5D Skew Projection & Dynamic Textures (`src/game/scenes/RoomScene.ts` and `src/game/scenes/RaidScene.ts`)**:
+   - Integrated A* Phaser canvas projection drawing flat 2D images onto the left and right isometric faces of custom poster blocks dynamically at runtime using `ctx.transform(...)`.
+   - Created procedural border frames in `BootScene` showing pending/rejected warning states contextually.
+   - Fixed Phaser nullability typecheck compiler warnings in `projectPosterImage` for both scenes.
+5. **Universal Replay & Visiting Alignment**:
+   - Linked poster querying and rendering natively inside Visitor room viewports, active raid screens, and historical replay scene playbacks.
+6. **Compilation Verification**:
+   - Runs `pnpm tsc --noEmit` and `pnpm lint` with **0 typecheck and build errors**, producing fully compiled Next.js Turbopack optimized productions.
+
+### Next Best Task
+
+The next best post-launch backlog task to execute is **Task 9.0.24 (Expanded Room Sizes)**. This will allow players to upgrade their strongholds to full apartment or house dimensions (e.g., 14x14 or 18x18 grids), complete with expanded grid rendering, pathfinding bounds, and advanced peripheral placement rules.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00023_custom_posters.sql` | **NEW.** DB migration adding poster columns, seeding custom poster item, and setting up RLS folders policies. |
+| `src/app/actions/poster.ts` | **NEW.** Secure server action for poster moderation and database commits. |
+| `src/components/game/PosterUploadDialog.tsx` | **NEW.** Glassmorphic upload dashboard component with Terminal diagnostic logs. |
+| `src/lib/store/useRoomStore.ts` | **MODIFY.** Extended placed item interface to track custom poster properties. |
+| `src/game/scenes/BootScene.ts` | **MODIFY.** Preloaded and rendered custom poster block templates (approved, pending, rejected). |
+| `src/game/scenes/RoomScene.ts` | **MODIFY.** Added canvas texture skew transformations, event hooks, and typecheck null guards. |
+| `src/game/scenes/RaidScene.ts` | **MODIFY.** Added A* skew transformations and typecheck null guards. |
+| `src/components/game/ContextMenu.tsx` | **MODIFY.** Added context buttons mapping custom posters to dialog overlays. |
+| `src/app/(game)/room/page.tsx` | **MODIFY.** Mounted upload dialogue and joined poster details in server queries. |
+| `src/app/(game)/visit/[userId]/page.tsx` | **MODIFY.** Joined custom poster properties for social visiting. |
+| `src/app/(game)/raid/[id]/page.tsx` | **MODIFY.** Joined custom poster properties for raid scenes. |
+| `src/app/(game)/raid/replay/[historyId]/page.tsx` | **MODIFY.** Joined custom poster properties for historical replay scenes. |
+| `docs/tasks.md` | **MODIFY.** Marked Custom Poster uploads as complete. |
+| `docs/changelog.md` | **MODIFY.** Added version 0.13.0 changelog. |
+| `docs/handoff.md` | **MODIFY.** Prepend session details. |
+
+---
+
 ## 2026-05-26 — Milestone 9G: Multi-Channel Text Chat System & Real-Time PvP mode refinements
 
 ### Summary

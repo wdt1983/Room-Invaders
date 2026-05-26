@@ -96,6 +96,32 @@ export interface SlotCaps {
 
 export const MAX_ROOM_LEVEL = 20;
 
+export const MAX_ROOM_SIZE_TIER = 5;
+
+export interface RoomSizeTierInfo {
+  tier: number;
+  grid: number;
+  name: string;
+  scrapCost: number;
+  componentsCost: number;
+}
+
+export const ROOM_SIZE_TIERS: Record<number, RoomSizeTierInfo> = {
+  1: { tier: 1, grid: 10, name: 'Standard Room', scrapCost: 0, componentsCost: 0 },
+  2: { tier: 2, grid: 12, name: 'Large Room', scrapCost: 800, componentsCost: 150 },
+  3: { tier: 3, grid: 14, name: 'Apartment', scrapCost: 2000, componentsCost: 400 },
+  4: { tier: 4, grid: 16, name: 'Big Apartment', scrapCost: 4500, componentsCost: 900 },
+  5: { tier: 5, grid: 18, name: 'House', scrapCost: 9000, componentsCost: 1800 },
+};
+
+export function roomSizeUpgradeCost(currentTier: number): { scrap: number; components: number } {
+  const nextTier = currentTier + 1;
+  const tierInfo = ROOM_SIZE_TIERS[nextTier];
+  if (!tierInfo) return { scrap: Infinity, components: Infinity };
+  return { scrap: tierInfo.scrapCost, components: tierInfo.componentsCost };
+}
+
+
 /**
  * Room-level upgrade costs.
  * Deducted in `upgradeRoomLevel` server action.

@@ -52,7 +52,8 @@ export function paintRangeBand(
   graphics.lineStyle(1, color, strokeAlpha);
 
   for (const tile of tiles) {
-    const pos = IsometricEngine.worldToScreen(tile.x, tile.y, rotation);
+    const gridSize = (graphics.scene as any).gridSize || (graphics.scene as any).grid_size || 10;
+    const pos = IsometricEngine.worldToScreen(tile.x, tile.y, rotation, gridSize);
     const cx = pos.x + offsetX;
     const cy = pos.y + offsetY;
     graphics.beginPath();
