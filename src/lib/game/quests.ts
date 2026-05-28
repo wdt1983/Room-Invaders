@@ -23,17 +23,19 @@ export interface QuestDefinition {
     contraband?: number;
   };
   unlockSequence?: string | null;
+  bossId?: string; // Optional field linking to boss encounters
 }
 
 const allQuests: {
   tutorial: QuestDefinition[];
   daily: QuestDefinition[];
   weekly: QuestDefinition[];
+  story: QuestDefinition[];
 } = questsData as any;
 
 // Helper to find a quest definition by ID across all categories
 export function findQuestDefinition(questId: string): QuestDefinition | null {
-  const categories = [allQuests.tutorial, allQuests.daily, allQuests.weekly];
+  const categories = [allQuests.tutorial, allQuests.daily, allQuests.weekly, allQuests.story];
   for (const list of categories) {
     const found = list.find((q) => q.id === questId);
     if (found) return found;
@@ -42,46 +44,91 @@ export function findQuestDefinition(questId: string): QuestDefinition | null {
 }
 
 /**
- * Seed the first tutorial quest ("tut-01" - "Wake Up") for a player.
+ * Seed the first tutorial quest ("tut-01" - "Wake Up") and first story quest ("story-01") for a player.
  * Safe to call repeatedly (idempotent due to unique index).
  */
 export async function seedInitialQuests(supabase: any, userId: string): Promise<void> {
+  // 1. Seed tutorial quest
   const tut01 = allQuests.tutorial.find((q) => q.id === 'tut-01');
-  if (!tut01) return;
+  if (tut01) {
+    try {
+      const { data: existing } = await supabase
+        .from('player_quests')
+        .select('id')
+        .eq('player_id', userId)
+        .eq('quest_id', 'tut-01')
+        .maybeSingle();
 
+      if (!existing) {
+        await supabase.from('player_quests').insert({
+          player_id: userId,
+          quest_id: 'tut-01',
+          status: 'active',
+          progress: 0,
+          target_value: tut01.targetValue,
+        });
+        console.log(`[QuestSystem] Seeded tut-01 for user: ${userId}`);
+      }
+    } catch (err) {
+      console.error('[QuestSystem] Failed to seed initial tutorial quests:', err);
+    }
+  }
+
+  // 2. Seed story quest if user is level >= 3 and has no story quests active or completed
   try {
-    // Check if player already has any quests to avoid double seeding
-    const { data: existing } = await supabase
-      .from('player_quests')
-      .select('id')
-      .eq('player_id', userId)
-      .eq('quest_id', 'tut-01')
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('player_level')
+      .eq('id', userId)
       .maybeSingle();
 
-    if (!existing) {
-      await supabase.from('player_quests').insert({
-        player_id: userId,
-        quest_id: 'tut-01',
-        status: 'active',
-        progress: 0,
-        target_value: tut01.targetValue,
-      });
-      console.log(`[QuestSystem] Seeded tut-01 for user: ${userId}`);
+    const playerLevel = profile?.player_level ?? 1;
+
+    if (playerLevel >= 3) {
+      const story01 = allQuests.story.find((q) => q.id === 'story-01');
+      if (story01) {
+        const { data: storyExists } = await supabase
+          .from('player_quests')
+          .select('id')
+          .eq('player_id', userId)
+          .like('quest_id', 'story-%')
+          .limit(1);
+
+        if (!storyExists || storyExists.length === 0) {
+          await supabase.from('player_quests').insert({
+            player_id: userId,
+            quest_id: 'story-01',
+            status: 'active',
+            progress: 0,
+            target_value: story01.targetValue,
+          });
+          console.log(`[QuestSystem] Seeded story-01 for user: ${userId}`);
+        }
+      }
     }
   } catch (err) {
-    console.error('[QuestSystem] Failed to seed initial quests:', err);
+    console.error('[QuestSystem] Failed to seed story quests:', err);
   }
+}
+
+/**
+ * Fetch the active or completed story quest for the player.
+ */
+export async function getActiveStoryQuest(supabase: any, userId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('player_quests')
+    .select('*')
+    .eq('player_id', userId)
+    .like('quest_id', 'story-%')
+    .in('status', ['active', 'completed'])
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
 }
 
 /**
  * Authoritative utility to update progress on a player's active quests.
  * Triggered by key gameplay milestones (buying items, winning raids, etc.).
- *
- * @param supabase Authenticated Supabase client (service role or user scoped)
- * @param userId UUID of the player
- * @param category The event category (e.g., 'place_furniture', 'raid_fixture')
- * @param amount Amount to increment progress by, or absolute value if isAbsolute is true
- * @param isAbsolute If true, overrides progress with amount instead of adding
  */
 export async function trackQuestProgress(
   supabase: any,
@@ -105,8 +152,6 @@ export async function trackQuestProgress(
     for (const quest of activeQuests) {
       const questDef = findQuestDefinition(quest.quest_id);
       
-      // Matches categories: specific category matching (e.g. 'place_furniture') 
-      // or generic 'place_any' matches both 'place_furniture' and 'place_defense'
       const isMatch = 
         questDef?.category === category || 
         (questDef?.category === 'place_any' && ['place_furniture', 'place_defense'].includes(category));
@@ -152,9 +197,10 @@ export async function trackQuestProgress(
 
       console.log(`[QuestSystem] Updated quest ${quest.quest_id} progress: ${newProgress}/${targetVal}`);
 
-      // Handle unlocking of the next tutorial quest in the sequence
+      // Handle unlocking of the next quest in the sequence (Tutorial or Story)
       if (isCompleted && questDef.unlockSequence) {
-        const nextQuestDef = allQuests.tutorial.find((q) => q.id === questDef.unlockSequence);
+        const nextQuestDef = allQuests.tutorial.find((q) => q.id === questDef.unlockSequence) ||
+                             allQuests.story.find((q) => q.id === questDef.unlockSequence);
         if (nextQuestDef) {
           const { error: unlockError } = await supabase.from('player_quests').insert({
             player_id: userId,
@@ -167,7 +213,7 @@ export async function trackQuestProgress(
           if (unlockError) {
             console.warn(`[QuestSystem] Failed to unlock next quest ${nextQuestDef.id}:`, unlockError);
           } else {
-            console.log(`[QuestSystem] Unlocked sequential tutorial quest: ${nextQuestDef.id}`);
+            console.log(`[QuestSystem] Unlocked sequential quest: ${nextQuestDef.id}`);
           }
         }
       }

@@ -483,8 +483,18 @@ export function TopBar() {
           onClick={async () => {
             const res = await upgradePlayerLevel(playerLevel);
             if (res.success) {
+              const previousLevel = playerLevel;
               usePlayerStore.getState().setPlayerState({ playerLevel: res.newLevel });
               usePlayerStore.getState().setInventory({ scrap: res.newScrap });
+              const { useUIStore } = require("@/lib/store/useUIStore");
+              useUIStore.getState().showLevelUpOverlay(previousLevel, res.newLevel);
+              const { trackEvent } = require("@/lib/game/analytics");
+              trackEvent("player_level_up", {
+                previousLevel,
+                newLevel: res.newLevel,
+                method: "scrap_purchase",
+                cost: upgradeCost,
+              });
               toast.success(`Upgraded to Lvl ${res.newLevel}`, {
                 description: `−${upgradeCost} Scrap`,
               });

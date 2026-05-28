@@ -11,7 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crosshair, Timer, Lock, Clock } from "lucide-react";
+import { Crosshair, Timer, Lock, Clock, Skull } from "lucide-react";
 import type { NpcRoomFixture } from "@/game/fixtures/npc-rooms";
 import { RAID_DURATION_SECONDS } from "@/lib/store/useRaidStore";
 
@@ -66,14 +66,26 @@ export function RaidTargetCard({ fixture, playerLevel, availableAtMs }: RaidTarg
   }
 
   const isLocked = isLevelLocked || isCooldown;
+  const isBoss = fixture.id.startsWith("boss-");
 
   return (
-    <Card className={`border-primary/20 bg-card/50 backdrop-blur ${isLocked ? 'opacity-75 grayscale-[0.3]' : ''}`}>
+    <Card className={`border-primary/20 bg-card/50 backdrop-blur transition-all duration-300 ${isBoss ? 'border-red-500/50 shadow-[0_0_20px_rgba(220,38,38,0.15)] hover:border-red-500 hover:shadow-[0_0_25px_rgba(220,38,38,0.35)]' : ''} ${isLocked ? 'opacity-75 grayscale-[0.3]' : ''}`}>
       <CardHeader className="border-b border-border/50 pb-3">
         <div className="flex items-start justify-between">
           <CardTitle className="flex items-center gap-2">
-            {isLevelLocked ? <Lock className="size-5 text-muted-foreground" /> : <Crosshair className="size-5 text-muted-foreground" />}
+            {isLevelLocked ? (
+              <Lock className="size-5 text-muted-foreground" />
+            ) : isBoss ? (
+              <Skull className="size-5 text-red-500 animate-pulse" />
+            ) : (
+              <Crosshair className="size-5 text-muted-foreground" />
+            )}
             {fixture.name}
+            {isBoss && (
+              <span className="text-[9px] font-extrabold text-white px-2 py-0.5 rounded bg-gradient-to-r from-red-500 to-orange-600 tracking-wider">
+                BOSS
+              </span>
+            )}
           </CardTitle>
           <div className={`rounded bg-primary/10 px-2 py-1 text-xs font-bold ${DIFFICULTY_COLOR[fixture.difficulty]}`}>
             {DIFFICULTY_LABEL[fixture.difficulty]}
@@ -111,9 +123,9 @@ export function RaidTargetCard({ fixture, playerLevel, availableAtMs }: RaidTarg
           </Button>
         ) : (
           <Link href={`/raid/${fixture.id}`} className="w-full">
-            <Button variant="default" className="w-full gap-2">
-              <Crosshair className="size-4" />
-              Launch Raid
+            <Button variant="default" className={`w-full gap-2 ${isBoss ? 'bg-red-600 hover:bg-red-500 font-bold border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : ''}`}>
+              {isBoss ? <Skull className="size-4" /> : <Crosshair className="size-4" />}
+              {isBoss ? "Battle Warlord" : "Launch Raid"}
             </Button>
           </Link>
         )}

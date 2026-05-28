@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Map, ScanEye, User, ShieldAlert } from 'lucide-react';
+import { CommunityEventBanner } from "@/components/game/CommunityEventBanner";
 
 import { MapDashboard } from './MapDashboard';
 
@@ -51,6 +52,15 @@ export default async function MapPage() {
     friends = friendProfiles || [];
   }
 
+  // Fetch active story quest
+  const { data: activeStoryQuest } = await supabase
+    .from("player_quests")
+    .select("quest_id, status, progress")
+    .eq("player_id", user.id)
+    .like("quest_id", "story-%")
+    .in("status", ["active", "completed"])
+    .maybeSingle();
+
   // Fetch session access token to authorize the matchmaking edge function invoke
   const session = (await supabase.auth.getSession()).data.session;
   const authHeader = session ? `Bearer ${session.access_token}` : undefined;
@@ -71,8 +81,10 @@ export default async function MapPage() {
   } else {
     console.warn("[MapPage] Matchmaking Edge Function offline, using database fallback:", matchError || matchData?.error);
     fallbackActive = true;
+  }
 
-    // Graceful Degradation Fallback: Select profiles directly if the Deno function isn't deployed
+  // Graceful Degradation Fallback: Select profiles directly if the Deno function isn't deployed
+  if (fallbackActive) {
     const { data: fbTargets } = await (supabase.from('profiles') as any)
       .select(`
           id,
@@ -126,12 +138,18 @@ export default async function MapPage() {
         </div>
       </div>
 
+      {/* Community Event Banner */}
+      <div className="mb-6">
+        <CommunityEventBanner />
+      </div>
+
       <MapDashboard 
         targets={targets} 
         bracketRange={bracketRange} 
         fallbackActive={fallbackActive} 
         playerProfile={playerProfile}
         friends={friends}
+        activeStoryQuest={activeStoryQuest}
       />
     </div>
   );

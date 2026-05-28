@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Users, UserPlus, Check, X, Search, Shield, Eye, Swords, Trash2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { TradingTerminal } from "@/components/game/TradingTerminal";
 
 interface Friend {
   friendshipId: string;
@@ -29,7 +30,7 @@ interface Request {
 }
 
 export default function SocialPage() {
-  const [activeTab, setActiveTab] = useState<"friends" | "received" | "sent">("friends");
+  const [activeTab, setActiveTab] = useState<"friends" | "received" | "sent" | "trades">("friends");
   const [searchUsername, setSearchUsername] = useState("");
   const [searchResult, setSearchResult] = useState<any | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -292,6 +293,12 @@ export default function SocialPage() {
                 >
                   Sent ({sentRequests.length})
                 </button>
+                <button
+                  onClick={() => setActiveTab("trades")}
+                  className={`flex-1 py-1 rounded font-bold text-center transition-all ${activeTab === "trades" ? "bg-primary/10 text-primary border border-primary/20 shadow-sm" : "text-muted-foreground"}`}
+                >
+                  Trading
+                </button>
               </div>
             </CardHeader>
             <CardContent className="pt-6">
@@ -395,7 +402,7 @@ export default function SocialPage() {
                           size="sm" 
                           className="h-7 text-[10px] font-bold gap-1 border-border/80 hover:bg-muted text-muted-foreground hover:text-red-400"
                         >
-                          <X className="size-3.5" />
+                          <X className="size-3" />
                           Cancel Request
                         </Button>
                       </div>
@@ -407,6 +414,10 @@ export default function SocialPage() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {activeTab === "trades" && (
+                <TradingTerminal friends={friends} currentUserId={currentUserId || ""} />
               )}
             </CardContent>
           </Card>

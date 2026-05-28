@@ -60,6 +60,7 @@ export interface ResolveRaidResponse {
   previousPlayerLevel: number;
   newPlayerLevel: number;
   leveledUp: boolean;
+  isFirstClear?: boolean;
 }
 
 export interface ResolveRaidError {

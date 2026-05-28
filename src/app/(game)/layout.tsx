@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import PlayerStoreInitializer from "@/components/store/PlayerStoreInitializer";
 import { ChatConsole } from "@/components/game/ChatConsole";
+import { LevelUpOverlay } from "@/components/game/LevelUpOverlay";
 
 /**
  * Game Layout — wraps all authenticated game routes in the (game) route group.
@@ -29,7 +30,7 @@ export default async function GameLayout({
   // 1. Authoritatively fetch or auto-create the profiles row first.
   // This is critical because foreign keys in inventories, player_squad, etc. reference profiles(id).
   const profileResult = await (supabase.from('profiles') as any)
-    .select('username, player_level, xp, safe_mode_until, tech_points, created_at')
+    .select('username, player_level, xp, safe_mode_until, tech_points, created_at, active_badge, active_border, active_room_skin')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -46,7 +47,7 @@ export default async function GameLayout({
         username,
         display_name,
       })
-      .select('username, player_level, xp, safe_mode_until, tech_points, created_at')
+      .select('username, player_level, xp, safe_mode_until, tech_points, created_at, active_badge, active_border, active_room_skin')
       .maybeSingle();
 
     if (createProfError) {
@@ -168,6 +169,9 @@ export default async function GameLayout({
         squad={squad}
         activeQuestId={activeQuestId}
         createdAt={(finalProfile as any).created_at}
+        activeBadge={(finalProfile as any).active_badge ?? null}
+        activeBorder={(finalProfile as any).active_border ?? null}
+        activeRoomSkin={(finalProfile as any).active_room_skin ?? null}
       />
       <TopBar />
       <main className="relative flex-1 overflow-hidden">
@@ -183,6 +187,7 @@ export default async function GameLayout({
         districtId={districtId} 
         mode="floating" 
       />
+      <LevelUpOverlay />
       {/* Global toast surface for every server-action outcome — placement /
           removal / rotation / level-up success+failure are all funneled
           through here so the player gets explicit feedback instead of silent

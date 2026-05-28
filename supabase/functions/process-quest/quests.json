@@ -227,5 +227,91 @@
         "credits": 100
       }
     }
+  ],
+  "story": [
+    {
+      "id": "story-01",
+      "title": "The Network's Warning",
+      "description": "The Network has intercepted chatter about a warlord called Ironjaw hoarding scrap in the industrial district. They need someone to take him down. Visit the Map and locate his stronghold.",
+      "category": "locate_boss",
+      "targetValue": 1,
+      "requiredLevel": 3,
+      "xpReward": 100,
+      "rewards": { "scrap": 200, "credits": 50 },
+      "unlockSequence": "story-02",
+      "bossId": "boss-ironjaw"
+    },
+    {
+      "id": "story-02",
+      "title": "Ironjaw's Scrapyard",
+      "description": "Breach Ironjaw's fortified scrapyard. Navigate his trap maze and take him down. The Network is counting on you.",
+      "category": "defeat_boss",
+      "targetValue": 1,
+      "requiredLevel": 3,
+      "xpReward": 250,
+      "rewards": { "scrap": 500, "components": 30, "credits": 100 },
+      "unlockSequence": "story-03",
+      "bossId": "boss-ironjaw"
+    },
+    {
+      "id": "story-03",
+      "title": "Ghost Signals",
+      "description": "Ironjaw talked before he fell. Someone called 'Whisper' is pulling strings from the shadows. The Network traced their wire network to an abandoned relay station. Scout it out.",
+      "category": "locate_boss",
+      "targetValue": 1,
+      "requiredLevel": 5,
+      "xpReward": 120,
+      "rewards": { "scrap": 250, "intel": 10, "credits": 75 },
+      "unlockSequence": "story-04",
+      "bossId": "boss-whisper"
+    },
+    {
+      "id": "story-04",
+      "title": "The Wire Ghost",
+      "description": "Whisper's relay station is a maze of invisible tripwires and alarm cascades. Every step could alert the entire grid. Tread carefully — and shut them down.",
+      "category": "defeat_boss",
+      "targetValue": 1,
+      "requiredLevel": 5,
+      "xpReward": 350,
+      "rewards": { "scrap": 600, "components": 45, "intel": 15, "credits": 150 },
+      "unlockSequence": "story-05",
+      "bossId": "boss-whisper"
+    },
+    {
+      "id": "story-05",
+      "title": "The Colonel's Gambit",
+      "description": "Whisper's network was connected to something bigger — a military remnant led by Colonel Volkov. He controls the sector's supply depot. The Network needs those supplies. Prepare for a real fight.",
+      "category": "defeat_boss",
+      "targetValue": 1,
+      "requiredLevel": 7,
+      "xpReward": 500,
+      "rewards": { "scrap": 800, "components": 60, "credits": 200, "contraband": 5 },
+      "unlockSequence": "story-06",
+      "bossId": "boss-volkov"
+    },
+    {
+      "id": "story-06",
+      "title": "The Machine Mind",
+      "description": "Volkov's intel reveals an automated defense grid — a self-sustaining AI called Circuit controlling the eastern power relay. Without it, the whole sector goes dark. Time to pull the plug.",
+      "category": "defeat_boss",
+      "targetValue": 1,
+      "requiredLevel": 10,
+      "xpReward": 700,
+      "rewards": { "scrap": 1000, "components": 80, "credits": 300, "contraband": 8 },
+      "unlockSequence": "story-07",
+      "bossId": "boss-circuit"
+    },
+    {
+      "id": "story-07",
+      "title": "Voice of The Fracture",
+      "description": "It all leads here. The Warden — the architect of The Fracture itself — has been watching you since day one. This is not a raid. This is a reckoning. The Network cannot help you now.",
+      "category": "defeat_boss",
+      "targetValue": 1,
+      "requiredLevel": 15,
+      "xpReward": 1500,
+      "rewards": { "scrap": 2000, "components": 150, "credits": 500, "contraband": 15, "intel": 50 },
+      "unlockSequence": null,
+      "bossId": "boss-warden"
+    }
   ]
 }

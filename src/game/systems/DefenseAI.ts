@@ -5,6 +5,7 @@ import {
   type PlacedTarget,
 } from '@/game/systems/CombatSystem';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
+import { useRaidStore } from '@/lib/store/useRaidStore';
 
 /**
  * DefenseAI — active-defense behavior for turrets (and, later, guards).
@@ -237,12 +238,26 @@ export class TurretAI {
     const aliveTargets = this.targets.filter((t) => t.hp > 0);
     if (aliveTargets.length === 0) return;
 
+    // Active community event effects
+    const stEvent = useRaidStore.getState().activeEvent;
+    const isMalfunctionActive = stEvent?.eventType === 'turret_malfunction';
+    const jamChance = isMalfunctionActive ? (Number(stEvent?.parameters?.turret_jam_chance) || 0.15) : 0;
+    const isBlackoutActive = stEvent?.eventType === 'sector_blackout';
+    const blackoutPenalty = isBlackoutActive ? 1 : 0;
+
     // Iterate a snapshot so `fire()` → exhaustion can safely delete from
     // the underlying map without disturbing iteration order.
     const snapshot = Array.from(this.turrets.values());
     for (const turret of snapshot) {
       if (turret.ammoRemaining <= 0) continue;
       if (timeMs - turret.lastFiredAtMs < turret.stats.fire_rate * 1000) continue;
+
+      // Malfunction jam check
+      if (isMalfunctionActive && Math.random() < jamChance) {
+        turret.lastFiredAtMs = timeMs - (turret.stats.fire_rate * 1000 * 0.5); // delay slightly by 500ms
+        EventBus.emit('turret-jammed', { gridX: turret.gridX, gridY: turret.gridY });
+        continue;
+      }
       
       let bestTarget: TurretTarget | null = null;
       let minDistance = Infinity;
@@ -255,7 +270,7 @@ export class TurretAI {
         const alerted = timeMs < turret.alertedUntilMs;
         const activeEffects = usePlayerStore.getState().activeEffects;
         const turretRangeBonus = activeEffects.turretRangeBonus ?? 0;
-        const effectiveRange = turret.stats.range + turretRangeBonus + (alerted ? ALERT_RANGE_BONUS : 0);
+        const effectiveRange = turret.stats.range + turretRangeBonus + (alerted ? ALERT_RANGE_BONUS : 0) - blackoutPenalty;
         if (chebyshev <= effectiveRange && chebyshev < minDistance) {
           minDistance = chebyshev;
           bestTarget = target;
@@ -295,7 +310,9 @@ export class TurretAI {
     const alerted = timeMs < turret.alertedUntilMs;
     const activeEffects = usePlayerStore.getState().activeEffects;
     const turretRangeBonus = activeEffects.turretRangeBonus ?? 0;
-    const effectiveRange = turret.stats.range + turretRangeBonus + (alerted ? ALERT_RANGE_BONUS : 0);
+    const stEvent = useRaidStore.getState().activeEvent;
+    const blackoutPenalty = stEvent?.eventType === 'sector_blackout' ? 1 : 0;
+    const effectiveRange = turret.stats.range + turretRangeBonus + (alerted ? ALERT_RANGE_BONUS : 0) - blackoutPenalty;
     return chebyshev <= effectiveRange;
   }
 

@@ -10,6 +10,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { useRaidStore } from "@/lib/store/useRaidStore";
+import { resolveFixture } from "@/game/fixtures/npc-rooms";
 import {
   Award,
   CheckCircle2,
@@ -23,6 +24,7 @@ import {
   Map,
   Package,
   ShieldAlert,
+  Sparkles,
   Trophy,
   XCircle,
 } from "lucide-react";
@@ -54,6 +56,39 @@ function formatElapsed(totalSeconds: number): string {
  * LootSystem (3.0.17) will expand the reward math on the server side
  * — nothing here needs to change for that task.
  */
+const BOSS_UNIQUE_ITEMS: Record<string, { name: string; type: string; desc: string; icon: string }> = {
+  'boss-ironjaw': {
+    name: "Ironjaw's Bear Trap",
+    type: "Trap (Rare Defense)",
+    desc: "Deals 30 damage and stuns squad/enemies for 2 seconds.",
+    icon: "🪤",
+  },
+  'boss-whisper': {
+    name: "Whisper's Ghost Wire",
+    type: "Trap (Rare Alarm)",
+    desc: "Alerts defenses in a 5-tile radius on breach.",
+    icon: "🕸️",
+  },
+  'boss-volkov': {
+    name: "Volkov's Autocannon Mk2",
+    type: "Turret (Epic Heavy Weapon)",
+    desc: "Heavy 25 dmg defense turret with rapid 1.5s fire rate.",
+    icon: "🔫",
+  },
+  'boss-circuit': {
+    name: "Circuit's EMP Mine",
+    type: "Trap (Epic Tech)",
+    desc: "Discharges high-voltage pulse disabling mechanicals for 4s.",
+    icon: "🔌",
+  },
+  'boss-warden': {
+    name: "The Warden's Key",
+    type: "Trophy (Legendary Cosmetic)",
+    desc: "The ultimate validation of sector survival. Proof of the Fracture's defeat.",
+    icon: "🔑",
+  },
+};
+
 export function RaidResults() {
   const phase = useRaidStore((s) => s.phase);
   const results = useRaidStore((s) => s.results);
@@ -67,6 +102,12 @@ export function RaidResults() {
   const Icon = isVictory ? Trophy : XCircle;
   const headerColor = isVictory ? 'text-emerald-400' : 'text-destructive';
   const borderColor = isVictory ? 'border-emerald-400/40' : 'border-destructive/40';
+
+  const isBossRaid = target ? target.id.startsWith("boss-") : false;
+  const fixture = target ? resolveFixture(target.id) : null;
+  const bossBriefing = isBossRaid && fixture && (fixture as any).briefing 
+    ? (isVictory ? (fixture as any).briefing.victory : (fixture as any).briefing.defeat)
+    : null;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
@@ -85,6 +126,33 @@ export function RaidResults() {
         </CardHeader>
 
         <CardContent className="grid grid-cols-2 gap-3 pt-4">
+          {/* Boss Briefing Message */}
+          {bossBriefing && (
+            <div className="col-span-2 rounded-lg border border-red-500/20 bg-red-950/10 p-3 text-xs italic text-red-200 font-mono mb-2 leading-relaxed">
+              <span className="text-[10px] text-red-400 font-bold block mb-1 font-sans not-italic uppercase tracking-wider">{"// Intercepted Boss Transmission:"}</span>
+              {bossBriefing}
+            </div>
+          )}
+
+          {/* First Clear Rewards Showcase */}
+          {results.isFirstClear && target && BOSS_UNIQUE_ITEMS[target.id] && (
+            <div className="col-span-2 flex flex-col gap-2 rounded-lg border border-yellow-500/30 bg-yellow-950/20 p-3 shadow-[0_0_15px_rgba(234,179,8,0.15)] mb-2 border-dashed">
+              <span className="text-[10px] font-black text-yellow-400 uppercase tracking-widest flex items-center gap-1.5 font-sans">
+                <Sparkles className="size-3.5 animate-spin" /> First Clear Unique Reward!
+              </span>
+              <div className="flex items-center gap-3 bg-black/40 border border-yellow-500/10 p-2 rounded">
+                <span className="text-3xl filter drop-shadow-[0_2px_4px_rgba(234,179,8,0.3)]">{BOSS_UNIQUE_ITEMS[target.id].icon}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-black text-white truncate">{BOSS_UNIQUE_ITEMS[target.id].name}</span>
+                  <span className="text-[9px] font-bold text-yellow-400/90">{BOSS_UNIQUE_ITEMS[target.id].type}</span>
+                  <span className="text-[9px] text-muted-foreground leading-tight mt-0.5">
+                    {BOSS_UNIQUE_ITEMS[target.id].desc}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Stat icon={Clock} label="Time used" value={formatElapsed(results.secondsElapsed)} />
           <Stat icon={Award} label="XP gained" value={`+${results.xpGained}`} />
           {results.lootScrap > 0 ? (

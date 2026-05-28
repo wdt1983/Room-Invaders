@@ -1,6 +1,110 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.19.0] — 2026-05-28 — Milestone 10A: Automated E2E and Unit Testing Foundations
+
+### Added
+- **TypeScript-Native Unit & Integration Test Suite (`tests/game/`)**:
+  - Created `tests/game/isometric.test.ts` to verify pure-math coordinate scaling formulas (`worldToScreen` and `screenToWorld` functions) on standard 2:1 isometric projections under rotation and offset shifts.
+  - Created `tests/game/GridSystem.test.ts` checking 2D tile boundaries, obstacle occupancies, A* pathfinding routes routing around columns, and adjacent-pathfinding selections.
+- **Automated Integration Browser Tests (`tests/e2e/`)**:
+  - Created `tests/e2e/auth.spec.ts` asserting high-fidelity public landing pages, PWA metrics display, and complete client form validations for registrations and logins.
+  - Created `tests/e2e/navigation.spec.ts` ensuring protected game routers (e.g. `/room`) trigger automatic server-side authentication redirects when session keys are missing.
+- **Config & Package Shortcuts (`vitest.config.ts`, `playwright.config.ts`, `package.json`)**:
+  - Configured `vitest.config.ts` mapping global import alias resolution (`@/*` -> `./src/*`) to compile absolute imports correctly.
+  - Configured `playwright.config.ts` launching automated headless Chromium browser testing, mapped directly to local dev server ports with a 120-second compile timeout.
+  - Registered standardized shortcut scripts `"test": "vitest run"` and `"test:e2e": "playwright test"` to easily invoke testing pipelines.
+
+### Changed
+- Bumped application version to `0.19.0`.
+
+## [0.18.0] — 2026-05-28 — Milestone 9M: Player-to-Player Barter Trading System
+
+### Added
+- **Database Schema Migration (`supabase/migrations/00029_player_trading_system.sql`)**:
+  - Implemented the database migration establishing `public.trade_offers` and `public.trade_items` tables with optimized indexes and owner-level Row-Level Security (RLS) policies.
+  - Developed securitized, atomic plpgsql escrow procedures (`propose_trade`, `accept_trade`, `withdraw_trade`, and `decline_trade`) running under `FOR UPDATE` row locks to prevent race conditions and double-spending.
+  - Wired triggers to automatically log system updates inside the `notifications` table on trade proposals, accepts, and declines in real time.
+- **Server Actions & Cache Revalidation (`src/app/(game)/social/actions.ts`)**:
+  - Engineered Server Actions `proposeTradeAction`, `acceptTradeAction`, `withdrawTradeAction`, and `declineTradeAction` to execute secure backend RPC procedures on behalf of authenticated users.
+  - Configured instant cache revalidation routines for `/social` and `/room` page router pathways to seamlessly reflect asset transfers.
+- **Interactive Glassmorphic Trading Terminal Component (`src/components/game/TradingTerminal.tsx`)**:
+  - Built a beautiful, translucent cyberpunk trading terminal dashboard organized into pending active boards, proposal inputs, and historic log archives.
+  - Implemented partner selector dropdowns, raw material range sliders mapped directly from current player balances, and numerical unplaced items offered arrays.
+  - Developed searchable counter-demand selector dropdowns mapping the catalog items, allowing senders to declare counter-proposal items.
+  - Attached check and close buttons to trigger secure transaction transitions with fluid Sonner toast visual updates.
+- **Social Panel Integration (`src/app/(game)/social/page.tsx`)**:
+  - Integrated the `<TradingTerminal />` component directly as a sub-navigation card panel tab under the social network view.
+
+### Changed
+- Bumped application version to `0.18.0`.
+
+## [0.17.0] — 2026-05-27 — Milestone 9L: Achievement System with Cosmetic Rewards
+
+### Added
+- **Database Schema Migration (`supabase/migrations/00028_achievements.sql`)**:
+  - Implemented the database migration establishing `public.achievement_catalog` and `public.player_achievements` tables with explicit Row-Level Security (RLS) policies.
+  - Added cosmetic tracking columns (`active_badge`, `active_border`, `active_room_skin`) to `public.profiles`.
+  - Added transactional spent metric trackers (`last_victory_at`, `last_spend_at`, `spend_count_after_victory`) to `public.inventories`.
+  - Seeded three starter achievements: "Veteran Raider" (`raids_50`), "Grid Overlord" (`outposts_5`), and "Double Spender" (`double_spent_scrap`).
+  - Configured PostgreSQL triggers on `raid_history` inserts to automatically increment raid victory achievements and auto-seed achievements for new profiles.
+  - Formulated a database backfill procedure to retroactively compute achievement progress for pre-existing raids.
+- **Server Actions & Spent Tracker Integration (`src/lib/game/achievements.ts`, `src/app/(game)/squad/achievements.ts`)**:
+  - Engineered Server Actions `getAchievementsAction` and `equipCosmeticAction` with secure profile unlocked-validation guards to prevent spoofing.
+  - Developed the server-authoritative `recordScrapSpend` helper that monitors scrap expenditures within 30 seconds of successful raids.
+  - Injected spent tracking hooks across all scrap upgrade actions in `src/app/(game)/room/actions.ts` (buy and place furniture, player level-up, room level-up, room size upgrades, and placed defense item repairs).
+- **Interactive Glassmorphic Trophy Hall Dashboard (`src/app/(game)/squad/SquadDashboard.tsx`)**:
+  - Built an immersive cyberpunk Trophy Room dashboard tab displaying overall statistics (achievements count, unlock percentage, active status indicators).
+  - Implemented live squad portrait previews that render equipped visual badges and pulse with custom animated neon-green glowing borders.
+  - Mapped a gorgeous ledger catalog grid with Outfit fonts, custom glowing progress bars, and reactive "EQUIP" server toggle buttons.
+- **Phaser 4 Engine Customizations (`BootScene.ts`, `RoomScene.ts`)**:
+  - Added a procedural `floor_neon_glitch` tile texture in the preloader drawing hot-pink and neon-green offset borders on a cyber-purple base.
+  - Implemented automatic tile override rendering in `RoomScene` that scales coordinates and renders the custom neon glitch theme when `'neon_glitch'` room skin is active.
+
+### Changed
+- Bumped application version to `0.17.0`.
+
+## [0.16.0] — 2026-05-26 — Milestone 9K: Player Level-Up Polish, Community Events & Territory Control
+
+### Added
+- **Dynamic Unlocks Fullscreen Overlay (`src/components/game/LevelUpOverlay.tsx`)**:
+  - Implemented a fullscreen cyberpunk overlay mapped dynamically from the store catalog (`useUIStore` state triggers).
+  - Highlights newly unlocked traps/turrets blueprints and logs systemic progression milestones (secondary traps at Level 3, PvP Matchmaking at Level 5, Tech Tree at Level 8, Raider slot #2 at Level 10, strongholds coordinates at Level 20).
+  - Wired triggers and Sentry breadcrumbs inside scrap upgrade cards, quests, and raid resolvers.
+- **District Territory Control Hex Board (`src/components/game/TerritoryMap.tsx`)**:
+  - Designed a responsive hexagonal regional outposts war room SVG board mapped from 19 axial coordinates (Radius 2 center).
+  - Features glassmorphic panels displaying live active control bounds, capture lockdowns, dynamic yield dividends, and log logs.
+  - Setup transactional PL/pgSQL routines (`record_skirmish_and_update_influence`, `distribute_territory_dividends`) enforcing secure tug-of-war district influence changes and daily clan banks resource rewards.
+  - Mounted central tabbed `<DistrictDashboard>` war-rooms organizing stronghold structures, treasury, and regional conquests side-by-side.
+- **Turret Jam Electrical Sparks VFX (`src/game/scenes/RaidScene.ts`)**:
+  - Configured Phaser event listener `onTurretJammed` drawing 3 line segments graphic flashes and temporary red warning overlays above jammed defenses during malfunction windows.
+
+### Changed
+- Bumped application version to `0.16.0`.
+
+## [0.15.0] — 2026-05-26 — Milestone 9J: Named NPC Raid Bosses with Story Quests
+
+### Added
+- **Premium Glassmorphic BossRaidHUD Overlay (`src/components/game/BossRaidHUD.tsx`)**:
+  - Implemented a gorgeous, translucent cyber-themed overlay displaying the active Boss Name, Title, and Phase segmented HP bar.
+  - Draws visual vertical ticks on the HP progress bar indicating phase transition boundaries dynamically retrieved from the room fixture.
+  - Features scrolling terminal pre-raid briefing monospace cards that automatically fade out or dismiss on click.
+  - Triggers massive glowing red alert banners and screen shakes when bosses enter new phases (e.g. Volkov's drone dispatches, Circuit's turret overcharges, and the Warden's stunning lockdowns).
+- **Narrative Raid Results Briefing & First Clear Showcases (`src/components/game/RaidResults.tsx`)**:
+  - Dynamically extracts post-raid boss victory and defeat dialog briefing text from active room fixtures and renders it in a glassmorphic monospace block.
+  - Developed a high-end "First Clear Unique Reward" showcase box that pulses with gold borders and highlights the unlocked unique items catalog details (Ironjaw's Bear Trap, Whisper's Ghost Wire, Volkov's Autocannon Mk2, Circuit's EMP Mine, and the Warden's Key).
+- **Robust Boss Cooldown Verifications (`src/app/(game)/raid/[id]/page.tsx`)**:
+  - Added secure Next.js Server Component guards checking the player's clearance history on `boss_clears` in the last 24 hours. Redirects players to the Recon Map if the target is currently locked.
+- **Authoritative First Clear & Quest Rewards Synced (`src/lib/store/useRaidStore.ts`, `src/lib/game/resolveRaid.ts`, `src/components/game/RaidResolver.tsx`)**:
+  - Wired `isFirstClear` boolean flags end-to-end between client-side wrappers, resolve-raid Edge Functions, and post-raid results overlays, crediting new inventory balances in real time.
+
+### Fixed
+- **JSX Comment Text Nodes Error (`src/components/game/RaidResults.tsx`)**:
+  - Resolved JSX compiler syntax failures by safely wrapping text double slash comments `//` into braced string templates `{"// ..."}`.
+- **Unused Type Imports and Variable Warnings (`src/game/fixtures/boss-rooms.ts`, `src/game/systems/BossAI.ts`, `src/game/scenes/RaidScene.ts`)**:
+  - Cleared React and Deno edge compilers warnings by pruning unused type imports (`NpcPlacedItem`, `BossPhase`), prefixing unused tick loops arguments, and adding explicit linter bypass rules.
+- Bumped application version to `0.15.0`.
+
 ## [0.14.0] — 2026-05-26 — Milestone 9I: Expanded Room Sizes
 
 ### Added

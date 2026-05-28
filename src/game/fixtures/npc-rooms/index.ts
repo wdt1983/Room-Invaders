@@ -117,6 +117,10 @@ export const NPC_ROOM_LIST: NpcRoomFixture[] = [
   CORNER_STORE,
 ];
 
+// Re-export boss rooms
+export { BOSS_ROOM_FIXTURES, BOSS_ROOM_LIST, isBossFixture } from '../boss-rooms';
+export type { BossRoomFixture, BossDefinition, BossPhase, BossAbility } from '../boss-rooms';
+
 /** Default fixture id used when a raid route receives an unknown `id` (for
  *  example, a profile UUID from the map's Scout Base button — real NPC
  *  rooms associated with profiles will land with task 6.0.8). */
@@ -128,6 +132,11 @@ export const DEFAULT_FIXTURE_ID = ABANDONED_APARTMENT.id;
  * "Scout Base" buttons use real profile UUIDs which won't match until the
  * procedural-NPC milestone (6.0.8).
  */
+import { BOSS_ROOM_FIXTURES } from '../boss-rooms';
+
 export function resolveFixture(id: string): NpcRoomFixture {
+  if (id && id.startsWith('boss-') && id in BOSS_ROOM_FIXTURES) {
+    return BOSS_ROOM_FIXTURES[id];
+  }
   return NPC_ROOM_FIXTURES[id] ?? NPC_ROOM_FIXTURES[DEFAULT_FIXTURE_ID];
 }

@@ -42,6 +42,36 @@ export const FIXTURES: Record<string, FixtureSummary> = {
     stash: { x: 1, y: 1 },
     requiredLevel: 3,
   },
+  "boss-ironjaw": {
+    name: "Ironjaw",
+    difficulty: "easy",
+    stash: { x: 8, y: 8 },
+    requiredLevel: 3,
+  },
+  "boss-whisper": {
+    name: "Whisper",
+    difficulty: "easy",
+    stash: { x: 1, y: 1 },
+    requiredLevel: 5,
+  },
+  "boss-volkov": {
+    name: "Volkov",
+    difficulty: "medium",
+    stash: { x: 10, y: 10 },
+    requiredLevel: 7,
+  },
+  "boss-circuit": {
+    name: "Circuit",
+    difficulty: "medium",
+    stash: { x: 6, y: 6 },
+    requiredLevel: 10,
+  },
+  "boss-warden": {
+    name: "The Warden",
+    difficulty: "hard",
+    stash: { x: 7, y: 7 },
+    requiredLevel: 15,
+  },
 };
 
 /** Ceiling used as a sanity bound for `secondsElapsed`. Hard-difficulty

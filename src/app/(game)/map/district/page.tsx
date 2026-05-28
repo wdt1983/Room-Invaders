@@ -9,9 +9,9 @@ import { revalidatePath } from "next/cache";
 
 // Import Server Actions
 import { createDistrict, joinDistrict, leaveDistrict } from "@/app/actions/district";
+import { getTerritories, getRecentSkirmishes } from "@/app/actions/territory";
 import { ChatConsole } from "@/components/game/ChatConsole";
-import { DistrictTreasury } from "@/components/game/DistrictTreasury";
-import { JointRaidLobby } from "@/components/game/JointRaidLobby";
+import { DistrictDashboard } from "@/components/game/DistrictDashboard";
 
 export const metadata = {
   title: "Stronghold Districts - Room Invaders",
@@ -329,6 +329,10 @@ export default async function StrongholdDistrictPage() {
     credits: (creditsWithdrawn || []).reduce((sum: number, r: any) => sum + r.amount, 0),
   };
 
+  // Fetch territory data
+  const territories = await getTerritories();
+  const recentSkirmishes = await getRecentSkirmishes();
+
   return (
     <div className="container mx-auto p-6 max-w-6xl h-full overflow-y-auto pb-20 select-none">
       {/* Header */}
@@ -354,148 +358,21 @@ export default async function StrongholdDistrictPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* District Dashboard and 3x3 Visual Matrix */}
         <div className="lg:col-span-3 space-y-6">
-          <Card className="border-primary/20 bg-card/40 backdrop-blur shadow-2xl rounded-2xl p-6">
-            <h2 className="text-sm font-black text-white tracking-wider uppercase mb-5">Tactical District Settle Map</h2>
-
-            {/* 3x3 Isometric Matrix Visualizer */}
-            <div className="flex justify-center py-10 relative bg-black/35 rounded-2xl border border-primary/10 overflow-hidden shadow-inner">
-              {/* Background HUD elements */}
-              <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(#0891b2_1px,transparent_1px)] [background-size:16px_16px]"></div>
-
-              <div 
-                className="grid grid-cols-3 gap-6 p-8 relative z-10"
-                style={{ transform: "rotateX(35deg) rotateZ(-45deg)", transformStyle: "preserve-3d" }}
-              >
-                {Array(3).fill(null).map((_, y) => 
-                  Array(3).fill(null).map((_, x) => {
-                    const node = districtGrid[y][x];
-                    
-                    if (node) {
-                      return (
-                        <div
-                          key={`${x}-${y}`}
-                          className={`w-28 h-28 border-2 rounded-2xl flex flex-col items-center justify-center relative p-2 transition-all duration-300 ${
-                            node.isMe
-                              ? "border-emerald-500 text-emerald-400 bg-emerald-950/40 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                              : "border-cyan-500 text-cyan-400 bg-cyan-950/40 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
-                          }`}
-                          style={{ transform: "translateZ(10px)", transformStyle: "preserve-3d" }}
-                        >
-                          {/* Pulsing indicator corner beacon */}
-                          <div className="absolute top-2.5 right-2.5 flex h-2 w-2">
-                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${node.isMe ? "bg-emerald-500" : "bg-cyan-500"}`}></span>
-                            <span className={`relative inline-flex rounded-full h-2 w-2 ${node.isMe ? "bg-emerald-500" : "bg-cyan-500"}`}></span>
-                          </div>
-
-                          <Home className="w-6 h-6 mb-1 filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
-                          <span className="text-[9px] font-black text-white tracking-wide truncate max-w-full uppercase">
-                            {node.username}
-                          </span>
-                          <span className="text-[8px] text-muted-foreground uppercase font-mono mt-0.5">
-                            Lvl {node.roomLevel} Room
-                          </span>
-                          <span className="absolute bottom-2 text-[8px] font-bold text-cyan-400 font-mono">
-                            🛡️ {node.defenseRating}
-                          </span>
-                        </div>
-                      );
-                    } else {
-                      // Render empty grid coordinate slot
-                      return (
-                        <div
-                          key={`${x}-${y}`}
-                          className="w-28 h-28 border border-dashed border-primary/20 bg-background/10 rounded-2xl flex flex-col items-center justify-center text-muted-foreground/40 hover:border-cyan-500/40 hover:text-cyan-400/80 transition-all duration-300"
-                        >
-                          <span className="text-[10px] font-black tracking-wider font-mono">({x}, {y})</span>
-                          <span className="text-[8px] font-bold mt-1 uppercase">EMPTY SLOT</span>
-                        </div>
-                      );
-                    }
-                  })
-                )}
-              </div>
-            </div>
-          </Card>
-
-          {/* District Power Matrix details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-primary/20 bg-card/40 backdrop-blur rounded-2xl p-4 flex flex-col gap-1 shadow-xl">
-              <span className="text-muted-foreground text-[10px] uppercase font-bold flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-cyan-400 shrink-0" />
-                Active Power Nodes
-              </span>
-              <span className="text-2xl font-black text-white font-mono mt-1">
-                {activeNodesCount} Nodes
-              </span>
-              <span className="text-[9px] text-muted-foreground uppercase leading-normal mt-0.5">
-                Placed across district boundaries.
-              </span>
-            </Card>
-
-            <Card className="border-primary/20 bg-card/40 backdrop-blur rounded-2xl p-4 flex flex-col gap-1 shadow-xl">
-              <span className="text-muted-foreground text-[10px] uppercase font-bold flex items-center gap-1.5">
-                <Target className="w-4 h-4 text-cyan-400 shrink-0" />
-                Grid Rate of Fire Boost
-              </span>
-              <span className="text-2xl font-black text-cyan-400 font-mono mt-1">
-                +{Math.round((rofMultiplier - 1.0) * 100)}% Boost
-              </span>
-              <span className="text-[9px] text-muted-foreground uppercase leading-normal mt-0.5">
-                Applies to all allied turrets.
-              </span>
-            </Card>
-
-            <Card className="border-primary/20 bg-card/40 backdrop-blur rounded-2xl p-4 flex flex-col gap-1 shadow-xl">
-              <span className="text-muted-foreground text-[10px] uppercase font-bold flex items-center gap-1.5">
-                <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
-                District Security Bracket
-              </span>
-              <span className="text-2xl font-black text-white font-mono mt-1">
-                {districtMembers.length} Members
-              </span>
-              <span className="text-[9px] text-muted-foreground uppercase leading-normal mt-0.5">
-                Loot plundered proportionally upon breaches.
-              </span>
-            </Card>
-          </div>
-
-          {/* ─── Cooperative Joint Raids ─── */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-2 text-cyan-400">
-                <Swords className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-black tracking-tight text-foreground uppercase">Joint Operations</h2>
-                <p className="text-[10px] text-muted-foreground">Collaborate with allied district members to launch high-stake team breaches.</p>
-              </div>
-            </div>
-            <JointRaidLobby
-              districtId={currentMember.district_id}
-              userId={user.id}
-              username={playerProfile.username}
-            />
-          </div>
-
-          {/* ─── Faction Shared Treasury ─── */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-2 text-amber-400">
-                <Vault className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-black tracking-tight text-foreground uppercase">Faction Shared Treasury</h2>
-                <p className="text-[10px] text-muted-foreground">Pool resources, coordinate upgrades, and manage district operations.</p>
-              </div>
-            </div>
-            <DistrictTreasury
-              vaultBalances={vaultBalances}
-              inventoryBalances={inventoryBalances}
-              recentTransactions={recentTransactions}
-              isLeader={isLeader}
-              withdrawn24h={withdrawn24h}
-            />
-          </div>
+          <DistrictDashboard
+            district={district}
+            districtGrid={districtGrid}
+            activeNodesCount={activeNodesCount}
+            rofMultiplier={rofMultiplier}
+            memberCount={districtMembers.length}
+            vaultBalances={vaultBalances}
+            inventoryBalances={inventoryBalances}
+            recentTransactions={recentTransactions}
+            isLeader={isLeader}
+            withdrawn24h={withdrawn24h}
+            playerProfile={playerProfile}
+            territories={territories}
+            recentSkirmishes={recentSkirmishes}
+          />
         </div>
 
         {/* Global Recon Chat Panel (Desktop Sidebar) */}

@@ -73,6 +73,7 @@ export function RaidResolver() {
           lootIntel: res.lootIntel,
           lootContraband: res.lootContraband,
           damageTaken: res.damageTaken,
+          isFirstClear: res.isFirstClear,
         });
         usePlayerStore.getState().setInventory({
           scrap: res.newScrap,
@@ -110,6 +111,14 @@ export function RaidResolver() {
           .getState()
           .applyXpAndLevel(res.newXp, res.newPlayerLevel);
         if (leveledUp) {
+          const { useUIStore } = require("@/lib/store/useUIStore");
+          useUIStore.getState().showLevelUpOverlay(previousLevel, newLevel);
+          trackEvent("player_level_up", {
+            previousLevel,
+            newLevel,
+            method: "raid_victory",
+            xp: res.newXp,
+          });
           const gained = newLevel - previousLevel;
           toast.success(
             gained > 1 ? `Level up! Lvl ${previousLevel} → ${newLevel}` : `Level up! Lvl ${newLevel}`,

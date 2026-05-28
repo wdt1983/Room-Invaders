@@ -12,11 +12,13 @@ import { toast } from "sonner";
 import { GameWrapper } from "@/components/game/GameWrapper";
 import { RaidInitializer } from "@/components/game/RaidInitializer";
 import { RaidHUD } from "@/components/game/RaidHUD";
+import { BossRaidHUD } from "@/components/game/BossRaidHUD";
 import { RaidResults } from "@/components/game/RaidResults";
 import { RaidResolver } from "@/components/game/RaidResolver";
 import { entryTileFor } from "@/lib/game/entryPoints";
 import { createClient } from "@/lib/supabase/client";
 import * as Icons from "lucide-react";
+import { getActiveEvent } from "@/app/actions/community-events";
 
 interface RaidPrepContainerProps {
   target: {
@@ -83,6 +85,21 @@ export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepCont
     };
     fetchLobbyInfo();
   }, [lobbyId]);
+
+  // Load Active Community Event if active
+  useEffect(() => {
+    const fetchEvent = async () => {
+      try {
+        const event = await getActiveEvent();
+        if (event) {
+          useRaidStore.getState().setActiveEvent(event);
+        }
+      } catch (err) {
+        console.error("Failed to load active community event:", err);
+      }
+    };
+    fetchEvent();
+  }, []);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -209,6 +226,7 @@ export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepCont
         />
         <GameWrapper />
         <RaidHUD />
+        <BossRaidHUD />
         <RaidResults />
         <RaidResolver />
       </div>

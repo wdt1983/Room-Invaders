@@ -23,6 +23,7 @@ const FURNITURE: readonly SpriteDescriptor[] = [
   ['furniture_custom_poster', 1, 1, 40, 0x334155],
   ['furniture_custom_poster_pending', 1, 1, 40, 0xd97706],
   ['furniture_custom_poster_rejected', 1, 1, 40, 0x7f1d1d],
+  ['cosmetic_warden_key',     1, 1, 16, 0x8b5cf6],
 ];
 
 const TRAPS: readonly SpriteDescriptor[] = [
@@ -35,6 +36,8 @@ const TRAPS: readonly SpriteDescriptor[] = [
   ['trap_laser_grid',      1, 1,  4, 0x1abc9c],
   ['trap_shock_wire',      2, 1,  6, 0x9b59b6],
   ['trap_emp_mine',        1, 1,  5, 0x2980b9],
+  ['trap_bear_trap',       1, 1,  6, 0xef4444],
+  ['trap_ghost_wire',      1, 1,  4, 0x10b981],
 ];
 
 const TURRETS: readonly SpriteDescriptor[] = [
@@ -43,6 +46,7 @@ const TURRETS: readonly SpriteDescriptor[] = [
   ['turret_tesla',      1, 1, 56, 0x9b59b6],
   ['turret_autocannon', 2, 2, 64, 0x2c3e50],
   ['turret_shotgun',    1, 1, 44, 0xd35400],
+  ['turret_autocannon_mk2', 2, 2, 64, 0x3b82f6],
 ];
 
 const BARRICADES: readonly SpriteDescriptor[] = [
@@ -53,6 +57,11 @@ const BARRICADES: readonly SpriteDescriptor[] = [
 
 const ENTITIES: readonly SpriteDescriptor[] = [
   ['entity_drone', 1, 1, 40, 0xf1c40f],
+  ['boss_ironjaw', 1, 1, 56, 0xef4444],
+  ['boss_whisper', 1, 1, 48, 0x10b981],
+  ['boss_volkov',  1, 1, 52, 0x3b82f6],
+  ['boss_circuit', 1, 1, 48, 0xeab308],
+  ['boss_warden',  1, 1, 60, 0x8b5cf6],
 ];
 
 const STASH: readonly SpriteDescriptor[] = [
@@ -79,6 +88,7 @@ export class BootScene extends Phaser.Scene {
     this.generateFloorTexture("floor_carpet", 0x242b35, "carpet");
     this.generateFloorTexture("floor_tile", 0x0f172a, "tile"); // glowing cyber-grid
     this.generateFloorTexture("floor_concrete", 0x475569, "concrete");
+    this.generateFloorTexture("floor_neon_glitch", 0x180828, "neon_glitch");
 
     // Standard fallback tile is our cyberpunk glowing tile
     this.generateFloorTexture("iso-tile", 0x0f172a, "tile");
@@ -102,7 +112,7 @@ export class BootScene extends Phaser.Scene {
   /**
    * Generates procedural floor tile diamonds with distinct isometric styles
    */
-  private generateFloorTexture(key: string, color: number, type: "wood" | "carpet" | "tile" | "concrete"): void {
+  private generateFloorTexture(key: string, color: number, type: "wood" | "carpet" | "tile" | "concrete" | "neon_glitch"): void {
     const graphics = this.make.graphics();
     const TILE_W = 64;
     const TILE_H = 32;
@@ -129,7 +139,37 @@ export class BootScene extends Phaser.Scene {
     graphics.closePath();
     graphics.fillPath();
 
-    if (type === "tile") {
+    if (type === "neon_glitch") {
+      // Sleek Neon Glitch: Dark purple base with cybernetic glowing lines in green & pink
+      const neonGreen = 0x22c55e;
+      const neonPink = 0xec4899;
+
+      // Draw glitchy offset outlines
+      graphics.lineStyle(1.5, neonPink, 0.6);
+      graphics.beginPath();
+      graphics.moveTo(ptTop.x - 2, ptTop.y);
+      graphics.lineTo(ptRight.x - 2, ptRight.y);
+      graphics.lineTo(ptBottom.x - 2, ptBottom.y);
+      graphics.lineTo(ptLeft.x - 2, ptLeft.y);
+      graphics.closePath();
+      graphics.strokePath();
+
+      graphics.lineStyle(1.5, neonGreen, 0.7);
+      graphics.beginPath();
+      graphics.moveTo(ptTop.x + 2, ptTop.y);
+      graphics.lineTo(ptRight.x + 2, ptRight.y);
+      graphics.lineTo(ptBottom.x + 2, ptBottom.y);
+      graphics.lineTo(ptLeft.x + 2, ptLeft.y);
+      graphics.closePath();
+      graphics.strokePath();
+
+      // Cyber micro circuit detail inside the tile
+      graphics.lineStyle(1, 0xffffff, 0.3);
+      graphics.beginPath();
+      graphics.moveTo(TILE_W * 0.5, TILE_H * 0.2);
+      graphics.lineTo(TILE_W * 0.5, TILE_H * 0.8);
+      graphics.strokePath();
+    } else if (type === "tile") {
       // Sleek Cyber Grid: Draw gorgeous glowing border edges (neon cyan!)
       const neonColor = 0x06b6d4; 
       

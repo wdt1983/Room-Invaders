@@ -218,20 +218,39 @@ export default async function RaidRoutePage({
     }
   }
 
-  // Enforce 4-hour cooldown
-  const { data: history } = await (supabase.from("raid_history") as any)
-    .select("created_at")
-    .eq("player_id", user.id)
-    .eq("target_id", isProceduralLoaded ? id : fixture.id)
-    .order("created_at", { ascending: false })
-    .limit(1);
+  if (id.startsWith("boss-")) {
+    const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+    const twentyFourHoursAgo = new Date(Date.now() - COOLDOWN_MS).toISOString();
+    const { data: recentClears, error: cooldownError } = await supabase
+      .from("boss_clears")
+      .select("cleared_at")
+      .eq("player_id", user.id)
+      .eq("boss_id", id)
+      .gt("cleared_at", twentyFourHoursAgo)
+      .limit(1);
 
-  if (history && history.length > 0) {
-    const latestRaidAt = history[0].created_at;
-    const COOLDOWN_MS = 4 * 60 * 60 * 1000;
-    const availableAtMs = new Date(latestRaidAt).getTime() + COOLDOWN_MS;
-    if (Date.now() < availableAtMs) {
-      redirect(isProcedural ? "/map" : "/raid");
+    if (cooldownError) {
+      console.warn("[RaidRoutePage] Boss cooldown check failed:", cooldownError);
+    } else if (recentClears && recentClears.length > 0) {
+      console.warn("[RaidRoutePage] Boss is on 24-hour cooldown");
+      redirect("/map");
+    }
+  } else {
+    // Enforce 4-hour standard cooldown
+    const { data: history } = await (supabase.from("raid_history") as any)
+      .select("created_at")
+      .eq("player_id", user.id)
+      .eq("target_id", isProceduralLoaded ? id : fixture.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (history && history.length > 0) {
+      const latestRaidAt = history[0].created_at;
+      const COOLDOWN_MS = 4 * 60 * 60 * 1000;
+      const availableAtMs = new Date(latestRaidAt).getTime() + COOLDOWN_MS;
+      if (Date.now() < availableAtMs) {
+        redirect(isProcedural ? "/map" : "/raid");
+      }
     }
   }
 

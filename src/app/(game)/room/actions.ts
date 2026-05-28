@@ -16,6 +16,7 @@ import {
 import { trackQuestProgress } from "@/lib/game/quests";
 import * as Sentry from "@sentry/nextjs";
 import { trackEvent } from "@/lib/game/analytics";
+import { recordScrapSpend } from "@/lib/game/achievements";
 
 
 const VALID_WALLS = new Set(['north', 'south', 'east', 'west']);
@@ -243,6 +244,9 @@ export async function buyAndPlaceFurniture(spriteKey: string, gridX: number, gri
     // Recompute defense_rating + slot usage after insert, persist, and return fresh stats
     const defenseState = await recomputeDefenseState(supabase, user.id, roomLevel);
 
+    // Track achievements progress for Double Spender
+    await recordScrapSpend(supabase, user.id);
+
     // Track quest progress for placing items
     if (itemType === 'furniture') {
       await trackQuestProgress(supabase, user.id, 'place_furniture', 1);
@@ -457,6 +461,9 @@ export async function upgradePlayerLevel(currentLevel: number) {
   // Track quest progress for player level-up
   await trackQuestProgress(supabase, user.id, 'upgrade_level', 1);
 
+  // Track achievements progress for Double Spender
+  await recordScrapSpend(supabase, user.id);
+
   return { success: true as const, newLevel, newScrap };
 }
 
@@ -543,6 +550,9 @@ export async function upgradeRoomLevel(currentRoomLevel: number) {
 
     // Track quest progress for spending resources
     await trackQuestProgress(supabase, user.id, 'spend_resources', scrapCost + componentsCost);
+
+    // Track achievements progress for Double Spender
+    await recordScrapSpend(supabase, user.id);
 
     return {
       success: true as const,
@@ -652,6 +662,9 @@ export async function upgradeRoomSizeTier(currentTier: number) {
 
     // Track quest progress for spending resources
     await trackQuestProgress(supabase, user.id, 'spend_resources', scrapCost + componentsCost);
+
+    // Track achievements progress for Double Spender
+    await recordScrapSpend(supabase, user.id);
 
     return {
       success: true as const,
@@ -767,6 +780,9 @@ export async function repairPlacedItem(gridX: number, gridY: number) {
 
     // Track quest progress for spending resources
     await trackQuestProgress(supabase, user.id, 'spend_resources', repairCost);
+
+    // Track achievements progress for Double Spender
+    await recordScrapSpend(supabase, user.id);
 
     return {
       success: true as const,

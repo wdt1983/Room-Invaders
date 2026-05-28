@@ -20,6 +20,9 @@ export default function PlayerStoreInitializer({
   squad,
   activeQuestId,
   createdAt,
+  activeBadge,
+  activeBorder,
+  activeRoomSkin,
 }: {
   inventory: {
     scrap: number;
@@ -37,8 +40,18 @@ export default function PlayerStoreInitializer({
   squad: any[];
   activeQuestId: string | null;
   createdAt: string;
+  activeBadge: string | null;
+  activeBorder: string | null;
+  activeRoomSkin: string | null;
 }) {
   useEffect(() => {
+    // 0. Hydrate active cosmetic states
+    usePlayerStore.getState().setCosmeticsState({
+      activeBadge,
+      activeBorder,
+      activeRoomSkin,
+    });
+
     // 1. Hydrate inventory details
     usePlayerStore.getState().setInventory({
       scrap: inventory.scrap,
@@ -123,6 +136,9 @@ export default function PlayerStoreInitializer({
     JSON.stringify(squad),
     activeQuestId,
     createdAt,
+    activeBadge,
+    activeBorder,
+    activeRoomSkin,
   ]);
 
   return null;

@@ -46,7 +46,12 @@ function json(payload: unknown, status = 200): Response {
 }
 
 function findQuestDefinition(questId: string): QuestDefinition | null {
-  const categories = [questsData.tutorial, questsData.daily, questsData.weekly];
+  const categories = [
+    questsData.tutorial,
+    questsData.daily,
+    questsData.weekly,
+    questsData.story,
+  ];
   for (const list of categories) {
     const found = list.find((q) => q.id === questId);
     if (found) return found;
@@ -232,6 +237,8 @@ Deno.serve(async (req: Request) => {
     bpXpGained = 100;
   } else if (body.questId.startsWith("weekly-")) {
     bpXpGained = 250;
+  } else if (body.questId.startsWith("story-")) {
+    bpXpGained = 100;
   }
 
   if (bpXpGained > 0) {

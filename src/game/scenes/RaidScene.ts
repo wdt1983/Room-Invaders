@@ -14,6 +14,8 @@ import {
   type NpcPlacedItem,
   resolveFixture,
   DEFAULT_FIXTURE_ID,
+  isBossFixture,
+  type BossRoomFixture,
 } from '@/game/fixtures/npc-rooms';
 import type { EntryPointType, EntryPointWall } from '@/lib/store/useRoomStore';
 import { applyDamage, applyDamageToPlaced, DEFAULT_SQUAD_HP, heal } from '@/game/systems/CombatSystem';
@@ -22,6 +24,7 @@ import { TrapSystem, type TrapTriggeredPayload } from '@/game/systems/TrapSystem
 import { TurretAI, type TurretFiredPayload } from '@/game/systems/DefenseAI';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
 import { SoundManager } from '@/game/objects/SoundManager';
+import { BossAI } from '@/game/systems/BossAI';
 
 const WALL_COLOR = 0x888888;
 const WALL_THICKNESS = 6;
@@ -144,6 +147,7 @@ export class RaidScene extends Phaser.Scene {
   private pathDebugGraphics!: Phaser.GameObjects.Graphics;
   private trapSystem: TrapSystem | null = null;
   private turretAI: TurretAI | null = null;
+  private bossAI: BossAI | null = null;
   private realtimeChannel: any = null;
   private hostileEntities: EntitySprite[] = [];
   private guardAiTimer: Phaser.Time.TimerEvent | null = null;
@@ -198,6 +202,11 @@ export class RaidScene extends Phaser.Scene {
   private onTurretFired: ((payload: TurretFiredPayload) => void) | null = null;
   private onChangeActiveUnit: ((index: number) => void) | null = null;
   private onExecuteAbility: ((payload: any) => void) | null = null;
+  private onBossPhaseChanged: ((payload: any) => void) | null = null;
+  private onBossSpawnMinions: ((payload: any) => void) | null = null;
+  private onBossOverchargeTurrets: ((payload: any) => void) | null = null;
+  private onBossLockdown: ((payload: any) => void) | null = null;
+  private onTurretJammed: ((payload: any) => void) | null = null;
 
   constructor() {
     super({ key: 'RaidScene' });
@@ -269,6 +278,9 @@ export class RaidScene extends Phaser.Scene {
     // ── Floor ──────────────────────────────────────────────────────────────
     const floorType = target?.cosmetics?.floorType || 'tile';
     const floorKey = `floor_${floorType}`;
+    const stEvent = useRaidStore.getState().activeEvent;
+    const isBlackout = stEvent?.eventType === 'sector_blackout';
+    const blackoutTint = isBlackout ? 0x222233 : 0xffffff;
 
     for (let x = 0; x < this.gridSize; x++) {
       for (let y = 0; y < this.gridSize; y++) {
@@ -276,6 +288,9 @@ export class RaidScene extends Phaser.Scene {
         const tile = this.add.image(screenPos.x + this.offsetX, screenPos.y + this.offsetY, floorKey);
         tile.setData('gridX', x);
         tile.setData('gridY', y);
+        if (isBlackout) {
+          tile.setTint(blackoutTint);
+        }
         this.floorTiles.push(tile);
       }
     }
@@ -305,6 +320,9 @@ export class RaidScene extends Phaser.Scene {
       sprite.setData('gridX', tile.x);
       sprite.setData('gridY', tile.y);
       sprite.setDepth(tile.x + tile.y + 0.5);
+      if (isBlackout) {
+        sprite.setTint(0x444455);
+      }
       this.tweens.add({
         targets: sprite,
         alpha: { from: 0.6, to: 1.0 },
@@ -337,6 +355,9 @@ export class RaidScene extends Phaser.Scene {
       );
       sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
       sprite.setFurnitureRotation(item.rotation ?? 0);
+      if (isBlackout) {
+        sprite.setTint(0x555566);
+      }
       this.furnitureItems.push(sprite);
       
       // Dynamic custom poster rendering checks in PvP Raids / Replays
@@ -460,6 +481,139 @@ export class RaidScene extends Phaser.Scene {
         gridY: item.gridY,
         spriteKey: item.spriteKey,
         sprite,
+      });
+    }
+
+    // ── Boss setup (task: Named NPC Raid Bosses) ───────────────────────────
+    const isBoss = isBossFixture(this.fixture.id);
+    if (isBoss) {
+      const bossFixture = this.fixture as BossRoomFixture;
+      const bDef = bossFixture.boss;
+
+      // Update useRaidStore with boss details
+      useRaidStore.getState().setBossRaidDetails({
+        isBoss: true,
+        name: bDef.name,
+        title: bDef.title,
+        hp: bDef.hp,
+        maxHp: bDef.maxHp,
+        phase: 1,
+        totalPhases: bDef.phases.length,
+        briefingText: bossFixture.briefing.pre,
+      });
+
+      // Spawn boss EntitySprite
+      const bossSprite = new EntitySprite(this, bDef.spawnTile.x, bDef.spawnTile.y, bDef.spriteKey, {
+        entityId: bDef.entityId,
+        name: bDef.name,
+        maxHp: bDef.maxHp,
+        isBoss: true,
+        isHostile: true,
+      });
+      bossSprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+      
+      this.hostileEntities.push(bossSprite);
+      
+      // Instantiate BossAI
+      this.bossAI = new BossAI(bDef, bossSprite, this.gridSystem);
+
+      // Event listener bindings
+      this.onBossPhaseChanged = (payload: { bossId: string; newPhase: number; totalPhases: number; event?: any }) => {
+        useRaidStore.getState().setBossPhase(payload.newPhase, payload.totalPhases);
+        
+        const st = useRaidStore.getState();
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        st.appendAction({
+          t: elapsed,
+          type: 'boss_phase_changed',
+          data: payload
+        });
+
+        this.cameras.main.shake(300, 0.01);
+        this.cameras.main.flash(400, 239, 68, 68, false); // red flash
+        this.broadcastOperationalEvent(`[${elapsed}s] ⚠️ ALERT: ${bDef.name} entered Phase ${payload.newPhase}/${payload.totalPhases}!`);
+      };
+      EventBus.on('boss-phase-changed', this.onBossPhaseChanged);
+
+      this.onBossSpawnMinions = (payload: { bossId: string; count: number; spriteKey: string; hp: number; damage: number }) => {
+        const st = useRaidStore.getState();
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        
+        for (let i = 0; i < payload.count; i++) {
+          const bx = bossSprite.currentGridX;
+          const by = bossSprite.currentGridY;
+          const offsets = [[0, -1], [0, 1], [-1, 0], [1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+          let spawn = { x: bx + 1, y: by + 1 };
+          
+          for (const [dx, dy] of offsets) {
+            const tx = bx + dx;
+            const ty = by + dy;
+            if (this.gridSystem.isInBounds(tx, ty) && this.gridSystem.isTileWalkable(tx, ty)) {
+              spawn = { x: tx, y: ty };
+              break;
+            }
+          }
+          
+          const minion = new EntitySprite(this, spawn.x, spawn.y, payload.spriteKey, {
+            entityId: `minion_${Date.now()}_${i}`,
+            name: 'Guard Drone',
+            maxHp: payload.hp,
+            speed: 1.2,
+            isHostile: true,
+          });
+          minion.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+          minion.setTint(0xff8888);
+          this.hostileEntities.push(minion);
+          
+          st.appendAction({
+            t: elapsed,
+            type: 'minion_spawned',
+            data: { entityId: minion.entityId, gridX: spawn.x, gridY: spawn.y }
+          });
+        }
+        
+        this.broadcastOperationalEvent(`[${elapsed}s] ⚠️ ALERT: ${bDef.name} spawned Guard Drones!`);
+      };
+      EventBus.on('boss-spawn-minions', this.onBossSpawnMinions);
+
+      this.onBossOverchargeTurrets = (_payload: { bossId: string; duration: number }) => {
+        if (this.turretAI) {
+          const deployedTurrets = (this.turretAI as any).turrets;
+          if (deployedTurrets) {
+            for (const turret of deployedTurrets.values()) {
+              turret.stats.fire_rate = turret.stats.fire_rate * 0.5; // twice as fast
+              this.playEmpVfx(turret.gridX, turret.gridY);
+            }
+          }
+        }
+        const st = useRaidStore.getState();
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        this.broadcastOperationalEvent(`[${elapsed}s] ⚡ WARNING: All defensive turrets overcharged!`);
+      };
+      EventBus.on('boss-overcharge-turrets', this.onBossOverchargeTurrets);
+
+      this.onBossLockdown = (payload: { bossId: string; duration: number }) => {
+        this.squadEntities.forEach(s => {
+          if (s.hp > 0) {
+            this.applyEntityStun(s.entityId, payload.duration);
+          }
+        });
+        const st = useRaidStore.getState();
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        this.broadcastOperationalEvent(`[${elapsed}s] 🔒 WARNING: The Warden triggered lockdown! Squad is STUNNED!`);
+      };
+      EventBus.on('boss-lockdown', this.onBossLockdown);
+    } else {
+      // Clear boss state details
+      useRaidStore.getState().setBossRaidDetails({
+        isBoss: false,
+        name: '',
+        title: '',
+        hp: 0,
+        maxHp: 0,
+        phase: 1,
+        totalPhases: 1,
+        briefingText: null,
       });
     }
 
@@ -663,6 +817,29 @@ export class RaidScene extends Phaser.Scene {
     // ── CombatSystem wiring (task 3.0.9) ───────────────────────────────────
     // Mirror squad HP to the store so the HUD stays live.
     this.onEntityDamaged = (payload) => {
+      // Check if boss was damaged
+      const isBossRaid = isBossFixture(this.fixture.id);
+      if (isBossRaid) {
+        const bDef = (this.fixture as BossRoomFixture).boss;
+        if (payload.entityId === bDef.entityId) {
+          const bossSprite = this.hostileEntities.find(e => e.entityId === bDef.entityId);
+          if (bossSprite) {
+            bossSprite.hp = payload.hp;
+            useRaidStore.getState().setBossHp(payload.hp);
+            
+            const st = useRaidStore.getState();
+            const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+            st.appendAction({
+              t: elapsed,
+              type: 'boss_damaged',
+              data: { bossId: payload.entityId, hp: payload.hp, maxHp: payload.maxHp, amount: payload.amount }
+            });
+            this.broadcastOperationalEvent(`[${elapsed}s] Boss ${bDef.name} took ${payload.amount} damage! (${payload.hp}/${payload.maxHp} HP)`);
+          }
+          return;
+        }
+      }
+
       const memberIndex = this.squadEntities.findIndex(e => e.entityId === payload.entityId);
       if (memberIndex >= 0) {
         const sprite = this.squadEntities[memberIndex];
@@ -710,6 +887,27 @@ export class RaidScene extends Phaser.Scene {
       }
     };
     this.onEntityKilled = (payload) => {
+      // Check if boss was killed
+      const isBossRaid = isBossFixture(this.fixture.id);
+      if (isBossRaid) {
+        const bDef = (this.fixture as BossRoomFixture).boss;
+        if (payload.entityId === bDef.entityId) {
+          useRaidStore.getState().setBossHp(0);
+          
+          const st = useRaidStore.getState();
+          const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+          st.appendAction({
+            t: elapsed,
+            type: 'boss_defeated',
+            data: { bossId: payload.entityId }
+          });
+          
+          this.broadcastOperationalEvent(`[${elapsed}s] VICTORY: Boss ${bDef.name} was DEFEATED!`);
+          this.finishRaid('victory', 'Boss defeated');
+          return;
+        }
+      }
+
       const memberIndex = this.squadEntities.findIndex(e => e.entityId === payload.entityId);
       if (memberIndex >= 0) {
         const sprite = this.squadEntities[memberIndex];
@@ -797,6 +995,31 @@ export class RaidScene extends Phaser.Scene {
     // emitter. Shares the squad-stun helper with handleTrapTriggered.
     this.onTurretFired = (payload) => this.handleTurretFired(payload);
     EventBus.on('turret-fired', this.onTurretFired);
+
+    // ── Turret jam visual feedback (Task 2) ──────────────────────────────
+    this.onTurretJammed = (payload: { gridX: number; gridY: number }) => {
+      const isBlackout = useRaidStore.getState().activeEvent?.eventType === 'sector_blackout';
+      const screenPos = IsometricEngine.worldToScreen(payload.gridX, payload.gridY, this.currentRotation);
+      const sparks = this.add.graphics().setDepth(payload.gridX + payload.gridY + 1.5);
+      sparks.lineStyle(2, 0x00ffff, 1);
+      for (let i = 0; i < 3; i++) {
+        sparks.lineBetween(
+          screenPos.x + this.offsetX + Phaser.Math.Between(-12, 12),
+          screenPos.y + this.offsetY - 24 + Phaser.Math.Between(-8, 8),
+          screenPos.x + this.offsetX + Phaser.Math.Between(-12, 12),
+          screenPos.y + this.offsetY - 12 + Phaser.Math.Between(-8, 8)
+        );
+      }
+      const turretSprite = this.furnitureItems.find(f => f.gridX === payload.gridX && f.gridY === payload.gridY);
+      if (turretSprite) {
+        turretSprite.setTint(0xff3333);
+        this.time.delayedCall(120, () => {
+          if (turretSprite) turretSprite.setTint(isBlackout ? 0x555566 : 0xffffff);
+        });
+      }
+      this.time.delayedCall(180, () => sparks.destroy());
+    };
+    EventBus.on('turret-jammed', this.onTurretJammed);
 
     // ── Cleanup on scene shutdown ──────────────────────────────────────────
     // Belt-and-suspenders: navigating away from /raid destroys the Phaser
@@ -1182,6 +1405,26 @@ export class RaidScene extends Phaser.Scene {
       this.turretAI.destroy();
       this.turretAI = null;
     }
+    if (this.bossAI) {
+      this.bossAI.destroy();
+      this.bossAI = null;
+    }
+    if (this.onBossPhaseChanged) {
+      EventBus.off('boss-phase-changed', this.onBossPhaseChanged);
+      this.onBossPhaseChanged = null;
+    }
+    if (this.onBossSpawnMinions) {
+      EventBus.off('boss-spawn-minions', this.onBossSpawnMinions);
+      this.onBossSpawnMinions = null;
+    }
+    if (this.onBossOverchargeTurrets) {
+      EventBus.off('boss-overcharge-turrets', this.onBossOverchargeTurrets);
+      this.onBossOverchargeTurrets = null;
+    }
+    if (this.onBossLockdown) {
+      EventBus.off('boss-lockdown', this.onBossLockdown);
+      this.onBossLockdown = null;
+    }
     this.stopBarricadeAttack();
     this.clearStashHold();
     if (this.onEntityEnteredTile) {
@@ -1195,6 +1438,10 @@ export class RaidScene extends Phaser.Scene {
     if (this.onExecuteAbility) {
       EventBus.off('execute-ability', this.onExecuteAbility);
       this.onExecuteAbility = null;
+    }
+    if (this.onTurretJammed) {
+      EventBus.off('turret-jammed', this.onTurretJammed);
+      this.onTurretJammed = null;
     }
     this.stunnedUntilMs = 0;
   }
@@ -1214,6 +1461,7 @@ export class RaidScene extends Phaser.Scene {
   public update(time: number): void {
     if (useRaidStore.getState().phase !== 'active') return;
     this.turretAI?.tick(time);
+    this.bossAI?.tick(time, this.squadEntities);
 
     // Draw pulsating selection ring under the active squad member
     if (this.playerEntity && this.playerEntity.active && this.playerEntity.hp > 0) {

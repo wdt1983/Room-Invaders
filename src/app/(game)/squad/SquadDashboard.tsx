@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { useSquadStore, type SquadMember } from "@/lib/store/useSquadStore";
 import { unlockTechNodeAction, updateSquadMemberAction } from "./actions";
+import { getAchievementsAction, equipCosmeticAction } from "./achievements";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,18 +23,31 @@ function Icon({ name, className }: { name: string; className?: string }) {
 
 interface SquadDashboardProps {
   initialPlayerLevel: number;
+  initialActiveBadge: string | null;
+  initialActiveBorder: string | null;
+  initialActiveRoomSkin: string | null;
 }
 
-export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardProps) {
+export default function SquadDashboard({ 
+  initialPlayerLevel,
+  initialActiveBadge,
+  initialActiveBorder,
+  initialActiveRoomSkin 
+}: SquadDashboardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<"loadout" | "tech">("loadout");
+  const [activeTab, setActiveTab] = useState<"loadout" | "tech" | "trophy">("loadout");
 
   // Zustand states
   const techPoints = usePlayerStore((state) => state.techPoints);
   const unlockedTechs = usePlayerStore((state) => state.unlockedTechs);
   const activeEffects = usePlayerStore((state) => state.activeEffects);
   const unlockTechNode = usePlayerStore((state) => state.unlockTechNode);
+
+  const activeBadge = usePlayerStore((state) => state.activeBadge);
+  const activeBorder = usePlayerStore((state) => state.activeBorder);
+  const activeRoomSkin = usePlayerStore((state) => state.activeRoomSkin);
+  const setCosmeticsState = usePlayerStore((state) => state.setCosmeticsState);
 
   const squadMembers = useSquadStore((state) => state.members);
   const isSlotLocked = useSquadStore((state) => state.isLocked);
@@ -45,6 +59,67 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
   // Renaming inputs state
   const [renamingSlot, setRenamingSlot] = useState<number | null>(null);
   const [newNameVal, setNewNameVal] = useState("");
+
+  // Achievements tracking details
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [loadingAchievements, setLoadingAchievements] = useState(true);
+
+  // Initialize cosmetics state on mount
+  useEffect(() => {
+    setCosmeticsState({
+      activeBadge: initialActiveBadge,
+      activeBorder: initialActiveBorder,
+      activeRoomSkin: initialActiveRoomSkin,
+    });
+  }, [initialActiveBadge, initialActiveBorder, initialActiveRoomSkin, setCosmeticsState]);
+
+  // Load achievements progress
+  useEffect(() => {
+    async function loadAchievements() {
+      try {
+        const res = await getAchievementsAction();
+        if (res.success && res.achievements) {
+          setAchievements(res.achievements);
+        }
+      } catch (err) {
+        console.error("Failed to load achievements", err);
+      } finally {
+        setLoadingAchievements(false);
+      }
+    }
+    loadAchievements();
+  }, [activeBadge, activeBorder, activeRoomSkin]);
+
+  const handleEquipCosmetic = async (type: "badge" | "border" | "room_skin", code: string | null) => {
+    if (isPending) return;
+
+    startTransition(async () => {
+      try {
+        const activeCode = type === "badge" ? activeBadge : type === "border" ? activeBorder : activeRoomSkin;
+        const targetCode = activeCode === code ? null : code;
+
+        const res = await equipCosmeticAction(type, targetCode);
+        if (res.success) {
+          setCosmeticsState({
+            activeBadge: type === "badge" ? targetCode : activeBadge,
+            activeBorder: type === "border" ? targetCode : activeBorder,
+            activeRoomSkin: type === "room_skin" ? targetCode : activeRoomSkin,
+          });
+
+          toast.success(
+            targetCode 
+              ? `${type.replace("_", " ")} equipped successfully!` 
+              : `${type.replace("_", " ")} unequipped.`
+          );
+          router.refresh();
+        } else {
+          toast.error("Failed to equip cosmetic", { description: res.error });
+        }
+      } catch (err) {
+        toast.error("Error communicating with cosmetics server");
+      }
+    });
+  };
 
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -217,10 +292,17 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
             Tech Tree {initialPlayerLevel < 8 && <Icons.Lock className="size-3 text-muted-foreground" />}
           </button>
           <button
+            onClick={() => setActiveTab("trophy")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded font-bold text-xs transition-all ${activeTab === "trophy" ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' : 'text-muted-foreground'}`}
+          >
+            <Icons.Trophy className="size-4 text-emerald-400 animate-pulse" />
+            Trophy Room
+          </button>
+          <button
             onClick={() => router.push("/battle-pass")}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded font-bold text-xs transition-all text-muted-foreground hover:text-foreground"
           >
-            <Icons.Trophy className="size-4 text-amber-400" />
+            <Icons.Milestone className="size-4 text-amber-400" />
             Battle Pass
           </button>
         </div>
@@ -313,6 +395,35 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
                     <CardDescription className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide">
                       Squad Slot #{slot}
                     </CardDescription>
+
+                    {/* Character headshot portrait box with glowing neon-green border overrides */}
+                    <div className="flex justify-center py-2 shrink-0 select-none">
+                      <div className={`relative flex items-center justify-center size-24 rounded-2xl bg-muted/30 border transition-all duration-500 ${
+                        activeBorder === "neon-green" 
+                          ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.45)]' 
+                          : 'border-border/40'
+                      }`}>
+                        <div className="absolute inset-0.5 rounded-[14px] bg-background/80 flex items-center justify-center overflow-hidden">
+                          <div className={`absolute inset-0 bg-gradient-to-br opacity-10 ${
+                            slot === 1 ? 'from-rose-500 to-purple-500' :
+                            slot === 2 ? 'from-emerald-500 to-teal-500' :
+                            slot === 3 ? 'from-amber-500 to-red-500' :
+                            'from-blue-500 to-indigo-500'
+                          }`}></div>
+                          {slot === 1 ? <Icons.ShieldAlert className={`size-10 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-rose-400'}`} /> :
+                           slot === 2 ? <Icons.HeartPulse className={`size-10 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-emerald-400'}`} /> :
+                           slot === 3 ? <Icons.Bomb className={`size-10 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-amber-400'}`} /> :
+                           <Icons.Radar className={`size-10 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-blue-400'}`} />}
+                        </div>
+                        
+                        {/* Little badge icon overlay on the portrait if user has equipped badge */}
+                        {activeBadge === "raids_50" && (
+                          <div className="absolute -bottom-2 -right-2 bg-background border border-amber-500/50 shadow rounded-lg p-1 animate-bounce">
+                            <Icons.Award className="size-4 text-amber-500" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </CardHeader>
 
                   <CardContent className="flex-1 py-2 space-y-3 text-xs overflow-y-auto scrollbar-none">
@@ -445,7 +556,7 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
             </CardContent>
           </Card>
         </div>
-      ) : (
+      ) : activeTab === "tech" ? (
         /* ========================================================
            TECH TREE TAB
            ======================================================== */
@@ -493,7 +604,7 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
                           </div>
                         </div>
 
-                        <p className="text-xs text-muted-foreground leading-relaxed leading-snug">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
                           {selectedNode.description}
                         </p>
 
@@ -644,6 +755,251 @@ export default function SquadDashboard({ initialPlayerLevel }: SquadDashboardPro
               </div>
             </div>
           )}
+        </div>
+      ) : (
+        /* ========================================================
+           TROPHY ROOM TAB
+           ======================================================= */
+        <div className="space-y-6">
+          {/* Hall Glassmorphic Header */}
+          <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-card/30 p-6 backdrop-blur shadow-xl">
+            <div className="absolute -right-16 -top-16 size-48 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none"></div>
+            <div className="absolute -left-16 -bottom-16 size-48 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+            <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 z-10">
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                  <Icons.Award className="size-6 text-emerald-400 animate-pulse" />
+                  Stronghold Trophy Hall
+                </h2>
+                <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
+                  Earn prestigious visual cosmetics and custom badges by completing high-difficulty tactical milestones. Equip borders and skins to showcase your achievements dynamically across the entire stronghold.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 shrink-0">
+                <div className="rounded-xl border border-border/40 bg-background/40 p-3 text-center">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Achievements</span>
+                  <p className="text-lg font-black text-emerald-400 mt-0.5">
+                    {loadingAchievements ? "..." : `${achievements.filter((a) => a.isUnlocked).length} / ${achievements.length}`}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/40 bg-background/40 p-3 text-center">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Unlocked Rate</span>
+                  <p className="text-lg font-black text-primary mt-0.5">
+                    {loadingAchievements ? "..." : `${Math.round((achievements.filter((a) => a.isUnlocked).length / (achievements.length || 1)) * 100)}%`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Portrait Preview panel */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+              <Icons.Users className="size-3.5 text-primary" /> Active Squad Portrait Previews
+            </h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((slot) => {
+                const locked = isSlotLocked(slot, initialPlayerLevel);
+                const member = squadMembers.find((m) => m.slotNumber === slot);
+
+                if (locked || !member) {
+                  const reqLvl = slot === 2 ? 10 : slot === 3 ? 25 : 30;
+                  return (
+                    <Card key={slot} className="border-border/40 bg-card/10 backdrop-blur opacity-40 flex flex-col justify-center items-center h-44 text-center p-4 border-dashed">
+                      <Icons.Lock className="size-6 text-muted-foreground/30 mb-2" />
+                      <span className="text-[10px] font-bold text-muted-foreground">Slot Locked (Level {reqLvl})</span>
+                    </Card>
+                  );
+                }
+
+                return (
+                  <Card key={slot} className="border-border/20 bg-card/30 backdrop-blur shadow-lg flex flex-col p-4 relative overflow-hidden group">
+                    <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+                    <div className="flex items-center gap-4">
+                      {/* Avatar preview with custom equipped border overlay */}
+                      <div className={`relative flex items-center justify-center size-16 rounded-xl bg-muted/20 border transition-all duration-500 shrink-0 ${
+                        activeBorder === "neon-green" 
+                          ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse' 
+                          : 'border-border/40'
+                      }`}>
+                        <div className="absolute inset-0.5 rounded-[9px] bg-background/80 flex items-center justify-center overflow-hidden">
+                          <div className={`absolute inset-0 bg-gradient-to-br opacity-10 ${
+                            slot === 1 ? 'from-rose-500 to-purple-500' :
+                            slot === 2 ? 'from-emerald-500 to-teal-500' :
+                            slot === 3 ? 'from-amber-500 to-red-500' :
+                            'from-blue-500 to-indigo-500'
+                          }`}></div>
+                          {slot === 1 ? <Icons.ShieldAlert className={`size-7 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-rose-400'}`} /> :
+                           slot === 2 ? <Icons.HeartPulse className={`size-7 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-emerald-400'}`} /> :
+                           slot === 3 ? <Icons.Bomb className={`size-7 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-amber-400'}`} /> :
+                           <Icons.Radar className={`size-7 transition-colors duration-500 ${activeBorder === 'neon-green' ? 'text-emerald-400' : 'text-blue-400'}`} />}
+                        </div>
+
+                        {/* Little badge icon overlay on the portrait if user has equipped badge */}
+                        {activeBadge === "badge_veteran_raider" && (
+                          <div className="absolute -bottom-1 -right-1 bg-background border border-amber-500/50 shadow rounded p-0.5 animate-bounce">
+                            <Icons.Award className="size-3 text-amber-500" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-foreground truncate">{member.name}</h4>
+                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">
+                          Slot #{slot} • {slot === 1 ? 'Leader' : slot === 2 ? 'Medic' : slot === 3 ? 'Demoman' : 'Scout'}
+                        </p>
+                        
+                        {/* Render active border/badge label below */}
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {activeBorder === "neon-green" && (
+                            <span className="text-[8px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-extrabold px-1 rounded">
+                              NEON FRAME
+                            </span>
+                          )}
+                          {activeBadge === "badge_veteran_raider" && (
+                            <span className="text-[8px] bg-amber-500/10 border border-amber-500/30 text-amber-400 font-extrabold px-1 rounded">
+                              VETERAN BADGE
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Achievement Milestones Catalog Grid */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+              <Icons.Trophy className="size-3.5 text-emerald-400" /> Milestone Achievement Catalog
+            </h3>
+            
+            {loadingAchievements ? (
+              <div className="py-20 text-center text-xs text-muted-foreground animate-pulse">
+                Accessing District Achievement Records...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {achievements.map((ach) => {
+                  const percent = Math.min(100, Math.round((ach.progress / ach.targetValue) * 100));
+                  
+                  // Determine reward visual representation
+                  let rewardLabel = "";
+                  let rewardIcon = <Icons.HelpCircle className="size-5" />;
+                  let isEquipped = false;
+
+                  if (ach.rewardType === "badge") {
+                    rewardLabel = "Exclusive Profile Badge";
+                    rewardIcon = <Icons.Award className="size-5 text-amber-400" />;
+                    isEquipped = activeBadge === ach.rewardCode;
+                  } else if (ach.rewardType === "portrait_border") {
+                    rewardLabel = "Glowing Portrait Border";
+                    rewardIcon = <Icons.Sparkles className="size-5 text-emerald-400" />;
+                    isEquipped = activeBorder === ach.rewardCode;
+                  } else if (ach.rewardType === "room_skin") {
+                    rewardLabel = "Phaser Room Skin Override";
+                    rewardIcon = <Icons.Layers className="size-5 text-fuchsia-400" />;
+                    isEquipped = activeRoomSkin === ach.rewardCode;
+                  }
+
+                  return (
+                    <div 
+                      key={ach.id} 
+                      className={`relative overflow-hidden rounded-2xl border transition-all duration-500 bg-card/25 p-5 backdrop-blur flex flex-col md:flex-row items-start md:items-center justify-between gap-6 ${
+                        ach.isUnlocked 
+                          ? 'border-emerald-500/30 bg-emerald-500/[0.02] shadow-[0_0_15px_rgba(16,185,129,0.05)]' 
+                          : 'border-border/30 bg-background/5'
+                      }`}
+                    >
+                      {/* Left Side: Detail & Progress Info */}
+                      <div className="flex-1 space-y-3.5 min-w-0 w-full">
+                        <div className="flex items-center gap-3">
+                          <div className={`rounded-xl p-2.5 border shrink-0 ${
+                            ach.isUnlocked 
+                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                              : 'bg-muted/10 border-border/30 text-muted-foreground'
+                          }`}>
+                            {rewardIcon}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-black uppercase tracking-wider text-foreground leading-tight">{ach.name}</h4>
+                              {ach.isUnlocked && (
+                                <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse flex items-center gap-0.5">
+                                  <Icons.CheckCircle className="size-2.5" /> UNLOCKED
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{ach.description}</p>
+                          </div>
+                        </div>
+
+                        {/* Progress Meter */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-[10px] font-mono">
+                            <span className="text-muted-foreground">Progress Checklist:</span>
+                            <span className={`font-bold ${ach.isUnlocked ? 'text-emerald-400' : 'text-foreground'}`}>
+                              {ach.progress} / {ach.targetValue} ({percent}%)
+                            </span>
+                          </div>
+                          <div className="h-2 w-full bg-muted/30 border border-border/20 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-1000 ${
+                                ach.isUnlocked 
+                                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
+                                  : 'bg-gradient-to-r from-primary to-purple-600'
+                              }`}
+                              style={{ width: `${percent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Reward Display & Toggle button */}
+                      <div className="flex flex-row md:flex-col items-center justify-between md:justify-center md:items-end shrink-0 w-full md:w-auto gap-4 border-t md:border-t-0 border-border/10 pt-4 md:pt-0">
+                        <div className="text-left md:text-right">
+                          <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Reward Earned:</span>
+                          <p className="text-xs font-bold text-foreground mt-0.5">{rewardLabel}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground font-semibold uppercase tracking-wider">{ach.rewardCode}</p>
+                        </div>
+
+                        {ach.isUnlocked ? (
+                          <Button
+                            className={`w-32 font-black transition-all duration-300 border text-xs ${
+                              isEquipped 
+                                ? 'bg-primary/20 hover:bg-primary/30 text-primary border-primary/40 shadow-[0_0_10px_rgba(236,72,153,0.25)]' 
+                                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:scale-[1.02]'
+                            }`}
+                            onClick={() => handleEquipCosmetic(ach.rewardType === "portrait_border" ? "border" : (ach.rewardType as any), ach.rewardCode)}
+                            disabled={isPending}
+                          >
+                            {isPending ? (
+                              <Icons.Loader2 className="size-4 animate-spin" />
+                            ) : isEquipped ? (
+                              <span className="flex items-center justify-center gap-1.5">
+                                <Icons.Sparkle className="size-3.5 text-primary" /> EQUIPPED
+                              </span>
+                            ) : (
+                              "EQUIP COSMETIC"
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            className="w-32 bg-background/50 border border-border/40 text-muted-foreground text-xs select-none pointer-events-none"
+                            disabled
+                          >
+                            <Icons.Lock className="size-3.5 mr-1.5" /> LOCKED
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

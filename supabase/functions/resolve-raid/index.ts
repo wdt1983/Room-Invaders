@@ -241,6 +241,74 @@ function getBpXpGained(isPvP: boolean, fixtureId: string, outcome: "victory" | "
   return 100; // default fallback
 }
 
+async function trackBossDefeatedQuestProgress(supabase: any, userId: string, bossId: string): Promise<void> {
+  try {
+    const { data: activeQuests, error } = await supabase
+      .from("player_quests")
+      .select("id, quest_id")
+      .eq("player_id", userId)
+      .eq("status", "active");
+
+    if (error || !activeQuests || activeQuests.length === 0) return;
+
+    const bossQuestMapping: Record<string, string> = {
+      "story-02": "boss-ironjaw",
+      "story-04": "boss-whisper",
+      "story-05": "boss-volkov",
+      "story-06": "boss-circuit",
+      "story-07": "boss-warden",
+    };
+
+    for (const pq of activeQuests) {
+      const requiredBoss = bossQuestMapping[pq.quest_id];
+      if (requiredBoss === bossId) {
+        const nowStr = new Date().toISOString();
+        await supabase
+          .from("player_quests")
+          .update({
+            progress: 1,
+            status: "completed",
+            completed_at: nowStr,
+            updated_at: nowStr,
+          })
+          .eq("id", pq.id);
+
+        console.log(`[QuestSystem] Completed boss defeat quest ${pq.quest_id} for boss ${bossId}`);
+
+        const unlockSequences: Record<string, string> = {
+          "story-02": "story-03",
+          "story-04": "story-05",
+          "story-05": "story-06",
+          "story-06": "story-07",
+        };
+
+        const nextQuest = unlockSequences[pq.quest_id];
+        if (nextQuest) {
+          const { data: storyExists } = await supabase
+            .from("player_quests")
+            .select("id")
+            .eq("player_id", userId)
+            .eq("quest_id", nextQuest)
+            .limit(1);
+
+          if (!storyExists || storyExists.length === 0) {
+            await supabase.from("player_quests").insert({
+              player_id: userId,
+              quest_id: nextQuest,
+              status: "active",
+              progress: 0,
+              target_value: 1,
+            });
+            console.log(`[QuestSystem] Unlocked sequential story quest: ${nextQuest}`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[QuestSystem] Error tracking boss defeat quest progress:", err);
+  }
+}
+
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -316,6 +384,8 @@ Deno.serve(async (req: Request) => {
   // Check if target is a player UUID (PvP raid)
   const isPvP = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(body.fixtureId);
 
+  const isBoss = body.fixtureId.startsWith("boss-");
+
   let loot: {
     scrap: number;
     components: number;
@@ -328,6 +398,7 @@ Deno.serve(async (req: Request) => {
 
   let gridSize = 10;
   let entryPoints: any[] = [];
+  let isFirstClearResult = false;
 
   if (isPvP) {
     const defenderId = body.fixtureId;
@@ -653,24 +724,46 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: "Player level too low for this target" }, 400);
     }
 
-    // Enforce 4-hour cooldown
-    const COOLDOWN_MS = 4 * 60 * 60 * 1000;
-    const fourHoursAgo = new Date(Date.now() - COOLDOWN_MS).toISOString();
-    // deno-lint-ignore no-explicit-any
-    const { data: recentRaids, error: cooldownError } = await (supabase.from("raid_history") as any)
-      .select("id")
-      .eq("player_id", user.id)
-      .eq("target_id", body.fixtureId)
-      .gt("created_at", fourHoursAgo)
-      .limit(1);
+    if (isBoss) {
+      // Enforce 24-hour boss cooldown
+      const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+      const twentyFourHoursAgo = new Date(Date.now() - COOLDOWN_MS).toISOString();
+      const { data: recentClears, error: cooldownError } = await supabase
+        .from("boss_clears")
+        .select("id")
+        .eq("player_id", user.id)
+        .eq("boss_id", body.fixtureId)
+        .gt("cleared_at", twentyFourHoursAgo)
+        .limit(1);
 
-    if (cooldownError) {
-      console.warn("[resolve-raid] Cooldown check failed:", cooldownError);
-      return json({ success: false, error: "Failed to verify target cooldown status" }, 500);
-    }
+      if (cooldownError) {
+        console.warn("[resolve-raid] Boss cooldown check failed:", cooldownError);
+        return json({ success: false, error: "Failed to verify boss cooldown status" }, 500);
+      }
 
-    if (recentRaids && recentRaids.length > 0) {
-      return json({ success: false, error: "Target is currently on cooldown" }, 400);
+      if (recentClears && recentClears.length > 0) {
+        return json({ success: false, error: "Target is currently on cooldown" }, 400);
+      }
+    } else {
+      // Enforce 4-hour standard cooldown
+      const COOLDOWN_MS = 4 * 60 * 60 * 1000;
+      const fourHoursAgo = new Date(Date.now() - COOLDOWN_MS).toISOString();
+      // deno-lint-ignore no-explicit-any
+      const { data: recentRaids, error: cooldownError } = await (supabase.from("raid_history") as any)
+        .select("id")
+        .eq("player_id", user.id)
+        .eq("target_id", body.fixtureId)
+        .gt("created_at", fourHoursAgo)
+        .limit(1);
+
+      if (cooldownError) {
+        console.warn("[resolve-raid] Cooldown check failed:", cooldownError);
+        return json({ success: false, error: "Failed to verify target cooldown status" }, 500);
+      }
+
+      if (recentRaids && recentRaids.length > 0) {
+        return json({ success: false, error: "Target is currently on cooldown" }, 400);
+      }
     }
 
     // Reward computation (NPC-specific)
@@ -723,9 +816,20 @@ Deno.serve(async (req: Request) => {
 
   // Victory validation check
   if (body.outcome === "victory") {
-    const secured = body.actionLog.some((e) => e?.type === "stash_secured");
-    if (!secured) {
-      return json({ success: false, error: "Victory claim missing stash_secured event" }, 400);
+    const isBoss = body.fixtureId.startsWith("boss-");
+
+    if (isBoss) {
+      const bossDefeated = body.actionLog.some(
+        (e) => e?.type === "boss_defeated" || e?.type === "boss-defeated" || e?.type === "entity-killed" || e?.type === "entity_killed"
+      );
+      if (!bossDefeated) {
+        return json({ success: false, error: "Victory claim missing boss_defeated event" }, 400);
+      }
+    } else {
+      const secured = body.actionLog.some((e) => e?.type === "stash_secured");
+      if (!secured) {
+        return json({ success: false, error: "Victory claim missing stash_secured event" }, 400);
+      }
     }
 
     // Hardened PvP & Static NPC coordinate path + speed verifications
@@ -767,13 +871,15 @@ Deno.serve(async (req: Request) => {
       }
     } else if (FIXTURES[body.fixtureId]) {
       // Static NPC fixture validation
-      const stash = FIXTURES[body.fixtureId].stash;
-      const reachedStash = body.actionLog.some((e) => 
-        (e?.type === "move" && e?.data?.gridX === stash.x && e?.data?.gridY === stash.y) ||
-        (e?.type === "stash_entered")
-      );
-      if (!reachedStash) {
-        return json({ success: false, error: "Illegal victory claim: squad never reached the loot stash tile" }, 400);
+      if (!isBoss) {
+        const stash = FIXTURES[body.fixtureId].stash;
+        const reachedStash = body.actionLog.some((e) => 
+          (e?.type === "move" && e?.data?.gridX === stash.x && e?.data?.gridY === stash.y) ||
+          (e?.type === "stash_entered")
+        );
+        if (!reachedStash) {
+          return json({ success: false, error: "Illegal victory claim: squad never reached the loot stash tile" }, 400);
+        }
       }
 
       // Speed check for NPC
@@ -892,16 +998,23 @@ Deno.serve(async (req: Request) => {
         const pNewIntel = (pInv.intel ?? 0) + pLootIntel;
         const pNewContraband = (pInv.contraband ?? 0) + pLootContraband;
 
+        const pUpdatePayload: any = {
+          scrap: pNewScrap,
+          components: pNewComponents,
+          credits: pNewCredits,
+          intel: pNewIntel,
+          contraband: pNewContraband,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (body.outcome === "victory") {
+          pUpdatePayload.last_victory_at = new Date().toISOString();
+          pUpdatePayload.spend_count_after_victory = 0;
+        }
+
         // deno-lint-ignore no-explicit-any
         await (supabase.from("inventories") as any)
-          .update({
-            scrap: pNewScrap,
-            components: pNewComponents,
-            credits: pNewCredits,
-            intel: pNewIntel,
-            contraband: pNewContraband,
-            updated_at: new Date().toISOString(),
-          })
+          .update(pUpdatePayload)
           .eq("owner_id", pId);
 
         // e) Credit XP & Level
@@ -1065,21 +1178,26 @@ Deno.serve(async (req: Request) => {
   const newIntel      = (inventory.intel      ?? 0) + loot.intel;
   const newContraband = (inventory.contraband ?? 0) + loot.contraband;
 
-  const anyLoot =
-    loot.scrap > 0 || loot.components > 0 || loot.credits > 0 ||
-    loot.intel > 0 || loot.contraband > 0;
+  const shouldUpdateInventory = anyLoot || body.outcome === "victory";
 
-  if (anyLoot) {
+  if (shouldUpdateInventory) {
+    const updatePayload: Record<string, any> = {
+      scrap: newScrap,
+      components: newComponents,
+      credits: newCredits,
+      intel: newIntel,
+      contraband: newContraband,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (body.outcome === "victory") {
+      updatePayload.last_victory_at = new Date().toISOString();
+      updatePayload.spend_count_after_victory = 0;
+    }
+
     // deno-lint-ignore no-explicit-any
     const { error: invError } = await (supabase.from("inventories") as any)
-      .update({
-        scrap: newScrap,
-        components: newComponents,
-        credits: newCredits,
-        intel: newIntel,
-        contraband: newContraband,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("owner_id", user.id);
     if (invError) return json({ success: false, error: "Failed to credit loot" }, 500);
   }
@@ -1144,6 +1262,84 @@ Deno.serve(async (req: Request) => {
   // --- Track quest progress ---
   if (body.outcome === "victory") {
     await trackRaidQuestProgress(supabase, user.id);
+    if (isBoss) {
+      // Track boss defeat quest progress
+      await trackBossDefeatedQuestProgress(supabase, user.id, body.fixtureId);
+
+      // Check if it's the first clear of the boss to commit to boss_clears and award unique loot
+      try {
+        const { data: existingClears, error: existErr } = await supabase
+          .from("boss_clears")
+          .select("id")
+          .eq("player_id", user.id)
+          .eq("boss_id", body.fixtureId)
+          .limit(1);
+
+        if (existErr) {
+          console.error("[resolve-raid] Error checking existing boss clears:", existErr);
+        }
+
+        const isFirstClear = !existingClears || existingClears.length === 0;
+        isFirstClearResult = isFirstClear;
+
+        // Insert boss clear entry
+        const { error: clearInsertErr } = await supabase
+          .from("boss_clears")
+          .insert({
+            player_id: user.id,
+            boss_id: body.fixtureId,
+            is_first_clear: isFirstClear,
+            phase_reached: 1, // Phase reached default
+            seconds_elapsed: body.secondsElapsed,
+            squad_hp_remaining: body.squadHp,
+          });
+
+        if (clearInsertErr) {
+          console.error("[resolve-raid] Failed to record boss clear:", clearInsertErr);
+        } else {
+          console.log(`[resolve-raid] Recorded boss clear for ${body.fixtureId} (First: ${isFirstClear})`);
+        }
+
+        // Award first-clear unique items
+        if (isFirstClear) {
+          const uniqueItemKeys: Record<string, string> = {
+            'boss-ironjaw': 'trap_bear_trap',
+            'boss-whisper': 'trap_ghost_wire',
+            'boss-volkov': 'turret_autocannon_mk2',
+            'boss-circuit': 'trap_emp_mine',
+            'boss-warden': 'cosmetic_warden_key',
+          };
+          const itemSpriteKey = uniqueItemKeys[body.fixtureId];
+          if (itemSpriteKey) {
+            const { data: catalogItem, error: catErr } = await supabase
+              .from("items")
+              .select("id")
+              .eq("sprite_key", itemSpriteKey)
+              .single();
+
+            if (catErr || !catalogItem) {
+              console.error(`[resolve-raid] Failed to find unique item sprite ${itemSpriteKey} in items catalog:`, catErr);
+            } else {
+              const { error: grantErr } = await supabase
+                .from("player_items")
+                .insert({
+                  owner_id: user.id,
+                  item_id: catalogItem.id,
+                  quantity: 1,
+                });
+
+              if (grantErr) {
+                console.error(`[resolve-raid] Failed to grant first-clear unique item ${itemSpriteKey}:`, grantErr);
+              } else {
+                console.log(`[resolve-raid] Successfully granted first-clear unique item ${itemSpriteKey} to user ${user.id}`);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[resolve-raid] Error committing boss clear / rewards:", err);
+      }
+    }
   }
 
   // --- Battle Pass XP ---
@@ -1183,5 +1379,6 @@ Deno.serve(async (req: Request) => {
     previousPlayerLevel,
     newPlayerLevel,
     leveledUp,
+    isFirstClear: isFirstClearResult,
   });
 });

@@ -120,6 +120,73 @@ export const NPC_LOOT_TABLES: Record<string, NpcLootTable> = {
   "tier1-corner-store":        CORNER_STORE_LOOT,
 };
 
+const IRONJAW_LOOT: NpcLootTable = {
+  xpVictory: 250,
+  xpDefeat: 40,
+  victory: [
+    { resource: "scrap",      min: 450, max: 550, chance: 1.0 },
+    { resource: "components", min: 25,  max: 35,  chance: 1.0 },
+    { resource: "credits",    min: 80,  max: 120, chance: 1.0 },
+  ],
+  defeat: [],
+};
+
+const WHISPER_LOOT: NpcLootTable = {
+  xpVictory: 350,
+  xpDefeat: 50,
+  victory: [
+    { resource: "scrap",      min: 550, max: 650, chance: 1.0 },
+    { resource: "components", min: 40,  max: 50,  chance: 1.0 },
+    { resource: "credits",    min: 130, max: 170, chance: 1.0 },
+  ],
+  defeat: [],
+};
+
+const VOLKOV_LOOT: NpcLootTable = {
+  xpVictory: 500,
+  xpDefeat: 70,
+  victory: [
+    { resource: "scrap",      min: 750, max: 850, chance: 1.0 },
+    { resource: "components", min: 55,  max: 65,  chance: 1.0 },
+    { resource: "credits",    min: 180, max: 220, chance: 1.0 },
+    { resource: "contraband", min: 4,   max: 6,   chance: 1.0 },
+  ],
+  defeat: [],
+};
+
+const CIRCUIT_LOOT: NpcLootTable = {
+  xpVictory: 700,
+  xpDefeat: 90,
+  victory: [
+    { resource: "scrap",      min: 900, max: 1100, chance: 1.0 },
+    { resource: "components", min: 70,  max: 90,   chance: 1.0 },
+    { resource: "credits",    min: 270, max: 330,  chance: 1.0 },
+    { resource: "contraband", min: 7,   max: 9,   chance: 1.0 },
+  ],
+  defeat: [],
+};
+
+const WARDEN_LOOT: NpcLootTable = {
+  xpVictory: 1500,
+  xpDefeat: 150,
+  victory: [
+    { resource: "scrap",      min: 1800, max: 2200, chance: 1.0 },
+    { resource: "components", min: 130,  max: 170,  chance: 1.0 },
+    { resource: "credits",    min: 450,  max: 550,  chance: 1.0 },
+    { resource: "contraband", min: 12,   max: 18,  chance: 1.0 },
+    { resource: "intel",      min: 40,   max: 60,   chance: 1.0 },
+  ],
+  defeat: [],
+};
+
+export const BOSS_LOOT_TABLES: Record<string, NpcLootTable> = {
+  "boss-ironjaw": IRONJAW_LOOT,
+  "boss-whisper": WHISPER_LOOT,
+  "boss-volkov":  VOLKOV_LOOT,
+  "boss-circuit": CIRCUIT_LOOT,
+  "boss-warden":  WARDEN_LOOT,
+};
+
 /**
  * Fallback table when an unknown fixture id reaches the function.
  * Mirrors the easy-difficulty tier from 3.0.16 so legacy clients still
@@ -183,6 +250,10 @@ function rollInt(rng: () => number, min: number, max: number): number {
  * NPC room, it dynamically constructs a table scaled progressively from Tier 1 to Tier 10.
  */
 export function getLootTableForFixture(fixtureId: string): NpcLootTable {
+  if (fixtureId && fixtureId.startsWith("boss-")) {
+    return BOSS_LOOT_TABLES[fixtureId] ?? FALLBACK_LOOT;
+  }
+
   if (fixtureId.startsWith("procedural-tier-")) {
     const tierMatch = fixtureId.match(/procedural-tier-(\d+)/);
     const tier = tierMatch ? parseInt(tierMatch[1], 10) : 1;

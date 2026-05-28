@@ -8,6 +8,7 @@ import {
   EntryPointType,
   EntryPointWall,
 } from '@/lib/store/useRoomStore';
+import { usePlayerStore } from '@/lib/store/usePlayerStore';
 import { entryTileFor } from '@/lib/game/entryPoints';
 import { EntitySprite } from '@/game/objects/EntitySprite';
 import { rangeTilesFor } from '@/lib/game/defense';
@@ -104,7 +105,8 @@ export class RoomScene extends Phaser.Scene {
 
     // Render Floor
     const cosmetics = useRoomStore.getState().cosmetics;
-    const floorType = cosmetics?.floorType || 'tile';
+    const activeRoomSkin = usePlayerStore.getState().activeRoomSkin;
+    const floorType = activeRoomSkin === 'neon_glitch' ? 'neon_glitch' : (cosmetics?.floorType || 'tile');
     const floorKey = `floor_${floorType}`;
 
     for (let x = 0; x < this.gridSize; x++) {
@@ -321,7 +323,9 @@ export class RoomScene extends Phaser.Scene {
       // 1. Redraw walls
       this.drawWalls();
       // 2. Swapping tile texture
-      const floorKey = `floor_${payload.floorType}`;
+      const activeSkin = usePlayerStore.getState().activeRoomSkin;
+      const floorType = activeSkin === 'neon_glitch' ? 'neon_glitch' : payload.floorType;
+      const floorKey = `floor_${floorType}`;
       this.floorTiles.forEach((tile) => {
         if (tile && tile.scene && tile.setTexture) {
           tile.setTexture(floorKey);

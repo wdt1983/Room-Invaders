@@ -43,6 +43,7 @@ interface MapDashboardProps {
     player_level: number;
   };
   friends: FriendProfile[];
+  activeStoryQuest?: any;
 }
 
 export function MapDashboard({ 
@@ -50,7 +51,8 @@ export function MapDashboard({
   bracketRange, 
   fallbackActive,
   playerProfile,
-  friends 
+  friends,
+  activeStoryQuest
 }: MapDashboardProps) {
   const [selectedTarget, setSelectedTarget] = useState<ScoutTarget | null>(null);
   const [viewMode, setViewMode] = useState<"map" | "scanner" | "geo">("map");
@@ -103,6 +105,7 @@ export function MapDashboard({
           playerProfile={playerProfile} 
           pvpTargets={targets} 
           friends={friends} 
+          activeStoryQuest={activeStoryQuest}
         />
       ) : viewMode === "scanner" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

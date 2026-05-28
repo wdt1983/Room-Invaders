@@ -43,19 +43,28 @@ interface PlayerQuestRow {
   claimed_at?: string;
 }
 
+interface BossClearRow {
+  boss_id: string;
+  cleared_at: string;
+  is_first_clear: boolean;
+}
+
 interface QuestDashboardProps {
   initialQuests: PlayerQuestRow[];
   playerLevel: number;
+  bossClears?: BossClearRow[];
 }
 
 const allQuests: {
   tutorial: QuestDefinition[];
   daily: QuestDefinition[];
   weekly: QuestDefinition[];
+  story: QuestDefinition[];
 } = questsData as any;
 
-export default function QuestDashboard({ initialQuests, playerLevel }: QuestDashboardProps) {
+export default function QuestDashboard({ initialQuests, playerLevel, bossClears = [] }: QuestDashboardProps) {
   const router = useRouter();
+  const [activeLeftTab, setActiveLeftTab] = useState<'training' | 'story'>('training');
   const [isPending, startTransition] = useTransition();
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [briefingOpen, setBriefingOpen] = useState(false);
@@ -146,8 +155,17 @@ export default function QuestDashboard({ initialQuests, playerLevel }: QuestDash
         contraband: data.newContraband,
       });
 
-      const { leveledUp, newLevel } = applyXpAndLevel(data.newXp, data.newPlayerLevel);
+      const { leveledUp, newLevel, previousLevel } = applyXpAndLevel(data.newXp, data.newPlayerLevel);
       if (leveledUp) {
+        const { useUIStore } = require("@/lib/store/useUIStore");
+        useUIStore.getState().showLevelUpOverlay(previousLevel, newLevel);
+        const { trackEvent } = require("@/lib/game/analytics");
+        trackEvent("player_level_up", {
+          previousLevel,
+          newLevel,
+          method: "quest_claim",
+          xp: data.newXp,
+        });
         toast.success(`LEVEL UP! Reached Lvl ${newLevel}!`);
       }
 
@@ -283,102 +301,278 @@ export default function QuestDashboard({ initialQuests, playerLevel }: QuestDash
         <div className="md:col-span-2 space-y-4">
           <Card className="border-primary/20 bg-card/40 backdrop-blur shadow-xl">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base font-bold">
-                <Sparkles className="size-5 text-primary" />
-                Fortress Training (Tutorial)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  <Sparkles className="size-5 text-primary" />
+                  Campaigns & Training
+                </CardTitle>
+                <div className="flex rounded-lg bg-background/60 p-0.5 border border-border/40 text-[10px] font-bold">
+                  <button
+                    onClick={() => setActiveLeftTab('training')}
+                    className={`px-2.5 py-1 rounded-md transition-all ${activeLeftTab === 'training' ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Training
+                  </button>
+                  <button
+                    onClick={() => setActiveLeftTab('story')}
+                    className={`px-2.5 py-1 rounded-md transition-all ${activeLeftTab === 'story' ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Story
+                  </button>
+                </div>
+              </div>
               <CardDescription className="text-xs">
-                Unlock rooms, traps, and new systems by completing your survivor onboarding chain.
+                {activeLeftTab === 'training'
+                  ? "Unlock rooms, traps, and new systems by completing your survivor onboarding chain."
+                  : "Embark on hand-crafted story encounters against named Fracture bosses."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="relative space-y-6 pl-6 border-l border-border/80 ml-2.5">
-                {allQuests.tutorial.map((q, idx) => {
-                  const uQuest = userQuestsMap[q.id];
-                  const isActive = uQuest?.status === "active";
-                  const isCompleted = uQuest?.status === "completed";
-                  const isClaimed = uQuest?.status === "claimed";
-                  const isLocked = !uQuest;
+              {activeLeftTab === 'training' ? (
+                <div className="relative space-y-6 pl-6 border-l border-border/80 ml-2.5">
+                  {allQuests.tutorial.map((q, idx) => {
+                    const uQuest = userQuestsMap[q.id];
+                    const isActive = uQuest?.status === "active";
+                    const isCompleted = uQuest?.status === "completed";
+                    const isClaimed = uQuest?.status === "claimed";
+                    const isLocked = !uQuest;
 
-                  return (
-                    <div key={q.id} className="relative group">
-                      {/* Timeline Bullet node */}
-                      <span className="absolute -left-[31px] top-0.5 flex size-4 items-center justify-center rounded-full bg-background border border-border">
-                        {isClaimed ? (
-                          <div className="size-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
-                        ) : isCompleted ? (
-                          <div className="size-2 rounded-full bg-primary animate-ping" />
-                        ) : isActive ? (
-                          <div className="size-1.5 rounded-full bg-primary" />
-                        ) : (
-                          <Lock className="size-2.5 text-muted-foreground/50" />
-                        )}
-                      </span>
+                    return (
+                      <div key={q.id} className="relative group">
+                        {/* Timeline Bullet node */}
+                        <span className="absolute -left-[31px] top-0.5 flex size-4 items-center justify-center rounded-full bg-background border border-border">
+                          {isClaimed ? (
+                            <div className="size-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
+                          ) : isCompleted ? (
+                            <div className="size-2 rounded-full bg-primary animate-ping" />
+                          ) : isActive ? (
+                            <div className="size-1.5 rounded-full bg-primary" />
+                          ) : (
+                            <Lock className="size-2.5 text-muted-foreground/50" />
+                          )}
+                        </span>
 
-                      <div className={`transition-opacity duration-300 ${isLocked ? "opacity-40" : "opacity-100"}`}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <h3 className={`text-sm font-semibold tracking-tight ${isClaimed ? "text-muted-foreground line-through" : "text-foreground"}`}>
-                              {idx + 1}. {q.title}
-                            </h3>
-                            <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-md">
-                              {q.description}
-                            </p>
-                            
-                            {/* Badger Rewards */}
-                            {!isClaimed && renderRewards(q.rewards, q.xpReward)}
-                          </div>
+                        <div className={`transition-opacity duration-300 ${isLocked ? "opacity-40" : "opacity-100"}`}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <h3 className={`text-sm font-semibold tracking-tight ${isClaimed ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                                {idx + 1}. {q.title}
+                              </h3>
+                              <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-md">
+                                {q.description}
+                              </p>
+                              
+                              {/* Badger Rewards */}
+                              {!isClaimed && renderRewards(q.rewards, q.xpReward)}
+                            </div>
 
-                          {/* Action button based on state */}
-                          <div className="shrink-0 pt-0.5">
-                            {isLocked ? (
-                              <div className="rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground flex items-center gap-1 font-medium select-none">
-                                <Lock className="size-3" /> Locked
-                              </div>
-                            ) : isClaimed ? (
-                              <div className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                                <CheckCircle2 className="size-3" /> Claimed
-                              </div>
-                            ) : isCompleted ? (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="h-7 bg-primary text-primary-foreground font-bold text-xs px-2.5 rounded shadow-lg shadow-primary/30 animate-pulse"
-                                disabled={claimingId !== null}
-                                onClick={() => handleClaimReward(q.id)}
-                              >
-                                Claim
-                              </Button>
-                            ) : (
-                              /* Active In Progress */
-                              <div className="flex flex-col items-end gap-1">
-                                <span className="text-[10px] text-muted-foreground font-bold">
-                                  Progress
-                                </span>
-                                <span className="text-xs font-extrabold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                                  {uQuest.progress} / {uQuest.target_value}
-                                </span>
+                            {/* Action button based on state */}
+                            <div className="shrink-0 pt-0.5">
+                              {isLocked ? (
+                                <div className="rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground flex items-center gap-1 font-medium select-none">
+                                  <Lock className="size-3" /> Locked
+                                </div>
+                              ) : isClaimed ? (
+                                <div className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="size-3" /> Claimed
+                                </div>
+                              ) : isCompleted ? (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-7 bg-primary text-primary-foreground font-bold text-xs px-2.5 rounded shadow-lg shadow-primary/30 animate-pulse"
+                                  disabled={claimingId !== null}
+                                  onClick={() => handleClaimReward(q.id)}
+                                >
+                                  Claim
+                                </Button>
+                              ) : (
+                                /* Active In Progress */
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className="text-[10px] text-muted-foreground font-bold">
+                                    Progress
+                                  </span>
+                                  <span className="text-xs font-extrabold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                    {uQuest.progress} / {uQuest.target_value}
+                                  </span>
 
-                                {/* Handle manual Safe Mode briefing modal trigger */}
-                                {q.id === "tut-08" && (
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="h-6 mt-1 text-[10px] border border-border px-1.5 animate-tutorial-glow"
-                                    onClick={() => setBriefingOpen(true)}
-                                  >
-                                    <BookOpen className="size-3 mr-1" /> Briefing
-                                  </Button>
-                                )}
-                              </div>
-                            )}
+                                  {/* Handle manual Safe Mode briefing modal trigger */}
+                                  {q.id === "tut-08" && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="h-6 mt-1 text-[10px] border border-border px-1.5 animate-tutorial-glow"
+                                      onClick={() => setBriefingOpen(true)}
+                                    >
+                                      <BookOpen className="size-3 mr-1" /> Briefing
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {[
+                    {
+                      act: 1,
+                      title: "Act I: Echoes in the Scrap",
+                      description: "Infiltrate the scrapyards and silent relay lines. Uncover who is pulling the strings.",
+                      quests: ["story-01", "story-02", "story-03", "story-04"],
+                    },
+                    {
+                      act: 2,
+                      title: "Act II: The Automated Outpost",
+                      description: "Breach the military remnant base and disable the rogue Machine Mind grid.",
+                      quests: ["story-05", "story-06"],
+                    },
+                    {
+                      act: 3,
+                      title: "Act III: Voice of the Fracture",
+                      description: "Face the ultimate architect of the Fracture itself.",
+                      quests: ["story-07"],
+                    },
+                  ].map((act) => {
+                    const actQuests = act.quests
+                      .map((id) => allQuests.story?.find((q) => q.id === id))
+                      .filter(Boolean) as QuestDefinition[];
+
+                    const hasUnlockedAct = actQuests.some((q) => userQuestsMap[q.id]);
+                    if (!hasUnlockedAct) return null;
+
+                    const bossDisplayDetails: Record<string, { name: string; title: string; color: string }> = {
+                      'boss-ironjaw': { name: "Ironjaw", title: "The Scrapyard King", color: "from-orange-500 to-red-600" },
+                      'boss-whisper': { name: "Whisper", title: "The Wire Ghost", color: "from-blue-500 to-indigo-600" },
+                      'boss-volkov': { name: "Volkov", title: "The Iron Colonel", color: "from-green-500 to-emerald-600" },
+                      'boss-circuit': { name: "Circuit", title: "The Machine Mind", color: "from-cyan-500 to-blue-600" },
+                      'boss-warden': { name: "The Warden", title: "Voice of the Fracture", color: "from-purple-500 to-pink-600" },
+                    };
+
+                    return (
+                      <div key={act.act} className="space-y-4">
+                        <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-primary">Act {act.act}</span>
+                          <h3 className="text-sm font-bold text-foreground mt-0.5">{act.title}</h3>
+                          <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{act.description}</p>
+                        </div>
+
+                        <div className="relative space-y-6 pl-6 border-l border-border/80 ml-2.5">
+                          {actQuests.map((q, idx) => {
+                            const uQuest = userQuestsMap[q.id];
+                            const isActive = uQuest?.status === "active";
+                            const isCompleted = uQuest?.status === "completed";
+                            const isClaimed = uQuest?.status === "claimed";
+                            const isLocked = !uQuest;
+                            const boss = q.bossId ? bossDisplayDetails[q.bossId] : null;
+
+                            // Check if this boss has been cleared in player history
+                            const clearsCount = bossClears.filter(bc => bc.boss_id === q.bossId).length;
+
+                            return (
+                              <div key={q.id} className="relative group">
+                                {/* Timeline Bullet node */}
+                                <span className="absolute -left-[31px] top-0.5 flex size-4 items-center justify-center rounded-full bg-background border border-border">
+                                  {isClaimed ? (
+                                    <div className="size-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
+                                  ) : isCompleted ? (
+                                    <div className="size-2 rounded-full bg-red-500 animate-ping animate-pulse" />
+                                  ) : isActive ? (
+                                    <div className="size-1.5 rounded-full bg-red-500" />
+                                  ) : (
+                                    <Lock className="size-2.5 text-muted-foreground/50" />
+                                  )}
+                                </span>
+
+                                <div className={`transition-opacity duration-300 ${isLocked ? "opacity-40" : "opacity-100"}`}>
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h3 className={`text-sm font-semibold tracking-tight ${isClaimed ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                                          {q.title}
+                                        </h3>
+                                        {boss && (
+                                          <span className={`text-[9px] font-extrabold text-white px-1.5 py-0.5 rounded-full bg-gradient-to-r ${boss.color}`}>
+                                            {boss.name}
+                                          </span>
+                                        )}
+                                        {clearsCount > 0 && (
+                                          <span className="text-[9px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                            Cleared ({clearsCount}x)
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-md">
+                                        {q.description}
+                                      </p>
+                                      
+                                      {/* Badger Rewards */}
+                                      {!isClaimed && renderRewards(q.rewards, q.xpReward)}
+                                    </div>
+
+                                    {/* Action button based on state */}
+                                    <div className="shrink-0 pt-0.5">
+                                      {isLocked ? (
+                                        <div className="rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground flex items-center gap-1 font-medium select-none">
+                                          <Lock className="size-3" /> Locked
+                                        </div>
+                                      ) : isClaimed ? (
+                                        <div className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                          <CheckCircle2 className="size-3" /> Claimed
+                                        </div>
+                                      ) : isCompleted ? (
+                                        <Button
+                                          size="sm"
+                                          variant="default"
+                                          className="h-7 bg-primary text-primary-foreground font-bold text-xs px-2.5 rounded shadow-lg shadow-primary/30 animate-pulse"
+                                          disabled={claimingId !== null}
+                                          onClick={() => handleClaimReward(q.id)}
+                                        >
+                                          Claim
+                                        </Button>
+                                      ) : (
+                                        /* Active In Progress */
+                                        <div className="flex flex-col items-end gap-1">
+                                          <span className="text-[10px] text-muted-foreground font-bold">
+                                            Active
+                                          </span>
+                                          {q.category === 'locate_boss' ? (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10 px-2.5 font-bold"
+                                              onClick={() => router.push('/map')}
+                                            >
+                                              Locate
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              variant="default"
+                                              className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-2.5"
+                                              onClick={() => router.push('/map')}
+                                            >
+                                              Battle
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

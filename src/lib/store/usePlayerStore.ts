@@ -115,9 +115,15 @@ interface PlayerState {
   unlockedTechs: string[];
   activeEffects: ReturnType<typeof compileActiveEffects>;
 
+  // Cosmetics
+  activeBadge: string | null;
+  activeBorder: string | null;
+  activeRoomSkin: string | null;
+
   addScrap: (amount: number) => void;
   setInventory: (data: Partial<PlayerState>) => void;
   setPlayerState: (data: Partial<PlayerState>) => void;
+  setCosmeticsState: (data: { activeBadge: string | null; activeBorder: string | null; activeRoomSkin: string | null }) => void;
   applyXpAndLevel: (
     xp: number,
     level?: number,
@@ -149,6 +155,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   unlockedTechs: [],
   activeEffects: DEFAULT_ACTIVE_EFFECTS,
 
+  // Cosmetic defaults
+  activeBadge: null,
+  activeBorder: null,
+  activeRoomSkin: null,
+
   addScrap: (amount) => set((state) => ({ scrap: Math.min(state.scrap + amount, state.maxScrap) })),
   setInventory: (data) => set((state) => {
     const updated = { ...state, ...data };
@@ -170,6 +181,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
     return updated;
   }),
+  setCosmeticsState: (data) => set(() => ({
+    activeBadge: data.activeBadge,
+    activeBorder: data.activeBorder,
+    activeRoomSkin: data.activeRoomSkin,
+  })),
   applyXpAndLevel: (xp, level) => {
     const prev = get();
     const previousLevel = prev.playerLevel;

@@ -9,12 +9,16 @@
 
 import { useState, useRef, useEffect, MouseEvent as ReactMouseEvent, WheelEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   Home, Users, Store, Building, Warehouse, ShieldAlert, Shield, 
-  Swords, Target, Eye, AlertTriangle, ZoomIn, ZoomOut, RotateCcw, Lock
+  Swords, Target, Eye, AlertTriangle, ZoomIn, ZoomOut, RotateCcw, Lock, Skull
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import { trackQuestProgress } from "@/lib/game/quests";
+import { toast } from "sonner";
 
 interface PvPScoutTarget {
   id: string;
@@ -43,6 +47,7 @@ interface NeighborhoodMapProps {
   };
   pvpTargets: PvPScoutTarget[];
   friends: FriendProfile[];
+  activeStoryQuest?: any;
 }
 
 // Deterministic Seeded PRNG for Neighborhood layout randomization
@@ -133,15 +138,23 @@ const BUILDING_THEMES: Record<string, BuildingConfig> = {
     label: "Vulnerable Survivor",
     colorClass: "border-purple-500/70 text-purple-400 bg-purple-950/35 shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:border-purple-400 hover:shadow-[0_0_25px_rgba(168,85,247,0.35)] animate-pulse",
     pulseClass: "bg-purple-400",
-    bgGlow: "rgba(168, 85, 247, 0.07)",
+    bgGlow: "rgba(16, 185, 129, 0.08)",
     description: "A ceasefire-expired active player coordinate. Plunder their scrap overflow!"
+  },
+  boss: {
+    icon: Skull,
+    label: "Sector Raid Boss",
+    colorClass: "border-red-600/80 text-red-500 bg-red-950/45 shadow-[0_0_20px_rgba(220,38,38,0.4)] hover:border-red-500 hover:shadow-[0_0_30px_rgba(220,38,38,0.6)] border-2 animate-tutorial-glow animate-pulse",
+    pulseClass: "bg-red-500 animate-ping",
+    bgGlow: "rgba(220, 38, 38, 0.12)",
+    description: "Narrative Boss Threat detected! Breach their defenses to clear the sector and secure legendary, unique items."
   }
 };
 
 interface GridNode {
   row: number;
   col: number;
-  type: "player" | "friend" | "house" | "apartment" | "store" | "warehouse" | "outpost" | "pvp";
+  type: "player" | "friend" | "house" | "apartment" | "store" | "warehouse" | "outpost" | "pvp" | "boss";
   id: string; // procedural-tier-X-Y or profile ID
   username?: string;
   level: number;
@@ -151,7 +164,8 @@ interface GridNode {
   cooldownRemaining?: number; // mock or computed cooldown
 }
 
-export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: NeighborhoodMapProps) {
+export function NeighborhoodMap({ playerProfile, pvpTargets, friends, activeStoryQuest }: NeighborhoodMapProps) {
+  const router = useRouter();
   // Navigation / Pan & Zoom State
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -264,8 +278,48 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
       }
     }
 
+    // Replace coordinate (0, 0) with Boss Node if active story quest exists
+    if (activeStoryQuest) {
+      const activeQuestId = activeStoryQuest.quest_id;
+      const questToBossMapping: Record<string, string> = {
+        "story-01": "boss-ironjaw",
+        "story-02": "boss-ironjaw",
+        "story-03": "boss-whisper",
+        "story-04": "boss-whisper",
+        "story-05": "boss-volkov",
+        "story-06": "boss-circuit",
+        "story-07": "boss-warden",
+      };
+      const bossId = questToBossMapping[activeQuestId];
+      
+      const bossDisplayDetails: Record<string, { name: string; title: string; requiredLevel: number; defenseRating: number }> = {
+        'boss-ironjaw': { name: "Ironjaw", title: "The Scrapyard King", requiredLevel: 3, defenseRating: 80 },
+        'boss-whisper': { name: "Whisper", title: "The Wire Ghost", requiredLevel: 5, defenseRating: 110 },
+        'boss-volkov': { name: "Volkov", title: "The Iron Colonel", requiredLevel: 7, defenseRating: 150 },
+        'boss-circuit': { name: "Circuit", title: "The Machine Mind", requiredLevel: 10, defenseRating: 200 },
+        'boss-warden': { name: "The Warden", title: "Voice of the Fracture", requiredLevel: 15, defenseRating: 350 },
+      };
+
+      const bossInfo = bossId ? bossDisplayDetails[bossId] : null;
+      if (bossInfo) {
+        const index00 = nodes.findIndex(n => n.row === 0 && n.col === 0);
+        if (index00 !== -1) {
+          nodes[index00] = {
+            row: 0,
+            col: 0,
+            type: "boss",
+            id: bossId,
+            username: `${bossInfo.name} (${bossInfo.title})`,
+            level: bossInfo.requiredLevel,
+            defenseRating: bossInfo.defenseRating
+          };
+          console.log(`[NeighborhoodMap] Overlayed boss pin for ${bossId} at (0, 0)`);
+        }
+      }
+    }
+
     setGridNodes(nodes);
-  }, [playerProfile, pvpTargets, friends]);
+  }, [playerProfile, pvpTargets, friends, activeStoryQuest]);
 
   // Pan / Drag handlers
   const handlePointerDown = (e: ReactMouseEvent) => {
@@ -318,8 +372,26 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
   const handleZoomOut = () => setScale(prev => Math.max(0.6, prev - 0.1));
 
   // Tapping a node selects it
-  const handleNodeClick = (node: GridNode) => {
+  const handleNodeClick = async (node: GridNode) => {
     setSelectedNode(node);
+
+    // If tapping a boss pin for a locate_boss quest, auto-complete it!
+    if (node.type === "boss" && activeStoryQuest && activeStoryQuest.status === "active") {
+      const activeQuestId = activeStoryQuest.quest_id;
+      if (activeQuestId === "story-01" || activeQuestId === "story-03") {
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await trackQuestProgress(supabase, user.id, "locate_boss", 1);
+            toast.success("Stronghold located! Story quest updated.");
+            router.refresh();
+          }
+        } catch (err) {
+          console.error("Failed to auto-complete locate quest:", err);
+        }
+      }
+    }
   };
 
   // Resolve current active theme settings
@@ -483,6 +555,8 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
                   <span className="text-sm font-bold text-foreground">
                     {selectedNode.type === "player" || selectedNode.type === "friend" || selectedNode.type === "pvp"
                       ? "Custom Grid"
+                      : selectedNode.type === "boss"
+                      ? "Hand-Crafted Room"
                       : `${selectedNode.level <= 3 ? "10x10" : selectedNode.level <= 7 ? "12x12" : "14x14"} Tiles`
                     }
                   </span>
@@ -499,6 +573,8 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
                       ? "Sanctuary Coordinate (Friendly Base)"
                       : selectedNode.type === "pvp"
                       ? "Vulnerable Active Player"
+                      : selectedNode.type === "boss"
+                      ? "Sector Named Boss Threat"
                       : `Tier ${selectedNode.level} Procedural Hostile`
                     }
                   </span>
@@ -517,7 +593,22 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
                   </div>
 
                   <div className="space-y-2 text-xs">
-                    {selectedNode.type === "pvp" ? (
+                    {selectedNode.type === "boss" ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Thematic Boss Loot:</span>
+                          <span className="font-bold text-emerald-400">3-5x richer than normal</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">First-Clear Drop:</span>
+                          <span className="font-bold text-amber-400">Guaranteed Unique Item</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Repeat Loot:</span>
+                          <span className="font-bold text-cyan-400">High repeatable resources</span>
+                        </div>
+                      </>
+                    ) : selectedNode.type === "pvp" ? (
                       <>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">⚙️ Scrap plundered:</span>
@@ -575,6 +666,14 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends }: Neighbor
                 <Link href={`/visit/${selectedNode.id}`} className="flex-1">
                   <Button className="w-full text-xs font-bold bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                     Visit Sanctuary
+                  </Button>
+                </Link>
+              ) : selectedNode.type === "boss" ? (
+                <Link href={`/raid/${selectedNode.id}`} className="flex-1">
+                  <Button 
+                    className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_20px_rgba(220,38,38,0.35)] hover:shadow-[0_0_25px_rgba(220,38,38,0.55)] animate-pulse uppercase"
+                  >
+                    Battle Warlord
                   </Button>
                 </Link>
               ) : (

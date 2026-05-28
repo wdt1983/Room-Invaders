@@ -35,6 +35,9 @@ interface UIState {
   setSfxVolume: (vol: number) => void;
   setMusicVolume: (vol: number) => void;
   setMuted: (muted: boolean) => void;
+  levelUpOverlay: { isOpen: boolean; previousLevel: number; newLevel: number } | null;
+  showLevelUpOverlay: (previousLevel: number, newLevel: number) => void;
+  closeLevelUpOverlay: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -51,5 +54,9 @@ export const useUIStore = create<UIState>((set) => ({
   setSfxVolume: (sfxVolume) => set({ sfxVolume }),
   setMusicVolume: (musicVolume) => set({ musicVolume }),
   setMuted: (isMuted) => set({ isMuted }),
+  levelUpOverlay: null,
+  showLevelUpOverlay: (previousLevel, newLevel) =>
+    set({ levelUpOverlay: { isOpen: true, previousLevel, newLevel } }),
+  closeLevelUpOverlay: () => set({ levelUpOverlay: null }),
 }));
 

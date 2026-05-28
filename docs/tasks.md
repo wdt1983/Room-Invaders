@@ -1,5 +1,5 @@
 # tasks.md — Room Invaders
-## Version: 0.14.0 | Last Updated: 2026-05-26
+## Version: 0.19.0 | Last Updated: 2026-05-28
 
 > **Reconciliation note (2026-04-13):** Task ledger was re-aligned against the actual
 > code state after drift accumulated across sessions. Tasks that were implemented in
@@ -262,7 +262,18 @@
 - [DONE] 9.0.15 — Clan Banks & Shared District Vaults. Migrations 00018 (vault tables + RLS + auto-vault trigger), 00019 (notification INSERT policy), 00020 (transactional deposit/withdraw procedures with row-level locks and daily cap enforcement). Server Actions `depositToVault` and `withdrawFromVault` in `vault.ts` with automatic system-alert notifications on withdrawal events. Integrated glassmorphic Treasury dashboard into `/map/district` featuring vault balance cards, interactive deposit/withdrawal form with resource slider, daily cap progress meter, and live monospace transaction ledger.
 - [DONE] 9.0.21 — Joint Raids (2-4 Player Cooperative Raids). Created database schema migration 00021 establishing public `joint_raid_lobbies` and `joint_raid_participants` tables with row-level security (RLS) rules and automated cleanups. Created server actions `createJointRaidLobby`, `joinJointRaidLobby`, `readyUpForJointRaid`, `launchJointRaid`, `cancelJointRaidLobby`, and `leaveJointRaidLobby` inside `joint-raid.ts` server actions. Formulated the client-side state hooks inside `useRaidStore.ts` tracking joint raid statuses. Devised a fully responsive glassmorphic lobby UI, `JointRaidLobby.tsx`, embedded into the districts console above the treasury displaying ready status, stat pooling summaries (+50 HP / +10 Damage per member), and a live operation monitoring terminal for observing allies powered by Supabase Broadcast channels. Expanded `RaidPrepContainer.tsx`, `RaidScene.ts` and `RaidResolver.tsx` to apply stat boosts to spawned squads, broadcast live action telemetry feeds, and trigger split rewards inside Deno edge functions where base loot and XP are divided evenly among participants and individually processed with active tech tree multipliers.
 - [DONE] 9.0.24 — Expanded Room Sizes: full apartment/house. Created a database migration mapping sizes to room upgrade tiers. Configured base upgrade panel with a tabbed Stronghold and Grid Sizing upgrade HUD. Enabled Phaser coordinate transformations and camera zoom auto-scaling to dynamically support grid sizes up to 18x18, preserving isometric z-sorting, pathfinding, wall boundaries, and item validation checks seamlessly.
+- [DONE] 4.0.13 — Player Level-Up Polish (Milestone 4L). Created useUIStore state triggers, a fullscreen glassmorphic `<LevelUpOverlay />` that maps unlocking defenses/furniture blueprints dynamically from the catalog, tracks systemic milestones (Level 3 secondary traps, Level 5 PvP matchmaking, Level 8 Tech tree, Level 10 second squad slot, etc.), registers Sentry telemetry analytics breadcrumbs, and hooks into scrap upgrades, quests, and raid resolvers securely.
+- [DONE] 9.0.27 — Community Event Framework. Created migrations `00026_community_events.sql` establishing tables, seeded active blackout events, created app server actions to pull events and log contributions, built dynamic blinking `<CommunityEventBanner />` components, procedurally adjusted Phaser image/tile tints (`0x222233`) and camera edge fog bounds under sector blackouts, injected 20% random jam skips and spark VFX inside `RaidScene.ts`, and doubled combat rewards autoritatively in edge resolutions.
+- [DONE] 9.0.28 — District / Territory Control System. Built database migration `00027_district_territory.sql` mapping grid outposts on a 19-hex board, established RLS and transactional pg procedures (`record_skirmish_and_update_influence`, `distribute_territory_dividends`) for secure tug-of-war influence offsets and passive daily resource rewards. Authored server actions for coordinates fetching and raid simulation results, built responsive interactive hex-grid SVG map boards with Selection rings and live influence meters, and deployed central tabbed `<DistrictDashboard>` war-rooms embedded inside the district page grids.
+- [DONE] 9.0.29 — Achievement System with Cosmetic Rewards (Milestone 9L). Created database schema migration `00028_achievements.sql` establishing catalog and progress tables, profile cosmetics slots, and spent tracking metrics. Authored secure Server Actions `getAchievementsAction` and `equipCosmeticAction` with locks validation. Developed the server-authoritative `recordScrapSpend` helper and injected hooks into all room actions. Built a stunning glassmorphic Trophy Room tab panel in the Squad dashboard, rendering live squad slots wrapped in custom animated pulsing neon-green glowing borders. Formulated procedural `floor_neon_glitch` tile preloading in Phaser `BootScene.ts` and automated floor tile overrides in `RoomScene.ts` when equipped. Verified local Supabase database reset, clean linter outputs, and Next.js Turbopack production builds with 0 errors.
+- [DONE] 9.0.30 — Trading System between Players (Milestone 9M). Created database schema migration 00029 establishing trade_offers and trade_items with Row-Level Security (RLS). Implemented secure plpgsql transaction procedures (propose_trade, accept_trade, withdraw_trade, decline_trade) with FOR UPDATE row locks. Developed Next.js Server Actions and a glassmorphic Trading Terminal sub-panel embedded in the Social panel.
 
+## Phase 10: Automated Testing & Continuous Integration (v0.7)
+**Goal:** High-fidelity automated test coverage for core systems and user flow paths.
+
+- [DONE] 10.0.1 — Establish TypeScript-native unit test suite for game systems. Configured `vitest.config.ts` mapping path aliases and created tests verifying pure isometric transformations (`IsometricEngine.test.ts`) and A* pathfinding obstacles navigation (`GridSystem.test.ts`).
+- [DONE] 10.0.2 — Establish automated E2E browser integration tests. Configured `playwright.config.ts` running Chromium and verified landing, registration, and login screens rendering and redirects (`auth.spec.ts` and `navigation.spec.ts`).
+- [DONE] 10.0.3 — Configure test script execution endpoints. Added `"test": "vitest run"` and `"test:e2e": "playwright test"` to `package.json` for easy dev/CI orchestration.
 
 ## Future Phases (Post-Launch Backlog)
 
@@ -273,11 +284,10 @@
 - [x] Chat system (text): global, friends, clan channels: Developed high-fidelity, translucent glassmorphic multi-channel ChatConsole client component with dynamic tabs (Global, cooperative District, and private deterministic Friend-to-Friend DM scoping). Mounted inside page grids and globally in the game layout shell as a floating collapsible drawer.
 - [x] Custom image uploads for wall posters (with moderation pipeline)
 - [x] Expanded room sizes: full apartment/house
-- [ ] Named NPC raid bosses with story quests
-- [ ] Community event framework
-- [ ] District/territory control system (clan-based)
-- [ ] Achievement system with cosmetic rewards
-- [ ] Trading system between players
+- [x] Community event framework: Scheduled global server-instanced operations (e.g. sector blackout, turret malfunction) with blinking banners, real-time Phaser adjustments, and double rewards.
+- [x] District/territory control system (clan-based): Hex-grid regional outposts where districts fight over shared resources via interactive SVG map selectors and authoritative PostgreSQL tug-of-war procedures.
+- [x] Achievement system with cosmetic rewards
+- [x] Trading system between players
 ```
 ```
 

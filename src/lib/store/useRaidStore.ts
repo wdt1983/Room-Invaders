@@ -71,6 +71,7 @@ export interface RaidResults {
   /** Human-readable sentence describing why the raid ended (timer expiry,
    *  player abandonment, stash secured, squad wiped). */
   reason: string;
+  isFirstClear?: boolean;
 }
 
 export interface RaidTarget {
@@ -144,6 +145,8 @@ interface RaidState {
   setActiveSquadIndex: (index: number) => void;
   activeAbilityMode: string | null;
   setActiveAbilityMode: (mode: string | null) => void;
+  activeEvent: any | null;
+  setActiveEvent: (event: any) => void;
 
   // Joint Raid fields
   isJointRaid: boolean;
@@ -155,6 +158,19 @@ interface RaidState {
   setJointLobbyId: (lobbyId: string | null) => void;
   setJointParticipants: (participants: JointParticipant[]) => void;
   setAllyBonuses: (hp: number, damage: number) => void;
+
+  // Boss Raid fields
+  isBossRaid: boolean;
+  bossHp: number;
+  bossMaxHp: number;
+  bossPhase: number;
+  bossTotalPhases: number;
+  bossName: string;
+  bossTitle: string;
+  briefingText: string | null;
+  setBossHp: (hp: number, maxHp?: number) => void;
+  setBossPhase: (phase: number, total: number) => void;
+  setBossRaidDetails: (details: { isBoss: boolean; name: string; title: string; hp: number; maxHp: number; phase: number; totalPhases: number; briefingText: string | null }) => void;
 
   /** Set the raid target + reset phase/timer. Called by `RaidInitializer` once
    *  per route load from the SSR-resolved fixture. */
@@ -211,6 +227,17 @@ const INITIAL_STATE = {
   jointParticipants: [],
   allyBonusHp: 0,
   allyBonusDamage: 0,
+  activeEvent: null,
+
+  // Boss Raid fields
+  isBossRaid: false,
+  bossHp: 0,
+  bossMaxHp: 0,
+  bossPhase: 1,
+  bossTotalPhases: 1,
+  bossName: '',
+  bossTitle: '',
+  briefingText: null as string | null,
 };
 
 export const useRaidStore = create<RaidState>((set) => ({
@@ -220,10 +247,31 @@ export const useRaidStore = create<RaidState>((set) => ({
   setJointLobbyId: (lobbyId) => set({ jointLobbyId: lobbyId }),
   setJointParticipants: (participants) => set({ jointParticipants: participants }),
   setAllyBonuses: (hp, damage) => set({ allyBonusHp: hp, allyBonusDamage: damage }),
+  setActiveEvent: (activeEvent) => set({ activeEvent }),
+
+  setBossHp: (hp, maxHp) => set((state) => ({
+    ...state,
+    bossHp: Math.max(0, hp),
+    bossMaxHp: maxHp ?? state.bossMaxHp,
+  })),
+
+  setBossPhase: (phase, total) => set({ bossPhase: phase, bossTotalPhases: total }),
+
+  setBossRaidDetails: (details) => set({
+    isBossRaid: details.isBoss,
+    bossName: details.name,
+    bossTitle: details.title,
+    bossHp: details.hp,
+    bossMaxHp: details.maxHp,
+    bossPhase: details.phase,
+    bossTotalPhases: details.totalPhases,
+    briefingText: details.briefingText,
+  }),
 
   startRaid: (target) => {
     const duration = RAID_DURATION_SECONDS[target.difficulty];
     set({
+      ...INITIAL_STATE,
       target,
       phase: 'prep',
       timeRemainingSeconds: duration,

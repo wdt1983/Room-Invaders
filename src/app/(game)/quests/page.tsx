@@ -89,10 +89,33 @@ export default async function QuestsPage() {
     .select("quest_id, status, progress, target_value, completed_at, claimed_at")
     .eq("player_id", user.id);
 
+  // 5. Fetch boss clears history to render timelines and achievements
+  const { data: bossClears } = await supabase
+    .from("boss_clears")
+    .select("boss_id, cleared_at, is_first_clear");
+
+  // Defensively seed story quests if player reached level >= 3 and has none
+  const hasStory = (finalQuests ?? []).some((q: any) => q.quest_id.startsWith("story-"));
+  if (!hasStory && playerLevel >= 3) {
+    await seedInitialQuests(supabase, user.id);
+    // Refetch quests after seeding story-01
+    const { data: refetchedQuests } = await (supabase.from("player_quests") as any)
+      .select("quest_id, status, progress, target_value, completed_at, claimed_at")
+      .eq("player_id", user.id);
+    return (
+      <QuestDashboard 
+        initialQuests={refetchedQuests || []} 
+        playerLevel={playerLevel}
+        bossClears={bossClears || []}
+      />
+    );
+  }
+
   return (
     <QuestDashboard 
       initialQuests={finalQuests || []} 
       playerLevel={playerLevel}
+      bossClears={bossClears || []}
     />
   );
 }

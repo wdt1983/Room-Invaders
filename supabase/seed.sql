@@ -166,3 +166,24 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
   '{"energy_boost": 15, "range": 2}',
   '{"w": 1, "h": 1}', 'turret_power_node', 8);
 
+-- ============================================
+-- BOSS REWARDS (5 unique items)
+-- ============================================
+
+INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite_key, unlock_level, item_source, required_boss_clear) VALUES
+('trap', 'Ironjaw''s Bear Trap', 'A heavy iron trap designed to clamp shut. High damage and stuns targets.', 3,
+  '{"scrap": 100, "components": 50}', '{"damage": 30, "stun_duration": 2.0, "uses": 2}', '{"w": 1, "h": 1}', 'trap_bear_trap', 3, 'boss', 'boss-ironjaw'),
+
+('trap', 'Whisper''s Ghost Wire', 'An invisible tripwire linked directly to the security network. Stays hidden and alerts all nearby defenses.', 3,
+  '{"scrap": 120, "components": 60}', '{"damage": 0, "alert_radius": 5, "uses": 1}', '{"w": 1, "h": 1}', 'trap_ghost_wire', 5, 'boss', 'boss-whisper'),
+
+('turret', 'Volkov''s Autocannon Mk2', 'An upgraded, custom autocannon configured by Colonel Volkov. Extremely long range and heavy punch.', 4,
+  '{"scrap": 200, "components": 120}', '{"damage": 25, "range": 6, "fire_rate": 1.5, "ammo": 10}', '{"w": 2, "h": 2}', 'turret_autocannon_mk2', 7, 'boss', 'boss-volkov'),
+
+('trap', 'Circuit''s EMP Mine', 'An advanced electromagnetic pulse mine. Heavy disruption, long stun.', 4,
+  '{"scrap": 180, "components": 100}', '{"damage": 5, "stun_duration": 4.0, "uses": 1}', '{"w": 1, "h": 1}', 'trap_emp_mine', 10, 'boss', 'boss-circuit'),
+
+('cosmetic', 'The Warden''s Key', 'A strange glowing cryptographic key recovered from the Heart of the Fracture. A legendary trophy.', 5,
+  '{"scrap": 500}', '{}', '{"w": 1, "h": 1}', 'cosmetic_warden_key', 15, 'boss', 'boss-warden');
+
+

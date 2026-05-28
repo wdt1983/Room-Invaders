@@ -16,6 +16,181 @@ https://github.com/wdt1983/Room-Invaders.git (private)
 
 ---
 
+## 2026-05-28 — Milestone 10A: Automated E2E and Unit Testing Foundations
+
+### Summary
+
+Successfully established the **Automated E2E Integration and Unit Testing Foundations (Milestone 10A)** for the Room Invaders ecosystem. Implemented high-fidelity, TypeScript-native unit tests using **Vitest** that thoroughly verify core coordinate translation formulas and A* pathfinding systems, and robust browser integration tests using **Playwright** that verify landing pages, user signup/sign-in flows, and server-side route authentication redirects. Configured dev servers auto-execution, strict path-alias resolution, and registered standardized run scripts inside `package.json` for seamless developer and CI environments.
+
+Key accomplishments:
+1. **TypeScript-Native Game Unit Tests (`tests/game/`)**:
+   - Created `tests/game/isometric.test.ts` to mathematically verify static `worldToScreen` and `screenToWorld` functions inside the `IsometricEngine` across standard 2:1 projection ratios, camera pixel offsets, and 90/180/270-degree rotation states.
+   - Created `tests/game/GridSystem.test.ts` checking 2D boundary checks, empty walkable tile filters, dynamic obstacle overrides, standard A* pathfinding routes that divert around column walls, and targeted adjacent walk paths.
+2. **Automated Integration Browser E2E Tests (`tests/e2e/`)**:
+   - Created `tests/e2e/auth.spec.ts` asserting high-fidelity public landing layouts, PWA client indicators, and form field requirements (username, email, password) for registration and login screens.
+   - Created `tests/e2e/navigation.spec.ts` verifying that unauthorized attempts to access protected routes like the room editor (`/room`) trigger instant, server-side redirection to `/login` as defined in the layout authentication guards.
+3. **Configurations & Short-Cut Commands**:
+   - Verified that `vitest.config.ts` handles clean global imports and path resolutions (`@/*` -> `./src/*`) without typescript runtime compilation failures.
+   - Verified that `playwright.config.ts` handles automated, headless Chromium browser instances linked directly to dynamic dev compilation servers with customizable timeout rates.
+   - Added `"test": "vitest run"` and `"test:e2e": "playwright test"` scripts inside `package.json` to unify test executions.
+4. **Test Run Outcomes**:
+   - Executed `pnpm test` (Vitest): **All 9 unit tests passed flawlessly** in 184ms.
+   - Executed `pnpm test:e2e` (Playwright): **All 4 E2E integration browser tests passed flawlessly** in 14.3 seconds.
+
+### Next Best Task
+
+The next best task is to build on top of these testing foundations. We should implement unit tests for other core game systems: `TrapSystem.ts`, `DefenseAI.ts` (Turret firing), `CombatSystem.ts` (HP updates), and `BossAI.ts` (phase shifts). This will establish a bulletproof regression suite for all current and future gameplay features.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `tests/game/isometric.test.ts` | **NEW.** Unit tests for IsometricEngine coordinate conversions. |
+| `tests/game/GridSystem.test.ts` | **NEW.** Unit tests for GridSystem boundary walks and A* pathfinding. |
+| `tests/e2e/auth.spec.ts` | **NEW.** Playwright E2E tests for landing, registration, and login page forms. |
+| `tests/e2e/navigation.spec.ts` | **NEW.** Playwright E2E tests for unauthenticated redirect handling. |
+| `vitest.config.ts` | **MODIFIED.** Pruned comment block to fix rolldown parse error. |
+| `package.json` | **MODIFIED.** Added `test` and `test:e2e` execution scripts. |
+| `docs/tasks.md` | **MODIFIED.** Added Phase 10 section, checked off milestones, and bumped version to `0.19.0`. |
+| `docs/changelog.md` | **MODIFIED.** Logged `[0.19.0]` changelog updates. |
+| `docs/handoff.md` | **MODIFIED.** Prepend session handoff log. |
+
+---
+
+## 2026-05-28 — Milestone 9M: Player-to-Player Barter Trading System
+
+### Summary
+
+Successfully implemented the server-authoritative **Player-to-Player Barter Trading System (Milestone 9M)** end-to-end. Created Postgres database schemas for secure peer-to-peer barter exchanges, established RLS policies and indices, and coded transactional plpgsql database functions (`propose_trade`, `accept_trade`, `withdraw_trade`, and `decline_trade`) utilizing `FOR UPDATE` row-level locks on player inventories and item balances. This escrow framework deducts offered assets immediately on proposal, preventing double-spending, and handles full atomic swaps or refunds contextually. Added automatic real-time push alerts that populate in-game notifications for trade partners. Developed secure Next.js Server Actions and engineered a stunning, responsive, glassmorphic **Trading Terminal** dashboard tab seamlessly integrated inside the Social dashboard panel.
+
+Key accomplishments:
+1. **Supabase Database Schema & RLS (`00029_player_trading_system.sql`)**:
+   - Created tables `trade_offers` and `trade_items` with optimized indexes and owner-level Row-Level Security (RLS) policies.
+   - Built 4 plpgsql stored procedures (`propose_trade`, `accept_trade`, `withdraw_trade`, `decline_trade`) enforcing strict transactional safety via `FOR UPDATE` row-level locks, fully blocking double-spend attempts.
+   - Tied triggers to automatically insert system alerts in the `notifications` table on trade proposals, accepts, and declines in real time.
+   - Pushed migration and successfully reset local development Supabase container (`supabase db reset`).
+2. **Next.js Server Actions (`src/app/(game)/social/actions.ts`)**:
+   - Created actions `proposeTradeAction`, `acceptTradeAction`, `withdrawTradeAction`, and `declineTradeAction` with robust user session validations.
+   - Bound Next.js edge revalidation paths (`revalidatePath`) to `/social` and `/room` to guarantee instant visual syncs.
+3. **Glassmorphic Trading Terminal UI Component (`src/components/game/TradingTerminal.tsx`)**:
+   - Engineered an interactive, translucent cyberpunk console organized into Barter Boards (pending inbound/outbound offers), Propose Barter (creation form), and Log Archives (history).
+   - Designed range sliders dynamically populated from active inventory balances and incremental counters for offering unplaced blueprint items.
+   - Integrated catalog dropdowns for counter-demanding materials or specific items from the master items list.
+   - Bound accept, withdraw, and decline Server Actions to buttons with real-time Sonner toast notifications.
+4. **Social Page Integration (`src/app/(game)/social/page.tsx`)**:
+   - Added a fourth `"Trading"` tab into the sub-navigation menu, mounting the dynamic `<TradingTerminal />` component inside the card content viewport.
+5. **Compilation & Build Hardening**:
+   - Verified the complete codebase using Next.js production build (`pnpm build`) and TypeScript compilation (`pnpm tsc --noEmit`), passing with **0 typecheck and build errors**.
+
+### Next Best Task
+
+The next best backlog task is **NPC Raid Bosses and Quests refinements** or **Clan systems expansions**, such as territory control improvements or seasonal battle pass integrations.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00029_player_trading_system.sql` | **NEW.** DB migration establishing trade tables, RLS policies, indexes, and plpgsql escrow procedures. |
+| `src/app/(game)/social/actions.ts` | **NEW.** Server Actions wrapping Supabase RPC procedures for proposing, accepting, withdrawing, and declining trades. |
+| `src/components/game/TradingTerminal.tsx` | **NEW.** Sleek, glassmorphic barter terminal widget with slider values, unplaced arrays, and buttons bindings. |
+| `src/app/(game)/social/page.tsx` | **MODIFIED.** Embedded `<TradingTerminal />` inside a new sub-tab panel. |
+| `docs/tasks.md` | **MODIFIED.** Checked off Milestone 9M and logged completed details. |
+| `docs/changelog.md` | **MODIFIED.** Added version `[0.18.0]` changelog. |
+| `docs/handoff.md` | **MODIFIED.** Prepend session handoff log. |
+
+---
+
+## 2026-05-27 — Milestone 9L: Achievement System with Cosmetic Rewards
+
+### Summary
+
+Successfully implemented the server-authoritative **Achievement System with Cosmetic Rewards (Milestone 9L)** end-to-end. Created Postgres database schemas for progress tracking, automated triggers on victory logs, and backfilled pre-existing player history victories. Hooked up scrap expenditures checks in inventories to trigger rapid spent milestones and transaction validations inside Next.js Server Actions. Built a gorgeous glassmorphic **Trophy Room** tab inside the Squad Dashboard that renders live squad headshots wrapped in beautiful pulsing neon-green CSS glowing borders, displays unlocked badges, and toggles equipped cosmetics reactively. Setup procedural neon glitch tiles rendering overrides inside Phaser 4 room scenes contextually when equipped.
+
+Key accomplishments:
+1. **Supabase Database Schema & Backfill (`00028_achievements.sql`)**:
+   - Created tables `achievement_catalog` and `player_achievements` with optimized indexes and owner-level Row-Level Security (RLS) policies.
+   - Added active cosmetic columns (`active_badge`, `active_border`, `active_room_skin`) to `public.profiles`.
+   - Added spent trackers (`last_victory_at`, `last_spend_at`, `spend_count_after_victory`) to `public.inventories` to authoritatively count rapid scrap transactions in PostgreSQL.
+   - Seeded 3 starter achievements: `raids_50` (Veteran Raider), `outposts_5` (Grid Overlord), and `double_spent_scrap` (Double Spender).
+   - Created Postgres triggers `on_raid_recorded_achievement` on `raid_history` inserts to increment victory progress and `on_profile_created_achievements` to seed catalog achievements for new profiles.
+   - Wrote a historical backfill procedure counting pre-existing user victories from `raid_history` when running migrations.
+2. **Server-Authoritative Spent Tracker & Server Actions**:
+   - Developed the backend spent-tracker helper `recordScrapSpend` inside `src/lib/game/achievements.ts` to log scrap spending within 30 seconds of a successful raid victory.
+   - Injected spent hooks into `buyAndPlaceFurniture`, player level-up upgrades, room upgrades, sizing upgrades, and defense item repairs inside `src/app/(game)/room/actions.ts`.
+   - Coded Server Actions `getAchievementsAction` and `equipCosmeticAction` inside `src/app/(game)/squad/achievements.ts` with strict locks validations, preventing client spoofing.
+3. **Interactive Trophy Hall UI Dashboard (`src/app/(game)/squad/SquadDashboard.tsx`)**:
+   - Engineered an interactive, cyberpunk glassmorphic tab layout next to Loadouts and Tech.
+   - Shows overall player achievements statistics, unlocked rates, active status indicators, and badges.
+   - Designed live active squad portrait previews rendering headshots wrapped in beautiful pulsing neon-green CSS glowing borders whenequipped.
+   - Connected Server Action triggers to "EQUIP" buttons, showing instant Sonner toast alerts and Next.js router cache invalidations.
+4. **Phaser 4 Engine Customizations (`BootScene.ts`, `RoomScene.ts`)**:
+   - Added a procedural `floor_neon_glitch` tile texture in the preloader drawing hot-pink and neon-green offset borders on a cyber-purple base.
+   - Implemented automatic tile override rendering in `RoomScene` that scales coordinates and renders the custom neon glitch theme when `'neon_glitch'` room skin is active.
+5. **Compilation & Build Hardening**:
+   - Reset and migrated the local Supabase container successfully (`npx supabase db reset`).
+   - Ran codebase linting (`pnpm lint`) and Next.js production compilation (`pnpm build`), compiling in 9.1s with **0 typecheck and build errors**.
+
+### Next Best Task
+
+The next best post-launch backlog task to execute is **Trading System between Players**. This will allow players inside cooperative districts or friends rosters to securely trade resources (Scrap, Components, Credits) or placed furniture/traps items directly via dynamic glassmorphic swap boards.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00028_achievements.sql` | **NEW.** DB migration for catalog, progress, RLS, triggers, seed data, and historical backfills. |
+| `src/lib/game/achievements.ts` | **NEW.** Spent monitoring helper `recordScrapSpend` with 30s victory evaluations. |
+| `src/app/(game)/squad/achievements.ts` | **NEW.** Server Actions for loading catalog details and securely equipping unlocked rewards. |
+| `src/app/(game)/squad/SquadDashboard.tsx` | **MODIFY.** Built the complete interactive glassmorphic Trophy Room dashboard panel, pulsing borders, and equip triggers. |
+| `src/app/(game)/room/actions.ts` | **MODIFY.** Injected spent trackers into `buyAndPlaceFurniture`, level-ups, size tiers upgrades, and repairs. |
+| `src/game/scenes/BootScene.ts` | **MODIFY.** Preloaded procedural neon glitch tile textures in preloader graphic draws. |
+| `src/game/scenes/RoomScene.ts` | **MODIFY.** Applied floor material overrides to custom neon skins dynamically. |
+| `supabase/functions/resolve-raid/index.ts` | **MODIFY.** Reset spent timers and timestamps `last_victory_at` on successful solo and joint raid finishes. |
+| `src/app/actions/territory.ts` | **MODIFY.** Propagated territory conquest checks to unlock `outposts_5` when capturing district cells. |
+| `src/lib/store/usePlayerStore.ts` | **MODIFY.** Extended store hooks and state fields to track `activeBadge`, `activeBorder`, `activeRoomSkin`. |
+| `docs/tasks.md` | **MODIFY.** Marked Task 9.0.29 completed, bumped version, and checked off achievements backlog item. |
+| `docs/changelog.md` | **MODIFY.** Added Milestone 9L v0.17.0 changelog. |
+| `docs/handoff.md` | **MODIFY.** Prepend session handoff log. |
+
+---
+
+## 2026-05-26 — Milestone 9K: Player Level-Up Polish, Community Events & Territory Control
+
+### Summary
+
+Successfully implemented **Player Level-Up Polish (Milestone 4L)**, the **Community Event Framework**, and the **District / Territory Control System (Milestone 9K)** end-to-end. Engineered a dynamic and immersive cyberpunk progression loop showcasing blueprint unlocks, schedules global instanced blackout events with ambient tints and electric spark VFX inside Phaser, and maps regional coordinate outposts on an interactive SVG hex map backed by authoritative pg tug-of-war procedures.
+
+Key accomplishments:
+1. **Milestone 4L (Player Level-Up Polish)**:
+   - Designed a global fullscreen cyberpunk glassmorphic `<LevelUpOverlay />` that maps unlocking defenses/furniture blueprints dynamically from the catalog (`useUIStore` state triggers) and logs systemic milestones (secondary traps at Level 3, PvP Matchmaking at Level 5, Tech Tree at Level 8, Raider slot #2 at Level 10, strongholds coordinates at Level 20).
+   - Wired level triggers and Sentry telemetry analytics breadcrumbs securely inside scrap upgrades, quests, and raid resolvers.
+2. **Community Event Framework**:
+   - Pushed DB migration `00026_community_events.sql` establishing schedules and seeded active events, created app server actions to pull events and log contributions, and built blinking glassmorphic HUD banners.
+   - Procedurally adjusted Phaser floor tints (`0x222233`) and camera fog under sector blackouts, injected 20% random jam tick skips and electric sparks VFX inside `RaidScene.ts`, and doubled combat rewards autoritatively in Deno edge functions.
+3. **District / Territory Control System**:
+   - Built database migration `00027_district_territory.sql` mapping grid outposts on a 19-hex board, established RLS and transactional pg procedures (`record_skirmish_and_update_influence`, `distribute_territory_dividends`) for secure tug-of-war influence offsets and passive daily resource rewards.
+   - Authored server actions for coordinates fetching and raid simulation results, built responsive interactive hex-grid SVG map boards with Selection rings and live influence meters, and deployed central tabbed `<DistrictDashboard>` war-rooms embedded inside the district page grids.
+4. **Compilation & Build Hardening**:
+   - Verified the complete codebase using Next.js production build (`pnpm build`), TypeScript validation (`pnpm tsc --noEmit`), and linter audits (`pnpm lint`), passing with **0 typecheck and build errors**.
+
+### Next Best Task
+
+The next best backlog task is **Milestone 9L: Achievement System with Cosmetic Rewards**. This will allow players to unlock exclusive badges and visual cosmetics (e.g. neon glowing borders for character portraits or rare room skins) upon achieving specific milestones like completing 50 successful raids or capturing 5 different territory outposts.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/00027_district_territory.sql` | **NEW.** DB migration for hex territories, skirmishes, tug-of-war PG functions, and daily dividend resets. |
+| `src/app/actions/territory.ts` | **NEW.** Server actions for fetching territories, committing skirmish results via RPC, and pulling feeds logs. |
+| `src/components/game/TerritoryMap.tsx` | **NEW.** Interactive client component: SVG hex board, selection rings, locking gauges, and live news skirmishes. |
+| `src/components/game/DistrictDashboard.tsx` | **NEW.** Client container tabbed layout: Stronghold sectors, Vault treasury, and War Room maps. |
+| `src/game/scenes/RaidScene.ts` | **MODIFY.** Initialized `onTurretJammed` Phaser graphics drawer (electric sparks VFX) and rusty-red jam overlays. |
+| `src/app/(game)/map/district/page.tsx` | **MODIFY.** Fetches territory nodes/skirmishes, and mounts the central `DistrictDashboard`. |
+| `docs/tasks.md` | **MODIFY.** Marked Task 4.0.13, 9.0.27, 9.0.28 completed. |
+| `docs/changelog.md` | **MODIFY.** Added Milestone 9K v0.16.0 changelog. |
+| `docs/handoff.md` | **MODIFY.** Prepend session handoff log. |
+
 ## 2026-05-26 — Milestone 9I: Expanded Room Sizes
 
 ### Summary

@@ -19,6 +19,8 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
   public weapon: string | null;
   public armor: string | null;
   public meleeDamage: number;
+  public isBoss: boolean = false;
+  public isHostile: boolean = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -34,6 +36,8 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
       passiveGear?: string | null;
       weapon?: string | null;
       armor?: string | null;
+      isBoss?: boolean;
+      isHostile?: boolean;
     } = {},
   ) {
     super(scene, 0, 0, textureKey);
@@ -45,6 +49,13 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
     this.passiveGear = options.passiveGear ?? null;
     this.weapon = options.weapon ?? null;
     this.armor = options.armor ?? null;
+    this.isBoss = options.isBoss ?? false;
+    this.isHostile = options.isHostile ?? false;
+
+    if (this.isBoss) {
+      this.setScale(1.5);
+      this.setTint(0xffcccc); // Red-tinted glow
+    }
 
     const activeEffects = usePlayerStore.getState().activeEffects;
 
