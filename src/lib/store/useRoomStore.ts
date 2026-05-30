@@ -30,6 +30,7 @@ export interface PlacedItem {
   customImageUrl?: string | null;
   moderationStatus?: 'pending' | 'approved' | 'rejected' | null;
   moderationError?: string | null;
+  hologramSettings?: { color: string; flicker: number; scanlines: number; noise: number; boss?: string } | null;
 }
 
 export interface Cosmetics {
@@ -73,6 +74,7 @@ interface RoomState {
   rotatePlacedItemAt: (gridX: number, gridY: number, rotation: number) => void;
   repairPlacedItemAt: (gridX: number, gridY: number) => void;
   movePlacedItemAt: (oldX: number, oldY: number, newX: number, newY: number) => void;
+  updateHologramSettingsAt: (gridX: number, gridY: number, settings: { color: string; flicker: number; scanlines: number; noise: number; boss?: string }) => void;
 }
 
 export const useRoomStore = create<RoomState>((set) => ({
@@ -124,6 +126,12 @@ export const useRoomStore = create<RoomState>((set) => ({
     set((state) => ({
       placedItems: state.placedItems.map((p) =>
         p.gridX === oldX && p.gridY === oldY ? { ...p, gridX: newX, gridY: newY } : p,
+      ),
+    })),
+  updateHologramSettingsAt: (gridX, gridY, settings) =>
+    set((state) => ({
+      placedItems: state.placedItems.map((p) =>
+        p.gridX === gridX && p.gridY === gridY ? { ...p, hologramSettings: settings } : p,
       ),
     })),
 }));

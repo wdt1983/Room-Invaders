@@ -10,6 +10,7 @@ import { slotCategoryFor, slotsForLevel } from '@/lib/game/defense';
 
 import { ContextMenu } from "@/components/game/ContextMenu";
 import { PosterUploadDialog } from "@/components/game/PosterUploadDialog";
+import { BossPedestalDialog } from "@/components/game/BossPedestalDialog";
 import { BaseDefenseMonitor } from "@/components/game/BaseDefenseMonitor";
 import { seedInitialQuests, trackQuestProgress } from '@/lib/game/quests';
 
@@ -51,6 +52,7 @@ export default async function RoomPage() {
         custom_image_url,
         moderation_status,
         moderation_error,
+        hologram_settings,
         items ( sprite_key, footprint, type )
     `)
     .eq('owner_id', user.id)
@@ -131,6 +133,7 @@ export default async function RoomPage() {
       customImageUrl: dbItem.custom_image_url,
       moderationStatus: dbItem.moderation_status,
       moderationError: dbItem.moderation_error,
+      hologramSettings: dbItem.hologram_settings,
     };
   });
 
@@ -197,6 +200,7 @@ export default async function RoomPage() {
       <ItemPanel />
       <ContextMenu />
       <PosterUploadDialog />
+      <BossPedestalDialog />
       <BaseDefenseMonitor user={user} />
     </div>
   );

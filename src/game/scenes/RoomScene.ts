@@ -53,6 +53,10 @@ export class RoomScene extends Phaser.Scene {
   private defenseViewGraphics!: Phaser.GameObjects.Graphics;
   private defenseViewTweens: Phaser.Tweens.Tween[] = [];
   private holographicMarkers: Map<string, Phaser.GameObjects.Graphics> = new Map();
+  private activeCustomPosters: Map<FurnitureSprite, { item: any; texKey: string; imgKey: string }> = new Map();
+  public activeBossPedestals: Map<FurnitureSprite, { projection: Phaser.GameObjects.Sprite; settings: any; lastSpinTime: number; dir: number }> = new Map();
+  public glitchIntensity: number = 0;
+  private lastScanlineUpdateTime: number = 0;
   public gridSize: number = 10;
   private lastCameraScrollX: number = 0;
   private lastCameraScrollY: number = 0;
@@ -313,7 +317,10 @@ export class RoomScene extends Phaser.Scene {
         }
         
         // Dynamic custom poster rendering checks
-        this.applyCustomPosterTexture(sprite, item);
+        this.applyCustomPosterTexture(sprite, item, index * 40 + 400);
+        
+        // Holographic boss pedestal projection check
+        this.applyHologramProjection(sprite, item, index * 40 + 400);
 
         // Cyber-pop staggered cascade intro animation
         sprite.setScale(0);
@@ -357,6 +364,15 @@ export class RoomScene extends Phaser.Scene {
       );
       if (idx >= 0) {
         const sprite = this.furnitureItems[idx];
+        this.stopHologramFlicker(sprite);
+        
+        const pedestalInfo = this.activeBossPedestals.get(sprite);
+        if (pedestalInfo) {
+          pedestalInfo.projection.destroy();
+          this.stopHologramFlicker(pedestalInfo.projection);
+          this.activeBossPedestals.delete(sprite);
+        }
+
         this.furnitureItems.splice(idx, 1);
 
         // Reset all grid tiles in the footprint
@@ -443,6 +459,7 @@ export class RoomScene extends Phaser.Scene {
       SoundManager.getInstance().playMusic('combat_tension');
       SoundManager.getInstance().playSfx('alarm');
       this.cameras.main.flash(500, 255, 0, 0);
+      this.triggerGlitchDecal(1.0);
     };
 
     const handlePvpAttackerMoved = (payload: { memberIndex: number; x: number; y: number }) => {
@@ -457,7 +474,7 @@ export class RoomScene extends Phaser.Scene {
       this.holographicMarkers.clear();
     };
 
-    const handlePosterUpdated = (payload: { id: string; gridX: number; gridY: number; customImageUrl: string; moderationStatus: string; moderationError?: string | null }) => {
+    const handlePosterUpdated = (payload: { id: string; gridX: number; gridY: number; customImageUrl: string; moderationStatus: string; moderationError?: string | null; hologramSettings?: any }) => {
       if (!this.sys || !this.sys.isActive()) return;
       const sprite = this.furnitureItems.find(f => f.gridX === payload.gridX && f.gridY === payload.gridY);
       if (sprite) {
@@ -467,8 +484,17 @@ export class RoomScene extends Phaser.Scene {
           customImageUrl: payload.customImageUrl,
           moderationStatus: payload.moderationStatus,
           moderationError: payload.moderationError,
+          hologramSettings: payload.hologramSettings,
         };
         this.applyCustomPosterTexture(sprite, mockItem);
+      }
+    };
+
+    const handlePedestalUpdated = (payload: { id: string; gridX: number; gridY: number; hologramSettings: any }) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      const sprite = this.furnitureItems.find(f => f.gridX === payload.gridX && f.gridY === payload.gridY);
+      if (sprite) {
+        this.applyHologramProjection(sprite, { hologram_settings: payload.hologramSettings, spriteKey: 'furniture_boss_pedestal' });
       }
     };
 
@@ -536,6 +562,7 @@ export class RoomScene extends Phaser.Scene {
     EventBus.on('pvp-attacker-moved', handlePvpAttackerMoved);
     EventBus.on('pvp-raid-completed', handlePvpRaidCompleted);
     EventBus.on('poster-updated', handlePosterUpdated);
+    EventBus.on('pedestal-updated', handlePedestalUpdated);
     EventBus.on('move-success', handleMoveSuccess);
 
     const cleanup = () => {
@@ -550,9 +577,15 @@ export class RoomScene extends Phaser.Scene {
       EventBus.off('pvp-attacker-moved', handlePvpAttackerMoved);
       EventBus.off('pvp-raid-completed', handlePvpRaidCompleted);
       EventBus.off('poster-updated', handlePosterUpdated);
+      EventBus.off('pedestal-updated', handlePedestalUpdated);
       EventBus.off('move-success', handleMoveSuccess);
       this.holographicMarkers.forEach(marker => marker.destroy());
       this.holographicMarkers.clear();
+      this.activeBossPedestals.forEach(info => {
+        info.projection.destroy();
+        this.stopHologramFlicker(info.projection);
+      });
+      this.activeBossPedestals.clear();
       this.exitDefenseView();
     };
 
@@ -778,7 +811,7 @@ export class RoomScene extends Phaser.Scene {
    * Overlapping tiles stack alpha — denser coverage reads as denser color,
    * which is a useful signal rather than a bug.
    */
-  private drawDefenseViewOverlay(): void {
+  private drawDefenseViewOverlay(scanlineOffset = 0): void {
     this.defenseViewGraphics.clear();
 
     const catalog = useRoomStore.getState().catalog;
@@ -809,10 +842,12 @@ export class RoomScene extends Phaser.Scene {
       paintRangeBand(
         this.defenseViewGraphics, primary, RANGE_FILL_COLOR.primary,
         this.currentRotation, this.offsetX, this.offsetY,
+        undefined, undefined, scanlineOffset,
       );
       paintRangeBand(
         this.defenseViewGraphics, alert, RANGE_FILL_COLOR.alert,
         this.currentRotation, this.offsetX, this.offsetY,
+        undefined, undefined, scanlineOffset,
       );
     }
   }
@@ -1085,6 +1120,7 @@ export class RoomScene extends Phaser.Scene {
     });
 
     SoundManager.getInstance().playSfx('place_item');
+    this.triggerGlitchDecal(0.35);
 
     return true;
   }
@@ -1159,44 +1195,162 @@ export class RoomScene extends Phaser.Scene {
     marker.strokeCircle(0, 0, 18);
   }
 
-  public applyCustomPosterTexture(sprite: FurnitureSprite, item: any) {
+  public applyCustomPosterTexture(sprite: FurnitureSprite, item: any, flickerDelay = 0) {
     if (!item || item.spriteKey !== 'furniture_custom_poster') return;
+
+    const settings = item.hologramSettings || item.hologram_settings;
 
     if (item.moderationStatus === 'approved' && item.customImageUrl) {
       const texKey = `custom_poster_tex_${item.id}`;
       const imgKey = `custom_poster_img_${item.id}`;
 
-      if (this.textures.exists(texKey)) {
-        sprite.setTexture(texKey);
-        return;
-      }
+      // Start/update the dynamic alpha flicker loop
+      this.applyHologramFlicker(sprite, settings, flickerDelay);
 
+      // Register for dynamic scrolling scanlines animation
+      this.activeCustomPosters.set(sprite, { item, texKey, imgKey });
+
+      // Fast-path: if source image is already loaded, redraw and refresh immediately
       if (this.textures.exists(imgKey)) {
-        this.projectPosterImage(texKey, imgKey);
+        this.projectPosterImage(texKey, imgKey, settings);
         sprite.setTexture(texKey);
         return;
       }
 
       this.load.image(imgKey, item.customImageUrl);
       this.load.once(`filecomplete-image-${imgKey}`, () => {
-        this.projectPosterImage(texKey, imgKey);
+        this.projectPosterImage(texKey, imgKey, settings);
         if (sprite.active) {
           sprite.setTexture(texKey);
         }
       });
       this.load.start();
-    } else if (item.moderationStatus === 'pending') {
-      sprite.setTexture('furniture_custom_poster_pending');
-    } else if (item.moderationStatus === 'rejected') {
-      sprite.setTexture('furniture_custom_poster_rejected');
     } else {
-      sprite.setTexture('furniture_custom_poster');
+      this.activeCustomPosters.delete(sprite);
+      this.stopHologramFlicker(sprite);
+      if (item.moderationStatus === 'pending') {
+        sprite.setTexture('furniture_custom_poster_pending');
+      } else if (item.moderationStatus === 'rejected') {
+        sprite.setTexture('furniture_custom_poster_rejected');
+      } else {
+        sprite.setTexture('furniture_custom_poster');
+      }
     }
   }
 
-  private projectPosterImage(texKey: string, imgKey: string) {
-    if (this.textures.exists(texKey)) return;
-    const canvasTexture = this.textures.createCanvas(texKey, 64, 64);
+  public applyHologramProjection(sprite: FurnitureSprite, item: any, flickerDelay = 0) {
+    if (!item || item.spriteKey !== 'furniture_boss_pedestal') return;
+
+    const settings = item.hologramSettings || item.hologram_settings || {
+      color: '#06b6d4',
+      flicker: 0.15,
+      scanlines: 0.40,
+      noise: 0.10,
+      boss: 'boss-ironjaw'
+    };
+
+    const boss = settings.boss || 'boss-ironjaw';
+    const color = settings.color || '#06b6d4';
+
+    const existing = this.activeBossPedestals.get(sprite);
+    if (existing) {
+      existing.projection.destroy();
+      this.stopHologramFlicker(existing.projection);
+    }
+
+    const bossKey = `hologram_${boss}`;
+    const initialTexture = this.textures.exists(`${bossKey}_dir_0`) ? `${bossKey}_dir_0` : 'boss_ironjaw_dir_0';
+
+    const projection = this.add.sprite(sprite.x, sprite.y - 18, initialTexture);
+    projection.setOrigin(0.5, 1);
+    projection.setAlpha(0.6);
+    projection.setDepth(sprite.depth + 1);
+
+    const tintColor = Phaser.Display.Color.HexStringToColor(color).color;
+    projection.setTint(tintColor);
+
+    this.applyHologramFlicker(projection, settings, flickerDelay);
+
+    this.activeBossPedestals.set(sprite, {
+      projection,
+      settings,
+      lastSpinTime: this.time ? this.time.now : Date.now(),
+      dir: 0
+    });
+  }
+
+  public triggerGlitchDecal(intensity: number) {
+    this.glitchIntensity = Math.max(this.glitchIntensity, intensity);
+  }
+
+  private applyHologramFlicker(sprite: any, settings: any, flickerDelay = 0) {
+    this.stopHologramFlicker(sprite);
+
+    const hologram = settings || {
+      color: '#06b6d4',
+      flicker: 0.15,
+      scanlines: 0.40,
+      noise: 0.10
+    };
+
+    if (!hologram.flicker || hologram.flicker <= 0) {
+      return;
+    }
+
+    const startTween = () => {
+      if (!sprite.active) return;
+
+      const duration = Math.max(50, 100 / hologram.flicker);
+      const minAlpha = Math.max(0.6, 1.0 - hologram.flicker * 0.35);
+
+      sprite.hologramFlickerTween = this.tweens.add({
+        targets: sprite,
+        alpha: minAlpha,
+        duration: duration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Power1',
+        onUpdate: () => {
+          // Micro-flickers for hardware instability aesthetics
+          if (Math.random() < 0.02 * hologram.flicker) {
+            sprite.alpha = minAlpha * 0.7;
+          }
+        }
+      });
+    };
+
+    if (flickerDelay > 0) {
+      sprite.hologramFlickerTimer = this.time.delayedCall(flickerDelay, startTween);
+    } else {
+      startTween();
+    }
+  }
+
+  private stopHologramFlicker(sprite: any) {
+    if (this.activeCustomPosters) {
+      this.activeCustomPosters.delete(sprite);
+    }
+    if (sprite.hologramFlickerTween) {
+      sprite.hologramFlickerTween.stop();
+      sprite.hologramFlickerTween = null;
+    }
+    if (sprite.hologramFlickerTimer) {
+      sprite.hologramFlickerTimer.remove();
+      sprite.hologramFlickerTimer = null;
+    }
+    sprite.setAlpha(1);
+  }
+
+  private projectPosterImage(texKey: string, imgKey: string, settings: any, scanlineOffset = 0) {
+    let canvasTexture: Phaser.Textures.CanvasTexture | null = null;
+    if (this.textures.exists(texKey)) {
+      canvasTexture = this.textures.get(texKey) as Phaser.Textures.CanvasTexture;
+      if (canvasTexture && canvasTexture.context) {
+        canvasTexture.context.clearRect(0, 0, 64, 64);
+      }
+    } else {
+      canvasTexture = this.textures.createCanvas(texKey, 64, 64);
+    }
     if (!canvasTexture) return;
     const ctx = canvasTexture.context;
     
@@ -1209,16 +1363,107 @@ export class RoomScene extends Phaser.Scene {
     const loadedImg = this.textures.get(imgKey).getSourceImage() as HTMLImageElement;
     if (!loadedImg) return;
 
+    const hologram = settings || {
+      color: '#06b6d4',
+      flicker: 0.15,
+      scanlines: 0.40,
+      noise: 0.10
+    };
+
+    // Tiny offscreen processing canvas for dynamic color tints, scanlines, and noise grain
+    const width = loadedImg.width || 32;
+    const height = loadedImg.height || 32;
+    
+    const offscreen = document.createElement('canvas');
+    offscreen.width = width;
+    offscreen.height = height;
+    const oCtx = offscreen.getContext('2d');
+    
+    if (oCtx) {
+      // 1. Base image
+      oCtx.drawImage(loadedImg, 0, 0, width, height);
+
+      // 2. Color tint overlay (source-atop preserves transparent details)
+      if (hologram.color) {
+        oCtx.save();
+        oCtx.globalCompositeOperation = 'source-atop';
+        oCtx.fillStyle = hologram.color;
+        oCtx.fillRect(0, 0, width, height);
+        oCtx.restore();
+      }
+
+      // 3. Scanline pattern overlay with scrolling offset
+      if (hologram.scanlines > 0) {
+        oCtx.save();
+        oCtx.globalCompositeOperation = 'source-atop';
+        oCtx.strokeStyle = `rgba(0, 0, 0, ${hologram.scanlines})`;
+        oCtx.lineWidth = 1;
+        
+        const offset = Math.floor(scanlineOffset) % 4;
+        for (let y = -4 + offset; y < height; y += 2) {
+          if (y >= 0) {
+            oCtx.beginPath();
+            oCtx.moveTo(0, y);
+            oCtx.lineTo(width, y);
+            oCtx.stroke();
+          }
+        }
+        oCtx.restore();
+      }
+
+      // 4. Digital static grain overlay
+      if (hologram.noise > 0) {
+        oCtx.save();
+        oCtx.globalCompositeOperation = 'source-atop';
+        const imgData = oCtx.getImageData(0, 0, width, height);
+        const data = imgData.data;
+        const noiseAmount = hologram.noise * 255;
+        for (let i = 0; i < data.length; i += 4) {
+          if (Math.random() < hologram.noise) {
+            const randNoise = (Math.random() - 0.5) * noiseAmount;
+            data[i] = Math.min(255, Math.max(0, data[i] + randNoise));
+            data[i+1] = Math.min(255, Math.max(0, data[i+1] + randNoise));
+            data[i+2] = Math.min(255, Math.max(0, data[i+2] + randNoise));
+          }
+        }
+        oCtx.putImageData(imgData, 0, 0);
+        oCtx.restore();
+      }
+
+      // 5. Dynamic horizontal pixel screen tearing / glitch decals
+      if (this.glitchIntensity > 0) {
+        const numSlices = 5;
+        const sliceHeight = height / numSlices;
+        oCtx.save();
+        const temp = document.createElement('canvas');
+        temp.width = width;
+        temp.height = height;
+        const tCtx = temp.getContext('2d');
+        if (tCtx) {
+          tCtx.drawImage(offscreen, 0, 0);
+          oCtx.clearRect(0, 0, width, height);
+          for (let i = 0; i < numSlices; i++) {
+            const sliceY = i * sliceHeight;
+            const shift = (Math.random() - 0.5) * width * 0.3 * this.glitchIntensity;
+            oCtx.drawImage(temp, 0, sliceY, width, sliceHeight, shift, sliceY, width, sliceHeight);
+          }
+        }
+        oCtx.restore();
+      }
+    }
+
+    const sourceCanvas = oCtx ? offscreen : loadedImg;
+
     // Skew and project onto Left face (facing South-East, parallel NW wall)
     ctx.save();
     ctx.transform(1, 0.5, 0, 1, 0, 0);
-    ctx.drawImage(loadedImg, 7, 2, 18, 18);
+    ctx.drawImage(sourceCanvas, 7, 2, 18, 18);
     ctx.restore();
 
     // Skew and project onto Right face (facing South-West, parallel NE wall)
     ctx.save();
     ctx.transform(1, -0.5, 0, 1, 0, 0);
-    ctx.drawImage(loadedImg, 39, 34, 18, 18);
+    ctx.drawImage(sourceCanvas, 39, 34, 18, 18);
     ctx.restore();
 
     canvasTexture.refresh();
@@ -1266,7 +1511,77 @@ export class RoomScene extends Phaser.Scene {
     }
   }
 
-  update(): void {
+  update(time: number): void {
     this.cullTiles();
+
+    // Glitch intensity decay (approx 300ms fully back to 0)
+    if (this.glitchIntensity > 0) {
+      const deltaFactor = this.sys.game.loop.delta / 16.66;
+      this.glitchIntensity -= 0.05 * deltaFactor;
+      if (this.glitchIntensity < 0) this.glitchIntensity = 0;
+    }
+
+    // Throttled scanline scroll crawler (Updates at ~20 FPS/every 50ms)
+    const currentTime = time || Date.now();
+    if ((this.activeCustomPosters.size > 0 || this.defenseViewActive) && currentTime - this.lastScanlineUpdateTime > 50) {
+      this.lastScanlineUpdateTime = currentTime;
+      const scanlineOffset = currentTime / 100;
+      
+      // 1. Scrolling custom posters
+      if (this.activeCustomPosters.size > 0) {
+        this.activeCustomPosters.forEach((data, sprite) => {
+          if (sprite.active && sprite.visible) {
+            const settings = data.item.hologramSettings || data.item.hologram_settings;
+            this.projectPosterImage(data.texKey, data.imgKey, settings, scanlineOffset);
+          }
+        });
+      }
+
+      // 2. Scrolling defense view coverage overlays
+      if (this.defenseViewActive) {
+        this.drawDefenseViewOverlay(scanlineOffset);
+      }
+    }
+
+    // 3. Spinning boss projections
+    if (this.activeBossPedestals.size > 0) {
+      this.activeBossPedestals.forEach((info, pedestal) => {
+        if (!pedestal.active) {
+          info.projection.destroy();
+          this.activeBossPedestals.delete(pedestal);
+          return;
+        }
+
+        // Spin projection: cycle texture every 500ms
+        const now = time || Date.now();
+        if (now - info.lastSpinTime > 500) {
+          info.dir = (info.dir + 1) % 4;
+          const boss = info.settings.boss || 'boss-ironjaw';
+          const bossKey = `hologram_${boss}`;
+          const tex = `${bossKey}_dir_${info.dir}`;
+          if (this.textures.exists(tex)) {
+            info.projection.setTexture(tex);
+          }
+          info.lastSpinTime = now;
+        }
+
+        // Sync coordinate position and depth layer above pedestal
+        const shiftX = this.glitchIntensity > 0 ? (Math.random() - 0.5) * 8 * this.glitchIntensity : 0;
+        const scaleX = this.glitchIntensity > 0 ? 1.0 + (Math.random() - 0.5) * 0.4 * this.glitchIntensity : 1.0;
+        const alphaDrop = this.glitchIntensity > 0 && Math.random() < 0.1 * this.glitchIntensity ? 0.35 : 1.0;
+
+        info.projection.x = pedestal.x + shiftX;
+        info.projection.scaleX = scaleX;
+        info.projection.setAlpha(Math.max(0.1, 0.6 * (1.0 - this.glitchIntensity * 0.5) * alphaDrop));
+
+        info.projection.y = pedestal.y - 18;
+        info.projection.setDepth(pedestal.depth + 1);
+
+        // Viewport Culling check
+        if (pedestal.visible !== info.projection.visible) {
+          info.projection.setVisible(pedestal.visible);
+        }
+      });
+    }
   }
 }

@@ -90,3 +90,82 @@ export async function moderateCustomPosterAction(
     };
   }
 }
+
+/**
+ * Authoritative Server Action for custom poster hologram visual filter updates.
+ *
+ * Verifies session authorization, validates item ownership, validates type,
+ * transactionally commits updated hologram configuration in PostgreSQL,
+ * and revalidates Next.js edge caches.
+ */
+export async function updateHologramSettingsAction(
+  playerItemId: string,
+  settings: { color: string; flicker: number; scanlines: number; noise: number }
+) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false as const, error: "Unauthorized" };
+    }
+
+    // 1. Fetch player item to verify ownership and check type
+    const { data: playerItem, error: fetchError } = await (supabase.from("player_items") as any)
+      .select("id, owner_id, item_id, items ( sprite_key )")
+      .eq("id", playerItemId)
+      .single();
+
+    if (fetchError || !playerItem) {
+      return { success: false as const, error: "Custom poster item not found." };
+    }
+
+    if (playerItem.owner_id !== user.id) {
+      return { success: false as const, error: "Permission denied. You do not own this item." };
+    }
+
+    const itemData = Array.isArray(playerItem.items) ? playerItem.items[0] : playerItem.items;
+    if (itemData?.sprite_key !== "furniture_custom_poster") {
+      return { success: false as const, error: "This item is not a custom poster." };
+    }
+
+    // 2. Validate hologram settings structure
+    const color = typeof settings.color === "string" && settings.color.startsWith("#") ? settings.color : "#06b6d4";
+    const flicker = typeof settings.flicker === "number" && settings.flicker >= 0 && settings.flicker <= 1 ? settings.flicker : 0.15;
+    const scanlines = typeof settings.scanlines === "number" && settings.scanlines >= 0 && settings.scanlines <= 1 ? settings.scanlines : 0.40;
+    const noise = typeof settings.noise === "number" && settings.noise >= 0 && settings.noise <= 1 ? settings.noise : 0.10;
+
+    const validatedSettings = { color, flicker, scanlines, noise };
+
+    // 3. Update database row
+    const { error: updateError } = await (supabase.from("player_items") as any)
+      .update({
+        hologram_settings: validatedSettings,
+      })
+      .eq("id", playerItemId);
+
+    if (updateError) {
+      console.error("[updateHologramSettingsAction] Update failed:", updateError);
+      return { success: false as const, error: "Failed to update hologram settings." };
+    }
+
+    // Revalidate paths to refresh page states
+    revalidatePath("/room");
+
+    return {
+      success: true as const,
+      settings: validatedSettings,
+    };
+  } catch (err: any) {
+    console.error("[updateHologramSettingsAction] Exception caught:", err);
+    Sentry.captureException(err, {
+      tags: { action: "updateHologramSettingsAction" },
+      extra: { playerItemId, settings },
+    });
+    return {
+      success: false as const,
+      error: err.message || "An unexpected error occurred during hologram update.",
+    };
+  }
+}
+

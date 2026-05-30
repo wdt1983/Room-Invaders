@@ -91,6 +91,7 @@ export default async function VisitFriendPage({ params }: PageProps) {
         custom_image_url,
         moderation_status,
         moderation_error,
+        hologram_settings,
         items ( sprite_key, footprint, type )
     `)
     .eq("owner_id", userId)
@@ -146,6 +147,7 @@ export default async function VisitFriendPage({ params }: PageProps) {
         customImageUrl: dbItem.custom_image_url,
         moderationStatus: dbItem.moderation_status,
         moderationError: dbItem.moderation_error,
+        hologramSettings: dbItem.hologram_settings,
       };
     });
 

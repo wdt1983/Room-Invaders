@@ -44,10 +44,13 @@ export function paintRangeBand(
   offsetY: number,
   fillAlpha: number = RANGE_FILL_ALPHA,
   strokeAlpha: number = RANGE_STROKE_ALPHA,
+  scanlineOffset: number = 0,
 ): void {
   if (tiles.length === 0) return;
   const halfW = TILE_WIDTH / 2;
   const halfH = TILE_HEIGHT / 2;
+  
+  // 1. Draw solid translucent floor fills and outer borders
   graphics.fillStyle(color, fillAlpha);
   graphics.lineStyle(1, color, strokeAlpha);
 
@@ -64,5 +67,20 @@ export function paintRangeBand(
     graphics.closePath();
     graphics.fillPath();
     graphics.strokePath();
+
+    // 2. Draw dynamic scrolling scanlines strictly bounded inside each diamond
+    if (scanlineOffset > 0) {
+      graphics.lineStyle(1, color, fillAlpha * 1.5);
+      const offset = Math.floor(scanlineOffset) % 6; // Repeats every 6px
+      for (let dy = -halfH; dy <= halfH; dy++) {
+        if ((dy + halfH - offset) % 6 === 0) {
+          const lineHalfW = halfW * (1 - Math.abs(dy) / halfH);
+          graphics.beginPath();
+          graphics.moveTo(cx - lineHalfW, cy + dy);
+          graphics.lineTo(cx + lineHalfW, cy + dy);
+          graphics.strokePath();
+        }
+      }
+    }
   }
 }

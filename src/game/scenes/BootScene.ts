@@ -23,6 +23,7 @@ const FURNITURE: readonly SpriteDescriptor[] = [
   ['furniture_custom_poster', 1, 1, 40, 0x334155],
   ['furniture_custom_poster_pending', 1, 1, 40, 0xd97706],
   ['furniture_custom_poster_rejected', 1, 1, 40, 0x7f1d1d],
+  ['furniture_boss_pedestal', 1, 1, 32, 0x475569],
   ['cosmetic_warden_key',     1, 1, 16, 0x8b5cf6],
 ];
 
@@ -108,6 +109,21 @@ export class BootScene extends Phaser.Scene {
         for (let dir = 0; dir < 4; dir++) {
           this.generateIsoBlock(`${key}_dir_${dir}`, w, h, heightPx, color, dir);
         }
+      }
+    }
+
+    // 3. Pre-generate boss holographic projections (cyan wireframe blueprints)
+    for (const bossKey of ['boss_ironjaw', 'boss_whisper', 'boss_volkov', 'boss_circuit', 'boss_warden']) {
+      const holoKey = `hologram_${bossKey}`;
+      const color = 0x06b6d4; // Cyan is default hologram color
+      const entry = ENTITIES.find(e => e[0] === bossKey);
+      const w = entry ? entry[1] : 1;
+      const h = entry ? entry[2] : 1;
+      const heightPx = entry ? entry[3] : 48;
+      
+      this.generateIsoBlock(holoKey, w, h, heightPx, color, 0);
+      for (let dir = 0; dir < 4; dir++) {
+        this.generateIsoBlock(`${holoKey}_dir_${dir}`, w, h, heightPx, color, dir);
       }
     }
   }
@@ -337,6 +353,7 @@ export class BootScene extends Phaser.Scene {
     };
 
     const neonColor = getNeonGlowColor(color);
+    const isHologram = key.startsWith('hologram_');
 
     const isFurniture = key.startsWith('furniture');
     const isTrap = key.startsWith('trap');
@@ -365,7 +382,7 @@ export class BootScene extends Phaser.Scene {
     };
 
     // Soft Ambient Occlusion Contact Floor Shadow
-    graphics.fillStyle(0x000000, 0.22);
+    graphics.fillStyle(isHologram ? neonColor : 0x000000, isHologram ? 0.25 : 0.22);
     graphics.beginPath();
     graphics.moveTo(ptTop.x, ptTop.y + heightPixels);
     graphics.lineTo(ptRight.x + 3, ptRight.y + heightPixels + 1.5);
@@ -395,7 +412,7 @@ export class BootScene extends Phaser.Scene {
         alpha?: number;
       } = {}
     ) => {
-      const alphaVal = options.alpha !== undefined ? options.alpha : 1;
+      const alphaVal = options.alpha !== undefined ? options.alpha : (isHologram ? 0.15 : 1);
       const subColorTop = options.screen ? baseColor : lighten(baseColor, 1.05);
       const subColorRight = darken(baseColor, 0.7);
       const subColorLeft = darken(baseColor, 0.55);
@@ -524,7 +541,11 @@ export class BootScene extends Phaser.Scene {
       }
 
       // Outlines / beveled seams
-      graphics.lineStyle(1.0, darken(baseColor, 0.35), 0.7 * alphaVal);
+      if (isHologram) {
+        graphics.lineStyle(1.5, neonColor, 0.9);
+      } else {
+        graphics.lineStyle(1.0, darken(baseColor, 0.35), 0.7 * alphaVal);
+      }
       graphics.beginPath();
       graphics.moveTo(pt0.x, pt0.y);
       graphics.lineTo(pt1.x, pt1.y);
@@ -534,6 +555,11 @@ export class BootScene extends Phaser.Scene {
       graphics.strokePath();
 
       if (zSize > 0) {
+        if (isHologram) {
+          graphics.lineStyle(1.5, neonColor, 0.9);
+        } else {
+          graphics.lineStyle(1.0, darken(baseColor, 0.35), 0.7 * alphaVal);
+        }
         graphics.beginPath();
         graphics.moveTo(pt3.x, pt3.y);
         graphics.lineTo(pt3B.x, pt3B.y);
@@ -701,6 +727,16 @@ export class BootScene extends Phaser.Scene {
       drawVolumetricSubBlock(0.04, 0.45, 0, 0.92, 0.1, heightPixels, 0x1e293b, { wood: true });
       // Inner artwork print core
       drawVolumetricSubBlock(0.08, 0.47, 2, 0.84, 0.06, heightPixels - 4, 0x0f172a, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_boss_pedestal')) {
+      // 1. Sleek metallic base terminal (volumetric block)
+      drawVolumetricSubBlock(0.15, 0.15, 0, 0.7, 0.7, 24, 0x1e293b, { panel: true });
+      // 2. High-tech keyboard/console interface panel on top
+      drawVolumetricSubBlock(0.2, 0.2, 24, 0.6, 0.6, 4, 0x0f172a, { neon: true });
+      // 3. Status indicator lights or glowing core on the front
+      drawVolumetricSubBlock(0.35, 0.12, 10, 0.3, 0.04, 6, 0x06b6d4, { neon: true });
 
       drawnCustomModel = true;
     }

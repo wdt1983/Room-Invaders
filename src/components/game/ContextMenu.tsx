@@ -86,6 +86,23 @@ export function ContextMenu() {
                 Edit Custom Poster
               </Button>
             )}
+            {contextMenu.spriteKey === 'furniture_boss_pedestal' && typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && (
+              <Button
+                size="sm"
+                variant="default"
+                className="w-full justify-start border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/25 hover:border-cyan-500/50 hover:shadow-[0_0_12px_rgba(6,182,212,0.3)] font-bold transition-all duration-300 rounded-lg text-xs group cursor-pointer"
+                onClick={() => {
+                  EventBus.emit('open-boss-pedestal-dialog', {
+                    gridX: contextMenu.gridX,
+                    gridY: contextMenu.gridY,
+                  });
+                  closeContextMenu();
+                }}
+              >
+                <span className="mr-2 size-3.5 group-hover:scale-110 transition-transform duration-300">🏆</span>
+                Customize Pedestal
+              </Button>
+            )}
             {contextMenu.isDamaged && typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && (
               <Button
                 size="sm"

@@ -374,6 +374,7 @@
 - [x] District/territory control system (clan-based): Hex-grid regional outposts where districts fight over shared resources via interactive SVG map selectors and authoritative PostgreSQL tug-of-war procedures.
 - [x] Achievement system with cosmetic rewards
 - [x] Trading system between players
+- [x] Cybernetic Screen Tearing & Glitch Decals: Implement high-fidelity dynamic visual room/raid disruptions (horizontal canvas tearing for custom posters, volumetric coordinate jitter for rotating holographic trophies, delta-based decay loops, and live event triggers like traps, turrets, defense destruction, and blackout floors) verified by 15 dedicated unit tests.
 ```
 ```
 

@@ -18,6 +18,7 @@ export class RoomEditorScene extends Phaser.Scene {
   private currentItemFootprint: { w: number; h: number } | null = null;
   private rangeGraphics!: Phaser.GameObjects.Graphics;
   private gridGraphics: Phaser.GameObjects.Graphics | null = null;
+  private activeGhostCoords: { x: number; y: number } | null = null;
 
   constructor() {
     super({ key: 'RoomEditorScene' });
@@ -58,6 +59,7 @@ export class RoomEditorScene extends Phaser.Scene {
       }
 
       this.rangeGraphics.clear();
+      this.activeGhostCoords = null;
 
       if (this.currentItemKey) {
         // Create the ghost, set alpha to 0.6
@@ -89,6 +91,7 @@ export class RoomEditorScene extends Phaser.Scene {
         this.currentItemKey = null;
         this.currentItemType = null;
         this.currentItemStats = {};
+        this.activeGhostCoords = null;
         if (this.rangeGraphics && this.rangeGraphics.clear) {
           this.rangeGraphics.clear();
         }
@@ -173,6 +176,7 @@ export class RoomEditorScene extends Phaser.Scene {
       this.ghostSprite.setDepth(worldCoords.x + worldCoords.y + 100);
 
       // Range/trigger-zone overlay — redraws anchored at the tile under the ghost.
+      this.activeGhostCoords = { x: worldCoords.x, y: worldCoords.y };
       this.drawRangeOverlay(worldCoords.x, worldCoords.y, roomScene);
     });
 
@@ -198,6 +202,7 @@ export class RoomEditorScene extends Phaser.Scene {
         this.currentItemType = null;
         this.currentItemStats = {};
         this.currentItemFootprint = null;
+        this.activeGhostCoords = null;
         this.rangeGraphics.clear();
         EventBus.emit('item-selected', null);
 
@@ -308,7 +313,7 @@ export class RoomEditorScene extends Phaser.Scene {
    * geometry. Drawn at scene depth 0 so the ghost sprite (depth worldX+worldY+100)
    * always renders on top.
    */
-  private drawRangeOverlay(originX: number, originY: number, roomScene: RoomScene): void {
+  private drawRangeOverlay(originX: number, originY: number, roomScene: RoomScene, scanlineOffset = 0): void {
     this.rangeGraphics.clear();
     if (!this.currentItemType) return;
 
@@ -345,19 +350,27 @@ export class RoomEditorScene extends Phaser.Scene {
     paintRangeBand(
       this.rangeGraphics, primary, RANGE_FILL_COLOR.primary,
       roomScene.currentRotation, roomScene.offsetX, roomScene.offsetY,
+      undefined, undefined, scanlineOffset,
     );
     paintRangeBand(
       this.rangeGraphics, alert, RANGE_FILL_COLOR.alert,
       roomScene.currentRotation, roomScene.offsetX, roomScene.offsetY,
+      undefined, undefined, scanlineOffset,
     );
   }
 
-  update() {
+  update(time: number) {
     const roomScene = this.scene.get('RoomScene') as RoomScene;
     if (roomScene && roomScene.sys.isActive() && this.cameras && this.cameras.main) {
       this.cameras.main.scrollX = roomScene.cameras.main.scrollX;
       this.cameras.main.scrollY = roomScene.cameras.main.scrollY;
       this.cameras.main.zoom = roomScene.cameras.main.zoom;
+
+      // Real-time scrolling scanline range overlay crawling
+      if (this.activeGhostCoords && this.ghostSprite) {
+        const scanlineOffset = time / 100;
+        this.drawRangeOverlay(this.activeGhostCoords.x, this.activeGhostCoords.y, roomScene, scanlineOffset);
+      }
     }
   }
 

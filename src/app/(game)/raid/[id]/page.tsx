@@ -105,6 +105,7 @@ export default async function RaidRoutePage({
           custom_image_url,
           moderation_status,
           moderation_error,
+          hologram_settings,
           items ( sprite_key, footprint, type )
       `)
       .eq("owner_id", defenderId)
@@ -132,6 +133,7 @@ export default async function RaidRoutePage({
           customImageUrl: dbItem.custom_image_url,
           moderationStatus: dbItem.moderation_status,
           moderationError: dbItem.moderation_error,
+          hologramSettings: dbItem.hologram_settings,
         };
       });
 

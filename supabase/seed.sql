@@ -51,7 +51,12 @@ INSERT INTO items (type, name, description, tier, cost, stats, footprint, sprite
   '{"scrap": 5}', '{}', '{"w": 1, "h": 1}', 'furniture_plant_potted', 1),
 
 ('furniture', 'Folding Table', 'A basic folding table. Functional, not pretty.', 1,
-  '{"scrap": 15}', '{}', '{"w": 2, "h": 1}', 'furniture_table_folding', 1);
+  '{"scrap": 15}', '{}', '{"w": 2, "h": 1}', 'furniture_table_folding', 1),
+
+-- Progression Trophy
+('furniture', 'Holographic Boss Pedestal', 'A sleek metal terminal projecting a rotating, glowing holographic trophy of a defeated boss.', 5,
+  '{"scrap": 250, "components": 50}', '{}', '{"w": 1, "h": 1}', 'furniture_boss_pedestal', 5);
+
 
 -- ============================================
 -- TRAPS (5 starter types)

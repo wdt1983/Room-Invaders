@@ -153,6 +153,10 @@ export class RaidScene extends Phaser.Scene {
   private bossAI: BossAI | null = null;
   private realtimeChannel: any = null;
   private hostileEntities: EntitySprite[] = [];
+  private activeCustomPosters: Map<FurnitureSprite, { item: any; texKey: string; imgKey: string }> = new Map();
+  public activeBossPedestals: Map<FurnitureSprite, { projection: Phaser.GameObjects.Sprite; settings: any; lastSpinTime: number; dir: number }> = new Map();
+  public glitchIntensity: number = 0;
+  private lastScanlineUpdateTime: number = 0;
   private guardAiTimer: Phaser.Time.TimerEvent | null = null;
   private simulatedDefenderTimer: Phaser.Time.TimerEvent | null = null;
 
@@ -365,6 +369,9 @@ export class RaidScene extends Phaser.Scene {
       
       // Dynamic custom poster rendering checks in PvP Raids / Replays
       this.applyCustomPosterTexture(sprite, item);
+      
+      // Holographic boss pedestal projection check
+      this.applyHologramProjection(sprite, item);
 
       if (item.type !== 'trap') {
         this.gridSystem.setTileState(item.gridX, item.gridY, 'occupied');
@@ -961,6 +968,7 @@ export class RaidScene extends Phaser.Scene {
     // squad can walk through. Future 3.0.11 (barricade attack) drives
     // this via `applyDamageToPlaced` calls from the attacker's update.
     this.onDefenseDestroyed = (payload) => {
+      this.triggerGlitchDecal(0.95);
       const idx = this.furnitureItems.findIndex(
         (f) => f.gridX === payload.gridX && f.gridY === payload.gridY,
       );
@@ -1442,6 +1450,13 @@ export class RaidScene extends Phaser.Scene {
       EventBus.off('execute-ability', this.onExecuteAbility);
       this.onExecuteAbility = null;
     }
+
+    this.activeBossPedestals.forEach(info => {
+      info.projection.destroy();
+      this.stopHologramFlicker(info.projection);
+    });
+    this.activeBossPedestals.clear();
+
     if (this.onTurretJammed) {
       EventBus.off('turret-jammed', this.onTurretJammed);
       this.onTurretJammed = null;
@@ -1463,6 +1478,72 @@ export class RaidScene extends Phaser.Scene {
    */
   public update(time: number): void {
     this.cullTiles();
+
+    // Glitch intensity decay (approx 300ms fully back to 0)
+    if (this.glitchIntensity > 0) {
+      const deltaFactor = this.sys.game.loop.delta / 16.66;
+      this.glitchIntensity -= 0.05 * deltaFactor;
+      if (this.glitchIntensity < 0) this.glitchIntensity = 0;
+    }
+
+    // Throttled scanline scroll crawler (Updates at ~20 FPS/every 50ms)
+    const currentTime = time || Date.now();
+    if (this.activeCustomPosters.size > 0 && currentTime - this.lastScanlineUpdateTime > 50) {
+      this.lastScanlineUpdateTime = currentTime;
+      const scanlineOffset = currentTime / 100;
+      
+      this.activeCustomPosters.forEach((data, sprite) => {
+        if (sprite.active && sprite.visible) {
+          const settings = data.item.hologramSettings || data.item.hologram_settings;
+          this.projectPosterImage(data.texKey, data.imgKey, settings, scanlineOffset);
+        }
+      });
+    }
+
+    // 3. Spinning boss projections
+    if (this.activeBossPedestals.size > 0) {
+      this.activeBossPedestals.forEach((info, pedestal) => {
+        if (!pedestal.active) {
+          info.projection.destroy();
+          this.activeBossPedestals.delete(pedestal);
+          return;
+        }
+
+        // Spin projection: cycle texture every 500ms
+        const now = time || Date.now();
+        if (now - info.lastSpinTime > 500) {
+          info.dir = (info.dir + 1) % 4;
+          const boss = info.settings.boss || 'boss-ironjaw';
+          const bossKey = `hologram_${boss}`;
+          const tex = `${bossKey}_dir_${info.dir}`;
+          if (this.textures.exists(tex)) {
+            info.projection.setTexture(tex);
+          }
+          info.lastSpinTime = now;
+        }
+
+        // Sync coordinate position and depth layer above pedestal
+        const isBlackout = useRaidStore.getState().activeEvent?.eventType === 'sector_blackout';
+        const activeGlitch = Math.max(this.glitchIntensity, isBlackout ? 0.25 : 0);
+
+        const shiftX = activeGlitch > 0 ? (Math.random() - 0.5) * 8 * activeGlitch : 0;
+        const scaleX = activeGlitch > 0 ? 1.0 + (Math.random() - 0.5) * 0.4 * activeGlitch : 1.0;
+        const alphaDrop = activeGlitch > 0 && Math.random() < 0.1 * activeGlitch ? 0.35 : 1.0;
+
+        info.projection.x = pedestal.x + shiftX;
+        info.projection.scaleX = scaleX;
+        info.projection.setAlpha(Math.max(0.1, 0.6 * (1.0 - activeGlitch * 0.5) * alphaDrop));
+
+        info.projection.y = pedestal.y - 18;
+        info.projection.setDepth(pedestal.depth + 1);
+
+        // Viewport Culling check
+        if (pedestal.visible !== info.projection.visible) {
+          info.projection.setVisible(pedestal.visible);
+        }
+      });
+    }
+
     if (useRaidStore.getState().phase !== 'active') return;
     this.turretAI?.tick(time);
     this.bossAI?.tick(time, this.squadEntities);
@@ -1535,6 +1616,7 @@ export class RaidScene extends Phaser.Scene {
    */
   private handleTrapTriggered(payload: TrapTriggeredPayload): void {
     const isSquadMember = this.squadEntities.some(s => s.entityId === payload.entityId);
+    this.triggerGlitchDecal(0.85);
 
     if (payload.stunSeconds > 0 || payload.immobilizeSeconds > 0) {
       SoundManager.getInstance().playSfx('stun');
@@ -1601,6 +1683,7 @@ export class RaidScene extends Phaser.Scene {
    * Handle a `'turret-fired'` event emitted by {@link TurretAI}.
    */
   private handleTurretFired(payload: TurretFiredPayload): void {
+    this.triggerGlitchDecal(0.40);
     const isSquadMember = this.squadEntities.some(s => s.entityId === payload.targetEntityId);
 
     SoundManager.getInstance().playSfx('laser');
@@ -2344,6 +2427,7 @@ export class RaidScene extends Phaser.Scene {
           (f) => f.gridX === event.data?.gridX && f.gridY === event.data?.gridY
         );
         if (idx >= 0) {
+          this.stopHologramFlicker(this.furnitureItems[idx]);
           this.furnitureItems[idx].destroy();
           this.furnitureItems.splice(idx, 1);
         }
@@ -2395,44 +2479,162 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  public applyCustomPosterTexture(sprite: FurnitureSprite, item: any) {
+  public applyCustomPosterTexture(sprite: FurnitureSprite, item: any, flickerDelay = 0) {
     if (!item || item.spriteKey !== 'furniture_custom_poster') return;
+
+    const settings = item.hologramSettings || item.hologram_settings;
 
     if (item.moderationStatus === 'approved' && item.customImageUrl) {
       const texKey = `custom_poster_tex_${item.id}`;
       const imgKey = `custom_poster_img_${item.id}`;
 
-      if (this.textures.exists(texKey)) {
-        sprite.setTexture(texKey);
-        return;
-      }
+      // Start/update the dynamic alpha flicker loop
+      this.applyHologramFlicker(sprite, settings, flickerDelay);
 
+      // Register for dynamic scrolling scanlines animation
+      this.activeCustomPosters.set(sprite, { item, texKey, imgKey });
+
+      // Fast-path: if source image is already loaded, redraw and refresh immediately
       if (this.textures.exists(imgKey)) {
-        this.projectPosterImage(texKey, imgKey);
+        this.projectPosterImage(texKey, imgKey, settings);
         sprite.setTexture(texKey);
         return;
       }
 
       this.load.image(imgKey, item.customImageUrl);
       this.load.once(`filecomplete-image-${imgKey}`, () => {
-        this.projectPosterImage(texKey, imgKey);
+        this.projectPosterImage(texKey, imgKey, settings);
         if (sprite.active) {
           sprite.setTexture(texKey);
         }
       });
       this.load.start();
-    } else if (item.moderationStatus === 'pending') {
-      sprite.setTexture('furniture_custom_poster_pending');
-    } else if (item.moderationStatus === 'rejected') {
-      sprite.setTexture('furniture_custom_poster_rejected');
     } else {
-      sprite.setTexture('furniture_custom_poster');
+      this.activeCustomPosters.delete(sprite);
+      this.stopHologramFlicker(sprite);
+      if (item.moderationStatus === 'pending') {
+        sprite.setTexture('furniture_custom_poster_pending');
+      } else if (item.moderationStatus === 'rejected') {
+        sprite.setTexture('furniture_custom_poster_rejected');
+      } else {
+        sprite.setTexture('furniture_custom_poster');
+      }
     }
   }
 
-  private projectPosterImage(texKey: string, imgKey: string) {
-    if (this.textures.exists(texKey)) return;
-    const canvasTexture = this.textures.createCanvas(texKey, 64, 64);
+  public applyHologramProjection(sprite: FurnitureSprite, item: any, flickerDelay = 0) {
+    if (!item || item.spriteKey !== 'furniture_boss_pedestal') return;
+
+    const settings = item.hologramSettings || item.hologram_settings || {
+      color: '#06b6d4',
+      flicker: 0.15,
+      scanlines: 0.40,
+      noise: 0.10,
+      boss: 'boss-ironjaw'
+    };
+
+    const boss = settings.boss || 'boss-ironjaw';
+    const color = settings.color || '#06b6d4';
+
+    const existing = this.activeBossPedestals.get(sprite);
+    if (existing) {
+      existing.projection.destroy();
+      this.stopHologramFlicker(existing.projection);
+    }
+
+    const bossKey = `hologram_${boss}`;
+    const initialTexture = this.textures.exists(`${bossKey}_dir_0`) ? `${bossKey}_dir_0` : 'boss_ironjaw_dir_0';
+
+    const projection = this.add.sprite(sprite.x, sprite.y - 18, initialTexture);
+    projection.setOrigin(0.5, 1);
+    projection.setAlpha(0.6);
+    projection.setDepth(sprite.depth + 1);
+
+    const tintColor = Phaser.Display.Color.HexStringToColor(color).color;
+    projection.setTint(tintColor);
+
+    this.applyHologramFlicker(projection, settings, flickerDelay);
+
+    this.activeBossPedestals.set(sprite, {
+      projection,
+      settings,
+      lastSpinTime: this.time ? this.time.now : Date.now(),
+      dir: 0
+    });
+  }
+
+  public triggerGlitchDecal(intensity: number) {
+    this.glitchIntensity = Math.max(this.glitchIntensity, intensity);
+  }
+
+  private applyHologramFlicker(sprite: any, settings: any, flickerDelay = 0) {
+    this.stopHologramFlicker(sprite);
+
+    const hologram = settings || {
+      color: '#06b6d4',
+      flicker: 0.15,
+      scanlines: 0.40,
+      noise: 0.10
+    };
+
+    if (!hologram.flicker || hologram.flicker <= 0) {
+      return;
+    }
+
+    const startTween = () => {
+      if (!sprite.active) return;
+
+      const duration = Math.max(50, 100 / hologram.flicker);
+      const minAlpha = Math.max(0.6, 1.0 - hologram.flicker * 0.35);
+
+      sprite.hologramFlickerTween = this.tweens.add({
+        targets: sprite,
+        alpha: minAlpha,
+        duration: duration,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Power1',
+        onUpdate: () => {
+          // Micro-flickers for hardware instability aesthetics
+          if (Math.random() < 0.02 * hologram.flicker) {
+            sprite.alpha = minAlpha * 0.7;
+          }
+        }
+      });
+    };
+
+    if (flickerDelay > 0) {
+      sprite.hologramFlickerTimer = this.time.delayedCall(flickerDelay, startTween);
+    } else {
+      startTween();
+    }
+  }
+
+  private stopHologramFlicker(sprite: any) {
+    if (this.activeCustomPosters) {
+      this.activeCustomPosters.delete(sprite);
+    }
+    if (sprite.hologramFlickerTween) {
+      sprite.hologramFlickerTween.stop();
+      sprite.hologramFlickerTween = null;
+    }
+    if (sprite.hologramFlickerTimer) {
+      sprite.hologramFlickerTimer.remove();
+      sprite.hologramFlickerTimer = null;
+    }
+    sprite.setAlpha(1);
+  }
+
+  private projectPosterImage(texKey: string, imgKey: string, settings: any, scanlineOffset = 0) {
+    let canvasTexture: Phaser.Textures.CanvasTexture | null = null;
+    if (this.textures.exists(texKey)) {
+      canvasTexture = this.textures.get(texKey) as Phaser.Textures.CanvasTexture;
+      if (canvasTexture && canvasTexture.context) {
+        canvasTexture.context.clearRect(0, 0, 64, 64);
+      }
+    } else {
+      canvasTexture = this.textures.createCanvas(texKey, 64, 64);
+    }
     if (!canvasTexture) return;
     const ctx = canvasTexture.context;
     
@@ -2445,16 +2647,109 @@ export class RaidScene extends Phaser.Scene {
     const loadedImg = this.textures.get(imgKey).getSourceImage() as HTMLImageElement;
     if (!loadedImg) return;
 
+    const hologram = settings || {
+      color: '#06b6d4',
+      flicker: 0.15,
+      scanlines: 0.40,
+      noise: 0.10
+    };
+
+    // Tiny offscreen processing canvas for dynamic color tints, scanlines, and noise grain
+    const width = loadedImg.width || 32;
+    const height = loadedImg.height || 32;
+    
+    const offscreen = document.createElement('canvas');
+    offscreen.width = width;
+    offscreen.height = height;
+    const oCtx = offscreen.getContext('2d');
+    
+    if (oCtx) {
+      // 1. Base image
+      oCtx.drawImage(loadedImg, 0, 0, width, height);
+
+      // 2. Color tint overlay (source-atop preserves transparent details)
+      if (hologram.color) {
+        oCtx.save();
+        oCtx.globalCompositeOperation = 'source-atop';
+        oCtx.fillStyle = hologram.color;
+        oCtx.fillRect(0, 0, width, height);
+        oCtx.restore();
+      }
+
+      // 3. Scanline pattern overlay with scrolling offset
+      if (hologram.scanlines > 0) {
+        oCtx.save();
+        oCtx.globalCompositeOperation = 'source-atop';
+        oCtx.strokeStyle = `rgba(0, 0, 0, ${hologram.scanlines})`;
+        oCtx.lineWidth = 1;
+        
+        const offset = Math.floor(scanlineOffset) % 4;
+        for (let y = -4 + offset; y < height; y += 2) {
+          if (y >= 0) {
+            oCtx.beginPath();
+            oCtx.moveTo(0, y);
+            oCtx.lineTo(width, y);
+            oCtx.stroke();
+          }
+        }
+        oCtx.restore();
+      }
+
+      // 4. Digital static grain overlay
+      if (hologram.noise > 0) {
+        oCtx.save();
+        oCtx.globalCompositeOperation = 'source-atop';
+        const imgData = oCtx.getImageData(0, 0, width, height);
+        const data = imgData.data;
+        const noiseAmount = hologram.noise * 255;
+        for (let i = 0; i < data.length; i += 4) {
+          if (Math.random() < hologram.noise) {
+            const randNoise = (Math.random() - 0.5) * noiseAmount;
+            data[i] = Math.min(255, Math.max(0, data[i] + randNoise));
+            data[i+1] = Math.min(255, Math.max(0, data[i+1] + randNoise));
+            data[i+2] = Math.min(255, Math.max(0, data[i+2] + randNoise));
+          }
+        }
+        oCtx.putImageData(imgData, 0, 0);
+        oCtx.restore();
+      }
+
+      // 5. Dynamic horizontal pixel screen tearing / glitch decals
+      const isBlackout = useRaidStore.getState().activeEvent?.eventType === 'sector_blackout';
+      const activeGlitch = Math.max(this.glitchIntensity, isBlackout ? 0.25 : 0);
+      if (activeGlitch > 0) {
+        const numSlices = 5;
+        const sliceHeight = height / numSlices;
+        oCtx.save();
+        const temp = document.createElement('canvas');
+        temp.width = width;
+        temp.height = height;
+        const tCtx = temp.getContext('2d');
+        if (tCtx) {
+          tCtx.drawImage(offscreen, 0, 0);
+          oCtx.clearRect(0, 0, width, height);
+          for (let i = 0; i < numSlices; i++) {
+            const sliceY = i * sliceHeight;
+            const shift = (Math.random() - 0.5) * width * 0.3 * activeGlitch;
+            oCtx.drawImage(temp, 0, sliceY, width, sliceHeight, shift, sliceY, width, sliceHeight);
+          }
+        }
+        oCtx.restore();
+      }
+    }
+
+    const sourceCanvas = oCtx ? offscreen : loadedImg;
+
     // Skew and project onto Left face (facing South-East, parallel NW wall)
     ctx.save();
     ctx.transform(1, 0.5, 0, 1, 0, 0);
-    ctx.drawImage(loadedImg, 7, 2, 18, 18);
+    ctx.drawImage(sourceCanvas, 7, 2, 18, 18);
     ctx.restore();
 
     // Skew and project onto Right face (facing South-West, parallel NE wall)
     ctx.save();
     ctx.transform(1, -0.5, 0, 1, 0, 0);
-    ctx.drawImage(loadedImg, 39, 34, 18, 18);
+    ctx.drawImage(sourceCanvas, 39, 34, 18, 18);
     ctx.restore();
 
     canvasTexture.refresh();

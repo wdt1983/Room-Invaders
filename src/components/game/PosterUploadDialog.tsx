@@ -7,9 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
-import { moderateCustomPosterAction } from "@/app/actions/poster";
+import { moderateCustomPosterAction, updateHologramSettingsAction } from "@/app/actions/poster";
 import { SoundManager } from "@/game/objects/SoundManager";
-import { FileImage, ShieldAlert, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { FileImage, ShieldAlert, CheckCircle, AlertTriangle, Loader2, Sliders, Palette, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 export function PosterUploadDialog() {
@@ -22,10 +22,31 @@ export function PosterUploadDialog() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Hologram settings states
+  const [holoColor, setHoloColor] = useState("#06b6d4");
+  const [flicker, setFlicker] = useState(0.15);
+  const [scanlines, setScanlines] = useState(0.40);
+  const [noise, setNoise] = useState(0.10);
+  const [savingHolo, setSavingHolo] = useState(false);
+
   const placedItems = useRoomStore((state) => state.placedItems);
   const targetItem = placedItems.find(
     (p) => coords && p.gridX === coords.x && p.gridY === coords.y
   );
+
+  useEffect(() => {
+    if (targetItem?.hologramSettings) {
+      setHoloColor(targetItem.hologramSettings.color || "#06b6d4");
+      setFlicker(targetItem.hologramSettings.flicker ?? 0.15);
+      setScanlines(targetItem.hologramSettings.scanlines ?? 0.40);
+      setNoise(targetItem.hologramSettings.noise ?? 0.10);
+    } else {
+      setHoloColor("#06b6d4");
+      setFlicker(0.15);
+      setScanlines(0.40);
+      setNoise(0.10);
+    }
+  }, [targetItem]);
 
   useEffect(() => {
     const handleOpen = (payload: { gridX: number; gridY: number }) => {
@@ -109,6 +130,7 @@ export function PosterUploadDialog() {
         customImageUrl: publicUrl,
         moderationStatus: res.status,
         moderationError: res.error,
+        hologramSettings: targetItem.hologramSettings || { color: holoColor, flicker, scanlines, noise },
       });
     } else {
       toast.error(res.error || "Automated safety scan failed.");
@@ -162,6 +184,46 @@ export function PosterUploadDialog() {
       console.error("Upload error caught:", err);
       toast.error("An unexpected upload error occurred.");
       setUploading(false);
+    }
+  };
+
+  const handleSaveHologram = async () => {
+    setSavingHolo(true);
+    try {
+      const res = await updateHologramSettingsAction(targetItem.id, {
+        color: holoColor,
+        flicker,
+        scanlines,
+        noise
+      });
+
+      if (res.success) {
+        SoundManager.getInstance().playSfx("place_item");
+        toast.success("Holographic display configuration locked!");
+        
+        // Update local state in Zustand store
+        useRoomStore.getState().updateHologramSettingsAt(targetItem.gridX, targetItem.gridY, res.settings);
+        
+        // Re-draw in Phaser immediately
+        EventBus.emit("poster-updated", {
+          id: targetItem.id,
+          gridX: targetItem.gridX,
+          gridY: targetItem.gridY,
+          customImageUrl: targetItem.customImageUrl,
+          moderationStatus: targetItem.moderationStatus,
+          moderationError: targetItem.moderationError,
+          hologramSettings: res.settings,
+        });
+
+        setOpen(false);
+      } else {
+        toast.error(res.error || "Failed to update hologram settings.");
+      }
+    } catch (err: any) {
+      console.error("Hologram save error caught:", err);
+      toast.error("An unexpected error occurred during filter configuration.");
+    } finally {
+      setSavingHolo(false);
     }
   };
 
@@ -255,6 +317,113 @@ export function PosterUploadDialog() {
               </div>
             )}
           </div>
+
+          {targetItem.moderationStatus === "approved" && targetItem.customImageUrl && (
+            <div className="border border-cyan-500/20 bg-cyan-950/20 backdrop-blur rounded-xl p-3 flex flex-col gap-3">
+              <div className="text-xs font-black tracking-wider uppercase text-cyan-400 flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5" />
+                Hologram Display Panel
+              </div>
+              
+              {/* Color Presets */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-extrabold uppercase text-muted-foreground flex items-center gap-1">
+                  <Palette className="w-3 h-3" /> Tint Color Preset:
+                </span>
+                <div className="flex gap-2">
+                  {[
+                    { hex: "#06b6d4", label: "Cyan" },
+                    { hex: "#10b981", label: "Green" },
+                    { hex: "#f59e0b", label: "Amber" },
+                    { hex: "#a855f7", label: "Purple" },
+                    { hex: "#ef4444", label: "Red" }
+                  ].map((preset) => (
+                    <button
+                      key={preset.hex}
+                      onClick={() => {
+                        setHoloColor(preset.hex);
+                        SoundManager.getInstance().playSfx("click");
+                      }}
+                      className={`size-6 rounded-full border cursor-pointer transition-all duration-300 ${
+                        holoColor === preset.hex
+                          ? "border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]"
+                          : "border-transparent opacity-60 hover:opacity-100"
+                      }`}
+                      style={{ backgroundColor: preset.hex }}
+                      title={preset.label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Sliders */}
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-[9px] font-extrabold uppercase text-muted-foreground">
+                    <span>Scanline Opacity:</span>
+                    <span className="text-cyan-400">{Math.round(scanlines * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={scanlines}
+                    onChange={(e) => setScanlines(parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 bg-cyan-950/40 rounded h-1 cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-[9px] font-extrabold uppercase text-muted-foreground">
+                    <span className="flex items-center gap-0.5"><Zap className="w-3 h-3 text-cyan-400" /> Flicker Intensity:</span>
+                    <span className="text-cyan-400">{Math.round(flicker * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={flicker}
+                    onChange={(e) => setFlicker(parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 bg-cyan-950/40 rounded h-1 cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-[9px] font-extrabold uppercase text-muted-foreground">
+                    <span>Digital Noise:</span>
+                    <span className="text-cyan-400">{Math.round(noise * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={noise}
+                    onChange={(e) => setNoise(parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 bg-cyan-950/40 rounded h-1 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Action Save CTA */}
+              <Button
+                disabled={savingHolo}
+                onClick={handleSaveHologram}
+                className="w-full h-8 mt-1 bg-cyan-500 hover:bg-cyan-400 hover:shadow-[0_0_12px_#06b6d4] text-black text-[10px] font-black tracking-widest uppercase rounded-lg transition-all duration-300"
+              >
+                {savingHolo ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                    LOCKING display...
+                  </>
+                ) : (
+                  "Lock Display Settings"
+                )}
+              </Button>
+            </div>
+          )}
 
           {/* Interactive Scanning Monospace Debug Terminal */}
           {scanning && scanLogs.length > 0 && (
