@@ -13,6 +13,8 @@ export interface CatalogItem {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   stats: Record<string, any> | null;
   tech_tree_node?: string | null;
+  required_boss_clear?: string | null;
+  footprint?: { w: number; h: number } | null;
 }
 
 export interface PlacedItem {
@@ -70,6 +72,7 @@ interface RoomState {
   removePlacedItemAt: (gridX: number, gridY: number) => void;
   rotatePlacedItemAt: (gridX: number, gridY: number, rotation: number) => void;
   repairPlacedItemAt: (gridX: number, gridY: number) => void;
+  movePlacedItemAt: (oldX: number, oldY: number, newX: number, newY: number) => void;
 }
 
 export const useRoomStore = create<RoomState>((set) => ({
@@ -115,6 +118,12 @@ export const useRoomStore = create<RoomState>((set) => ({
     set((state) => ({
       placedItems: state.placedItems.map((p) =>
         p.gridX === gridX && p.gridY === gridY ? { ...p, isDamaged: false } : p,
+      ),
+    })),
+  movePlacedItemAt: (oldX, oldY, newX, newY) =>
+    set((state) => ({
+      placedItems: state.placedItems.map((p) =>
+        p.gridX === oldX && p.gridY === oldY ? { ...p, gridX: newX, gridY: newY } : p,
       ),
     })),
 }));

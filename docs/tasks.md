@@ -1,5 +1,89 @@
 # tasks.md — Room Invaders
-## Version: 0.19.0 | Last Updated: 2026-05-28
+## Version: 0.26.0 | Last Updated: 2026-05-29
+
+## Milestone 9J: Volumetric Color Shading & Direct Move Relocation Tool (v0.26.0)
+**Goal:** Implement dynamic 3D wall shading based on player cosmetics, and build a secure, zero-cost free relocation Move Tool for room customization.
+
+### Stage 3: Dynamic Range Resizing, Wall Snapping & Breathing Grid
+- `[x]` Update `rangeTilesFor` in `defense.ts` to support multi-tile footprint parameters and exclude interior cells.
+- `[x]` Update `drawRangeOverlay` in `RoomEditorScene.ts` to calculate and pass ghost footprint dimensions.
+- `[x]` Update `drawDefenseViewOverlay` in `RoomScene.ts` to pass placed items' rotated footprint dimensions.
+- `[x]` Implement visual boundary snapping offsets in `updateIsometricPosition` in `FurnitureSprite.ts`.
+- `[x]` Implement the GPU-accelerated pulsing alpha grid tween inside `RoomEditorScene.ts` `drawEditorGrid`.
+- `[x]` Compile and test all modifications.
+
+### Stage 2: Footprint Relocation, Neon Grid & Holographic Pop Effects
+- `[x]` Select `footprint` in `catalogData` query inside `page.tsx`.
+- `[x]` Extend `CatalogItem` interface to support `footprint` in `useRoomStore.ts`.
+- `[x]` Pass `footprint` in the `item-selected` event emission in `ItemPanel.tsx`.
+- `[x]` Fix the `ContextMenu.tsx` Move button to extract catalog data (type, stats, footprint) and emit the correct object payload to `item-selected`.
+- `[x]` Implement multi-tile occupancy tracking in `RoomScene.ts` (loading items, placing items, relocating items).
+- `[x]` Rewrite `isPlaceableFor` in `RoomScene.ts` to support multi-tile footprint checks and bypass the item's own original footprint.
+- `[x]` Rewrite `movePlacedItem` Server Action in `actions.ts` to execute multi-tile bounds, perimeter, entry-point, and non-self occupancy checks.
+- `[x]` Build the double-pass glowing neon grid in `RoomEditorScene.ts` utilizing the active `wallColor`.
+- `[x]` Listen for `cosmetics-changed` in `RoomEditorScene.ts` to dynamically refresh the neon grid.
+- `[x]` Program beveled cybernetic pop particles in `RoomScene.ts` `handleMoveSuccess` matching the customized preset color.
+- `[x]` Compile and test all modifications.
+
+### Stage 1: Dynamic Wall Shading & Relocation Foundation
+- `[x]` Implement the secure `movePlacedItem` Server Action in `actions.ts` with bounds, occupancy, turret, and entry-point validation.
+- [x] Add the `movingItem` state and `setMovingItem` setter in `useUIStore.ts` to manage active relocation.
+- [x] Add the `movePlacedItemAt` action in `useRoomStore.ts` to update Cartesian coordinates in the Zustand store.
+- [x] Upgrade `ContextMenu.tsx` with a cyan-accented **Move Furniture** button that hooks into state transitions.
+- [x] Integrate placement/move interception inside `GameBridge.tsx` to handle free movements or fallback to standard purchase.
+- [x] Implement `adjustColor(color, factor)` in `RoomScene.ts` to scale RGB channels.
+- [x] Update procedural 3D wall rendering in `drawWalls()` to dynamically shade face panels and glowing neon top tubings using the active `wallColor`.
+- [x] Implement the `'move-success'` EventBus listener in `RoomScene.ts` with coordinate updates, grid state registration, and a spring pop tween scale animation.
+- [x] Add the `isOriginalSpot` bypass in `isPlaceableFor` to permit placing items back on their original tile during a move.
+- [x] Automatically clear `movingItem` state in `useUIStore.ts` whenever the user exits Edit Mode.
+- [x] Verify production build (`pnpm build`) and all 55 tests (`pnpm test`) pass successfully.
+
+## Bedroom Defense Placement & Faction Boss Locks (v0.25.2)
+**Goal:** Resolve defense placement errors, register advanced Phaser assets, and enforce secure boss locks.
+
+- [x] Deduplicate Circuit's EMP Mine `sprite_key` to `'trap_circuit_emp_mine'` in `seed.sql`, `boss-rooms.ts`, `resolve-raid/index.ts`, and `TrapSystem.ts` to fix placement.
+- [x] Register missing visual assets (`turret_power_node`, `guard_drone`, `guard_dog`, `guard_decoy`, `trap_circuit_emp_mine`) in Phaser `BootScene.ts`.
+- [x] Implement database-to-Zustand client state hydration of completed boss clears (`clearedBosses`).
+- [x] Implement gorgeous cybernetic padlocks and descriptive clear tooltips (e.g. `Defeat Circuit to unlock`) in the shop panel `ItemPanel.tsx`.
+- [x] Enforce secure server-side validation in `buyAndPlaceFurniture` Server Action to reject unauthorized placement of locked boss reward items.
+
+## Console Error & Hydration Fixes (Polishing & Stability)
+**Goal:** Address runtime and build-time console errors to achieve a flawless Next.js 16 / React 19 / Phaser 4 application runtime and clean compilation.
+
+- [x] Synchronized remote database schema with all 29 migrations (`supabase db push`) to resolve column mismatches (e.g., `rooms.room_size_tier` column missing, which caused `roomError` on `page.tsx`).
+- [x] Refactored `StoreInitializer.tsx` state updates from the inline render cycle into standard React `useEffect()` hooks, permanently eliminating React 19's "Cannot update a component while rendering a different component" hydration warning.
+- [x] Added `"use client";` boundary directive to `StoreInitializer.tsx` to resolve Next.js Turbopack Server Component compilation failures, ensuring a 100% clean production build compile (`pnpm build`).
+- [x] Verified build compilation, lint rules compliance, and execution of all 55 automated unit tests with 100% success.
+
+## High-Fidelity 3D Volumetric Procedural Asset Overhaul (Aesthetic Refinement)
+**Goal:** Address user feedback by replacing basic geometric flat vector drawings with highly polished, multi-layered 3D isometric sub-block assemblies for all main catalog items.
+
+- [x] Develop a 3D isometric sub-block rendering helper (`drawVolumetricSubBlock`) supporting local footprint and height coordinate mapping
+- [x] Implement 3D layered components for Twin Bed (wooden frame base, headboard, footboard, raised mattress, blanket layer, volumetric neon pillow)
+- [x] Implement 3D layered components for Wooden Desk (individual volumetric leg pillars, wood top slab, drawer unit cabinet, standing monitor with support neck, keyboard)
+- [x] Implement 3D layered components for Office Chair (star base spokes, riser cylinder, thick black fabric seat cushion, steel back bar, black backrest)
+- [x] Implement 3D layered components for Metal Shelf (tall vertical poles, wireframe shelves, cardboard storage box, toolboxes, glowing gas canisters)
+- [x] Implement 3D layered components for TV Flatscreen (wooden console cabinet base, middle compartment, deck receiver, volumetric TV neck, beveled screen panel)
+- [x] Implement 3D layered components for Dresser (dresser box frame, three separately inset drawer compartments)
+- [x] Implement 3D layered components for folding tables, potted plants (terracotta pot, soil, plant stem, leafy voxel green layers), and floor lamps (base, vertical rod, glowing lamp shade dome)
+- [x] Implement 3D layered components for Barricades (flipped bookshelf with vertical shelves and spilled colorful books, table shield with horizontal legs, sandbag canvas blocks)
+- [x] Implement 3D layered components for turrets (pyramid armor bases, swivel collars, gun housings, twin volumetric gun barrels, condenser coils, taser brass spikes, energy coil rings)
+- [x] Ground entities and stash chests (hovering central drone chassis, quad arms, neon discs, gold armored lockbox chest with steel reinforcement straps)
+
+## Volumetric Isometric Voxel/Pixel Art Upgrade (Aesthetic Polish)
+**Goal:** Upgrade the procedural asset rendering to create high-fidelity, polished, 3D volumetric voxel/pixel art assets with correct coordinate rotations and contact shadows.
+
+- [x] Pre-generate 4 distinct directional textures (`_dir_0` to `_dir_3`) in `BootScene.ts`
+- [x] Implement soft contact floor shadows under all blocks in `generateIsoBlock()`
+- [x] Add volumetric gradients (overhead/side lighting) for Top, Left, Right faces
+- [x] Add neon rim bevels and shadow seams to emphasize volumetric forms
+- [x] Program unit-basis coordinate mappings (`getPoint()`) for all sub-feature layouts on the Top face
+- [x] Enable 4-way rotation for wood grains (desks, tables), pillows/mattress (beds), and office base Spokes (chairs)
+- [x] Refactor `FurnitureSprite.ts` to swap textures based on rotation step (eliminating 2D setAngle hack)
+- [x] Hydrate correct starting textures in `RoomScene.ts` and `RaidScene.ts`
+- [x] Fix Windows TypeScript excludes for `supabase/functions/` Deno files in `tsconfig.json`
+
+---
 
 > **Reconciliation note (2026-04-13):** Task ledger was re-aligned against the actual
 > code state after drift accumulated across sessions. Tasks that were implemented in
@@ -81,7 +165,7 @@
 - [DEFERRED → Phase 8] 1.0.19 — Cosmetic: wall color picker (saves to `rooms.cosmetics`). *Deferred 2026-04-14: walls currently render as procedural colored line segments in `RoomScene.drawWalls()`; a color picker on placeholder art is throw-away work. Bundle with 8.0.1 (final art pass) when walls get real sprite segments.*
 - [DEFERRED → Phase 8] 1.0.20 — Cosmetic: floor type selector (wood, carpet, tile, concrete — saves to `rooms.cosmetics`). *Deferred 2026-04-14: floor is a single `iso-tile` placeholder sprite. Floor-variant selector needs real tile textures first. Bundle with 8.0.1.*
 - [DONE] 1.0.21 — Input handling: touch + mouse handled inline in `RoomScene`/`RoomEditorScene` pointermove/pointerdown. No dedicated `InputManager.ts` — revisit if complexity grows.
-- [TODO] 1.0.22 — Performance: implement tile culling (only render tiles within camera viewport)
+- [DONE] 1.0.22 — Performance: implement tile culling (only render tiles within camera viewport)
 
 > **Phase 1 interactive-editor capabilities are complete.** Remaining Phase 1 items are 1.0.22 (tile culling — premature perf work until 14×14 rooms land at room-level 20) plus 1.0.19/1.0.20 which have been **deferred to Phase 8.0.1 (final art pass)** because they're cosmetic toggles on top of placeholder art. Phase 1 is effectively closed for the purpose of downstream work.
 
@@ -133,8 +217,9 @@
 - [DONE] 3.0.19 — XP → level-up. New shared curve module (`src/lib/game/progression.ts`) with `xpForLevel(n) = 50 * n * (n - 1)`, `levelForXp`, and `levelProgress`. Mirrored server-side as `supabase/functions/resolve-raid/progression.ts` (stays in sync until a future task promotes the curve to a DB table). `resolve-raid` Edge Function now computes `levelForXp(newXp)` after crediting XP, bumps `profiles.player_level` when a threshold is crossed, and returns `previousPlayerLevel` / `newPlayerLevel` / `leveledUp` in the response. Never demotes — a scrap-purchased level from `upgradePlayerLevel` (4.0.13) that outpaces the XP threshold survives. `usePlayerStore` gains an `xp` field + `applyXpAndLevel(xp, level)` mutator that recomputes `maxScrap` / `maxComponents` on the new level and is idempotent w.r.t. identical inputs. `StoreInitializer` now requires an `xp` prop and seeds the store from `profiles.xp` on room-page SSR; `room/page.tsx` selects `xp` alongside `player_level`. `RaidResolver` calls `applyXpAndLevel(res.newXp, res.newPlayerLevel)` after the inventory write and fires a `toast.success("Level up! Lvl N")` (or `Lvl N → M` for multi-level jumps from hard-raid XP grants that cross multiple thresholds) when the server reports a delta. `TopBar` renders a translucent primary-tinted progress fill behind the Lvl button, clipped to `progress01 = xpIntoLevel / xpForNext`, with a tooltip carrying the raw numbers. Max level 100 (≈495,000 XP). Milestone unlock hooks from GDD §6.1 (L3 second trap, L5 PvP, L8 tech tree, etc.) are **not yet wired** — 3.0.19 delivers the XP → level promotion pipeline only; milestone-gated content lives with Phase 4 (4.0.13 / 4.0.14).
 - [DONE] 3.0.20 — NPC room cooldowns: each NPC room has a 4-hour cooldown after being raided. Enforced on the server side via the `resolve-raid` Deno Edge Function, which queries `raid_history` for any raids completed by the player for the fixture in the last 4 hours and rejects them with a 400 error. Enforced on the client-side individual raid page (`src/app/(game)/raid/[id]/page.tsx`) by querying `raid_history` and redirecting users back to the list if the target is on cooldown.
 - [DONE] 3.0.21 — Raid list: show cooldown timers, locked/unlocked state based on player level. Fully integrated into the raid target card component and general page view (which already computed lock/timer displays). Secured the individual raid page (`src/app/(game)/raid/[id]/page.tsx`) via a Next.js Server Component guard that queries the player's level from the database and redirects back to `/raid` if they do not meet the fixture's required level.
+- [DONE] 3.0.22 — Authoritative Server-Side Replay Validation: Implement chronological replay verification inside the `resolve-raid` Deno Edge Function by executing client-sent `actionLog` payloads against our node-compatible TypeScript implementations of `CombatSystem`, `TrapSystem`, `DefenseAI`, and `BossAI`. Secures the PvP loop against client-side exploitation or spoofed logs before database commits are allowed.
 
-**Exit Criteria:** Player can browse NPC targets, prep a raid, play through the room (move unit, dodge traps, destroy barricades, avoid turrets), reach the loot stash, and receive rewards. Server validates results.
+**Exit Criteria:** Player can browse NPC targets, prep a raid, play through the room (move unit, dodge traps, destroy barricades, avoid turrets), reach the loot stash, and receive rewards. Server validates results with full chronological replay re-simulation.
 
 ---
 
@@ -142,7 +227,7 @@
 **Goal:** Resource display, quest system, level-up progression. Builds on Phase 2's economy foundation.
 
 - [DONE] 4.0.1 — `ResourceBar` in TopBar: 5 resources (Scrap/Components/Credits/Contraband/Intel) with lucide icons + max caps. Implemented during Phase 0.0.12.
-- [PARTIAL] 4.0.2 — Resource costs for placeable items: seed.sql has costs on all 20 items. Balance pass not yet done.
+- [DONE] 4.0.2 — Complete Defense-Cost and Plundering Balance Pass. Performed a comprehensive balance pass on all 30+ placeable items (furniture, traps, turrets, barricades, advanced gated defenses, and boss rewards) in `supabase/seed.sql`. Balanced scrap/component ratios to ensure high player starting accessibility and strategic pacing, and synchronized stats maps across client systems (`TrapSystem.ts`, `DefenseAI.ts`, `RaidScene.ts`) and Deno-safe Edge Function files (`replaySystems.ts`, `replayValidator.ts`) to maintain 100% server-client validation parity. All 46 Vitest unit tests pass successfully.
 - [DONE] 4.0.3 — Implement repair system: defenses damaged/triggered during PvP raids are authoritatively flagged as is_damaged. Restoring their operational status requires 40% of original Scrap cost (minimum 5 Scrap). Damaged items are visually greyed/rusty-red tinted and translucent in the editor, and contribute 0 to the defense rating. Replays and active raids filter them out server-side. Deployed migrations, Edge Functions, React UI ContextMenu, TopBar warning badge, and Phaser event loops successfully.
 - [DONE] 4.0.4 — Passive resource generation: `TickManager` runs 5s client tick + 30s DB sync; `room/page.tsx` applies offline delta on SSR (capped to 24h).
 - [DONE] 4.0.5 — Storage Caps & Overflow: Enforced `inventories.storage_capacity` as the protected resource cap (scrap cap = `storage_capacity`; components cap = `floor(storage_capacity * 0.25)`). Resources gathered above this cap (from passive offline tick or future raids) are allowed up to the player-level absolute limits (`maxScrap` / `maxComponents`), but accumulate as raidable "overflow" targets once Safe Mode expires. The TopBar resource HUD is styled in an amber/orange warning highlight with a pulsing animation and descriptive hover tooltips to alert the player of exactly how much overflow resource is currently at risk.
@@ -153,7 +238,7 @@
 - [DONE] 4.0.10 — Implement quest completion: validate via `process-quest` Edge Function, grant rewards. Created and deployed `process-quest` Deno Edge Function. Validates completed quests, transitions status to `'claimed'`, and credits resources (scrap, components, credits, intel, contraband) and XP authoritatively on the server, handling level promotions.
 - [DONE] 4.0.11 — Implement tutorial quest sequence: gated progression, each quest unlocks next. Programmed the progression engine to automatically activate subsequent onboarding goals (from `tut-01` to `tut-08` in sequence) exactly upon completing a tutorial step.
 - [DONE] 4.0.12 — Implement tutorial UI overlay: ceasefire briefing overlay. Created the **Safe Mode Briefing Card** on `/quests` that opens a custom dialogue explaining ceasefire terms and level 5 storage overflows. Confirming the briefing completes the final tutorial quest `tut-08`.
-- [PARTIAL] 4.0.13 — Player level-up: `upgradePlayerLevel` server action + TopBar button exist (pay scrap → level++). XP thresholds, notifications, unlock-message UX still TODO.
+- [DONE] 4.0.13 — Player level-up progression curve milestones. Created secure scrap-upgrades, quests, and raid resolvers. Programmed the progression engine, XP thresholds (`src/lib/game/progression.ts`), and a gorgeous fullscreen glassmorphic `<LevelUpOverlay />` that maps unlocking defenses/furniture blueprints dynamically from the catalog and tracks systemic milestones (Level 3 secondary traps, Level 5 PvP matchmaking, Level 8 Tech tree, Level 10 second squad slot, etc.).
 - [DONE] 4.0.14 — Room Level Upgrades: Implemented premium stronghold room level upgrades up to Level 20! Added the `upgradeRoomLevel` server action that validates resource upgrade costs (scrap and components scaling per tier), transactionally updates the `rooms` and `inventories` tables (adjusting `room_level`, `grid_size`, `entry_points`, and `storage_capacity`), and recomputes the player's defense slots and rating dynamically. Developed a gorgeous glassmorphic **Upgrade Stronghold** sheet dialogue highlighting current vs next stats (Grid Sizing, Defense Slots, Protected Capacity, and unlocked Entry Points like the L5 West Skylight, L10 North Breach Wall, L15 South Second Window, and L20 East Tunnel). Phaser's `RoomScene` and `RoomEditorScene` were upgraded to dynamically scale grids and trigger EventBus restarts upon upgrading, seamlessly expanding the player's canvas.
 - [DONE] 4.0.15 — Daily quest refresh: server-side via pg_cron, 3 new dailies at midnight UTC. Created `public.refresh_daily_quests()` PL/pgSQL stored procedure, enabled the `pg_cron` extension, and scheduled midnight UTC refresh sweeps.
 - [DONE] 4.0.16 — Weekly quest refresh: 3 new weeklies on Monday 00:00 UTC. Created `public.refresh_weekly_quests()` PL/pgSQL stored procedure and scheduled Monday 00:00 UTC refresh sweeps.
@@ -274,6 +359,7 @@
 - [DONE] 10.0.1 — Establish TypeScript-native unit test suite for game systems. Configured `vitest.config.ts` mapping path aliases and created tests verifying pure isometric transformations (`IsometricEngine.test.ts`) and A* pathfinding obstacles navigation (`GridSystem.test.ts`).
 - [DONE] 10.0.2 — Establish automated E2E browser integration tests. Configured `playwright.config.ts` running Chromium and verified landing, registration, and login screens rendering and redirects (`auth.spec.ts` and `navigation.spec.ts`).
 - [DONE] 10.0.3 — Configure test script execution endpoints. Added `"test": "vitest run"` and `"test:e2e": "playwright test"` to `package.json` for easy dev/CI orchestration.
+- [DONE] 10.0.4 — Expand Core Game Unit Tests. Implemented comprehensive TypeScript-native unit test suites under `tests/game/` for `CombatSystem.test.ts` (HP tracking, damage, healing, destructible barricades), `TrapSystem.test.ts` (trap triggers, stun states, uses, and active store multipliers), `DefenseAI.test.ts` (turret Chebyshev ranges, reload tickers, alert buffs, and active event penalties), and `BossAI.test.ts` (phase shift triggers, enrage abilities, and GridSystem-based movement AI). Verified 100% test completion and clean linter outputs.
 
 ## Future Phases (Post-Launch Backlog)
 

@@ -62,7 +62,7 @@ export default async function RoomPage() {
     .maybeSingle();
 
   const { data: catalogData } = await (supabase.from('items') as any)
-    .select('id, name, type, sprite_key, unlock_level, cost, stats, tech_tree_node')
+    .select('id, name, type, sprite_key, unlock_level, cost, stats, tech_tree_node, required_boss_clear, footprint')
     .order('unlock_level', { ascending: true });
 
   const playerLevel = profileData?.player_level ?? 1;

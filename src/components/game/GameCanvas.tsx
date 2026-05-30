@@ -112,6 +112,7 @@ export function GameCanvas() {
     <div
       id={CONTAINER_ID}
       className="h-full w-full"
+      onContextMenu={(e) => e.preventDefault()}
     />
   );
 }

@@ -26,6 +26,14 @@ const FLOOR_MATERIAL_PRESETS = [
   { id: 'concrete', name: 'Concrete', icon: '🪨', desc: 'Cold cracked concrete slabs' },
 ] as const;
 
+const BOSS_NAMES: Record<string, string> = {
+  'boss-ironjaw': 'Ironjaw',
+  'boss-whisper': 'Whisper',
+  'boss-volkov': 'Colonel Volkov',
+  'boss-circuit': 'Circuit',
+  'boss-warden': 'The Warden',
+};
+
 const TYPE_STYLES = {
   turret: {
     activeBorder: 'border-red-500 bg-red-950/20 ring-1 ring-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)]',
@@ -64,6 +72,9 @@ export function ItemPanel() {
   const catalog = useRoomStore((state) => state.catalog);
   const playerLevel = usePlayerStore((state) => state.playerLevel);
   const unlockedTechs = usePlayerStore((state) => state.unlockedTechs);
+  const clearedBosses = usePlayerStore((state) => state.clearedBosses);
+  
+  const clearedBossesSet = useMemo(() => new Set(clearedBosses || []), [clearedBosses]);
 
   const cosmetics = useRoomStore((state) => state.cosmetics);
   const setCosmetics = useRoomStore((state) => state.setCosmetics);
@@ -135,7 +146,8 @@ export function ItemPanel() {
             {catalog.map((item) => {
               const isLevelLocked = item.unlock_level > playerLevel;
               const isTechLocked = !!(item.tech_tree_node && !unlockedIdsSet.has(item.tech_tree_node));
-              const isLocked = isLevelLocked || isTechLocked;
+              const isBossLocked = !!(item.required_boss_clear && !clearedBossesSet.has(item.required_boss_clear));
+              const isLocked = isLevelLocked || isTechLocked || isBossLocked;
               const scrapCost = item.cost?.scrap || 0;
               const styleKey = (item.type in TYPE_STYLES) ? (item.type as keyof typeof TYPE_STYLES) : 'furniture';
               const typeStyle = TYPE_STYLES[styleKey];
@@ -151,6 +163,7 @@ export function ItemPanel() {
                         key: item.sprite_key,
                         type: item.type,
                         stats: item.stats ?? {},
+                        footprint: item.footprint,
                       });
                     }
                   }}
@@ -159,12 +172,14 @@ export function ItemPanel() {
                       ? `${typeStyle.activeBorder} scale-[1.03]` 
                       : `border-border/20 ${typeStyle.hoverBg} hover:scale-[1.02] hover:-translate-y-0.5`
                   } ${isLocked ? 'opacity-40 cursor-not-allowed filter grayscale-[30%]' : ''}`}
-                  title={isTechLocked ? "Research Node Required in Squad & Tech Core" : undefined}
+                  title={isTechLocked ? "Research Node Required in Squad & Tech Core" : isBossLocked ? `Defeat ${BOSS_NAMES[item.required_boss_clear || ''] || 'Faction Boss'} to unlock` : undefined}
                 >
                   {isLocked && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl z-10">
                       {isTechLocked ? (
                         <Cpu className="w-5 h-5 text-cyan-400 drop-shadow-md animate-pulse" />
+                      ) : isBossLocked ? (
+                        <Target className="w-5 h-5 text-red-500 drop-shadow-md animate-pulse" />
                       ) : (
                         <Lock className="w-5 h-5 text-white drop-shadow-md" />
                       )}
@@ -190,6 +205,9 @@ export function ItemPanel() {
                     )}
                     {!isLevelLocked && isTechLocked && (
                       <p className="text-[7.5px] text-cyan-400 font-extrabold uppercase tracking-widest">Research</p>
+                    )}
+                    {!isLevelLocked && !isTechLocked && isBossLocked && (
+                      <p className="text-[7.5px] text-red-500 font-extrabold uppercase tracking-widest">Boss Locked</p>
                     )}
                   </div>
                 </Card>

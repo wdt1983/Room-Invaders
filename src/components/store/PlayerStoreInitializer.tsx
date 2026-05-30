@@ -23,6 +23,7 @@ export default function PlayerStoreInitializer({
   activeBadge,
   activeBorder,
   activeRoomSkin,
+  clearedBosses,
 }: {
   inventory: {
     scrap: number;
@@ -43,6 +44,7 @@ export default function PlayerStoreInitializer({
   activeBadge: string | null;
   activeBorder: string | null;
   activeRoomSkin: string | null;
+  clearedBosses: string[];
 }) {
   useEffect(() => {
     // 0. Hydrate active cosmetic states
@@ -64,8 +66,8 @@ export default function PlayerStoreInitializer({
       activeQuestId,
     });
     
-    // 2. Hydrate player level & XP details
-    usePlayerStore.getState().setPlayerState({ playerLevel });
+    // 2. Hydrate player level, XP, and boss clears
+    usePlayerStore.getState().setPlayerState({ playerLevel, clearedBosses });
     usePlayerStore.getState().applyXpAndLevel(xp, playerLevel);
     
     // 3. Hydrate tech tree details
@@ -139,6 +141,7 @@ export default function PlayerStoreInitializer({
     activeBadge,
     activeBorder,
     activeRoomSkin,
+    JSON.stringify(clearedBosses),
   ]);
 
   return null;

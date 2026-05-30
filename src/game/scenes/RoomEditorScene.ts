@@ -5,6 +5,7 @@ import { RoomScene } from '@/game/scenes/RoomScene';
 import { rangeTilesFor } from '@/lib/game/defense';
 import { paintRangeBand, RANGE_FILL_COLOR } from '@/game/utils/rangeDraw';
 import { useRoomStore } from '@/lib/store/useRoomStore';
+import { useUIStore } from '@/lib/store/useUIStore';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ItemStats = Record<string, any>;
@@ -14,7 +15,9 @@ export class RoomEditorScene extends Phaser.Scene {
   private currentItemKey: string | null = null;
   private currentItemType: string | null = null;
   private currentItemStats: ItemStats = {};
+  private currentItemFootprint: { w: number; h: number } | null = null;
   private rangeGraphics!: Phaser.GameObjects.Graphics;
+  private gridGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super({ key: 'RoomEditorScene' });
@@ -24,25 +27,9 @@ export class RoomEditorScene extends Phaser.Scene {
     const offsetX = this.scale.width / 2;
     const offsetY = this.scale.height / 4;
 
-    const graphics = this.add.graphics();
-    graphics.lineStyle(2, 0x4ade80, 0.5); // Highlight grid specifically in Edit Mode
-
-    // Draw a semitransparent wireframe grid
-    const size = useRoomStore.getState().gridSize ?? 10;
-    for (let x = 0; x <= size; x++) {
-      // Draw grid lines along Y axis
-      const startPos1 = IsometricEngine.worldToScreen(x, 0, 0, size);
-      const endPos1 = IsometricEngine.worldToScreen(x, size, 0, size);
-      graphics.moveTo(startPos1.x + offsetX, startPos1.y + offsetY);
-      graphics.lineTo(endPos1.x + offsetX, endPos1.y + offsetY);
-
-      // Draw grid lines along X axis
-      const startPos2 = IsometricEngine.worldToScreen(0, x, 0, size);
-      const endPos2 = IsometricEngine.worldToScreen(size, x, 0, size);
-      graphics.moveTo(startPos2.x + offsetX, startPos2.y + offsetY);
-      graphics.lineTo(endPos2.x + offsetX, endPos2.y + offsetY);
-    }
-    graphics.strokePath();
+    const roomScene = this.scene.get('RoomScene') as RoomScene;
+    const initialRotation = roomScene ? roomScene.currentRotation : 0;
+    this.drawEditorGrid(initialRotation);
 
     // Range/trigger-zone overlay for the selected defense item (task 2.0.10).
     // Redrawn on every `pointermove` and cleared on deselect / mode change.
@@ -59,11 +46,12 @@ export class RoomEditorScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setScrollFactor(0); // Pin to camera
 
-    const handleItemSelected = (payload: { key: string; type: string; stats?: ItemStats } | null) => {
+    const handleItemSelected = (payload: { key: string; type: string; stats?: ItemStats; footprint?: { w: number; h: number } } | null) => {
       if (!this.sys || !this.sys.isActive()) return;
       this.currentItemKey = payload?.key ?? null;
       this.currentItemType = payload?.type ?? null;
       this.currentItemStats = payload?.stats ?? {};
+      this.currentItemFootprint = payload?.footprint ?? { w: 1, h: 1 };
       if (this.ghostSprite) {
         this.ghostSprite.destroy();
         this.ghostSprite = null;
@@ -110,14 +98,30 @@ export class RoomEditorScene extends Phaser.Scene {
       }
     };
 
+    const handleGridRotated = (rotation: number) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      this.drawEditorGrid(rotation);
+    };
+
+    const handleCosmeticsChanged = () => {
+      if (!this.sys || !this.sys.isActive()) return;
+      const roomScene = this.scene.get('RoomScene') as RoomScene;
+      const rotation = roomScene ? roomScene.currentRotation : 0;
+      this.drawEditorGrid(rotation);
+    };
+
     EventBus.on('item-selected', handleItemSelected);
     EventBus.on('placement-success', handlePlacementSuccess);
     EventBus.on('change-mode', handleChangeMode);
+    EventBus.on('grid-rotated', handleGridRotated);
+    EventBus.on('cosmetics-changed', handleCosmeticsChanged);
 
     const cleanup = () => {
       EventBus.off('item-selected', handleItemSelected);
       EventBus.off('placement-success', handlePlacementSuccess);
       EventBus.off('change-mode', handleChangeMode);
+      EventBus.off('grid-rotated', handleGridRotated);
+      EventBus.off('cosmetics-changed', handleCosmeticsChanged);
     };
 
     this.events.once('shutdown', cleanup);
@@ -137,8 +141,26 @@ export class RoomEditorScene extends Phaser.Scene {
         roomScene.gridSize
       );
 
+      // Determine the rotated footprint size of the selected blueprint/ghost item
+      let fpW = 1;
+      let fpH = 1;
+      const movingItem = useUIStore.getState().movingItem;
+      if (movingItem) {
+        const placed = useRoomStore.getState().placedItems.find(
+          (p) => p.gridX === movingItem.x && p.gridY === movingItem.y
+        );
+        if (placed) {
+          const isRotatedOdd = placed.rotation === 1 || placed.rotation === 3;
+          fpW = isRotatedOdd ? placed.footprintH : placed.footprintW;
+          fpH = isRotatedOdd ? placed.footprintW : placed.footprintH;
+        }
+      } else {
+        fpW = this.currentItemFootprint?.w ?? 1;
+        fpH = this.currentItemFootprint?.h ?? 1;
+      }
+
       // Validate — type-aware (traps/barricades/furniture = floor, turrets = perimeter)
-      const isValid = roomScene.isPlaceableFor(this.currentItemType, worldCoords.x, worldCoords.y);
+      const isValid = roomScene.isPlaceableFor(this.currentItemType, worldCoords.x, worldCoords.y, fpW, fpH);
 
       // Tint ghost
       this.ghostSprite.setTint(isValid ? 0x00ff00 : 0xff0000);
@@ -157,6 +179,46 @@ export class RoomEditorScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       const roomScene = this.scene.get('RoomScene') as RoomScene;
 
+      // Right Click: cancel ghost placement and/or open context menu directly under pointer
+      if (pointer.rightButtonDown() || pointer.button === 2) {
+        const worldCoords = IsometricEngine.screenToWorld(
+          pointer.worldX, pointer.worldY,
+          roomScene.offsetX, roomScene.offsetY,
+          roomScene.currentRotation,
+          roomScene.gridSize
+        );
+        const targetFurniture = roomScene.furnitureItems.find(f => f.occupies(worldCoords.x, worldCoords.y));
+
+        // Cancel ghost selection
+        if (this.ghostSprite) {
+          this.ghostSprite.destroy();
+          this.ghostSprite = null;
+        }
+        this.currentItemKey = null;
+        this.currentItemType = null;
+        this.currentItemStats = {};
+        this.currentItemFootprint = null;
+        this.rangeGraphics.clear();
+        EventBus.emit('item-selected', null);
+
+        if (targetFurniture) {
+          const spriteKey = targetFurniture.texture.key;
+          const isDamaged = targetFurniture.isDamaged;
+          const targetX = targetFurniture.gridX;
+          const targetY = targetFurniture.gridY;
+
+          EventBus.emit('open-context-menu', {
+            spriteKey: spriteKey,
+            x: pointer.x,
+            y: pointer.y,
+            gridX: targetX,
+            gridY: targetY,
+            isDamaged
+          });
+        }
+        return;
+      }
+
       const worldCoords = IsometricEngine.screenToWorld(
         pointer.worldX, pointer.worldY,
         roomScene.offsetX, roomScene.offsetY,
@@ -174,7 +236,25 @@ export class RoomEditorScene extends Phaser.Scene {
       // Placement: with a ghost selected, attempt to place on a valid tile
       // (type-specific — see `RoomScene.isPlaceableFor`).
       if (this.ghostSprite && this.currentItemKey) {
-        if (roomScene.isPlaceableFor(this.currentItemType, worldCoords.x, worldCoords.y)) {
+        // Determine the rotated footprint size of the selected blueprint/ghost item
+        let fpW = 1;
+        let fpH = 1;
+        const movingItem = useUIStore.getState().movingItem;
+        if (movingItem) {
+          const placed = useRoomStore.getState().placedItems.find(
+            (p) => p.gridX === movingItem.x && p.gridY === movingItem.y
+          );
+          if (placed) {
+            const isRotatedOdd = placed.rotation === 1 || placed.rotation === 3;
+            fpW = isRotatedOdd ? placed.footprintH : placed.footprintW;
+            fpH = isRotatedOdd ? placed.footprintW : placed.footprintH;
+          }
+        } else {
+          fpW = this.currentItemFootprint?.w ?? 1;
+          fpH = this.currentItemFootprint?.h ?? 1;
+        }
+
+        if (roomScene.isPlaceableFor(this.currentItemType, worldCoords.x, worldCoords.y, fpW, fpH)) {
           EventBus.emit('request-placement', {
             key: this.currentItemKey,
             x: worldCoords.x,
@@ -187,12 +267,14 @@ export class RoomEditorScene extends Phaser.Scene {
       // No ghost selected → tapping an occupied tile opens the removal context menu
       if (roomScene.gridSystem.getTileState(worldCoords.x, worldCoords.y) === 'occupied') {
         const targetFurniture = roomScene.furnitureItems.find(
-          (f) => f.gridX === worldCoords.x && f.gridY === worldCoords.y,
+          (f) => f.occupies(worldCoords.x, worldCoords.y),
         );
         const spriteKey = targetFurniture?.texture.key ?? 'placed_item';
         const isDamaged = targetFurniture ? targetFurniture.isDamaged : false;
+        const targetX = targetFurniture ? targetFurniture.gridX : worldCoords.x;
+        const targetY = targetFurniture ? targetFurniture.gridY : worldCoords.y;
         const screenPos = IsometricEngine.worldToScreen(
-          worldCoords.x, worldCoords.y,
+          targetX, targetY,
           roomScene.currentRotation,
           roomScene.gridSize,
         );
@@ -201,8 +283,8 @@ export class RoomEditorScene extends Phaser.Scene {
           spriteKey,
           x: screenPos.x + roomScene.offsetX,
           y: screenPos.y + roomScene.offsetY,
-          gridX: worldCoords.x,
-          gridY: worldCoords.y,
+          gridX: targetX,
+          gridY: targetY,
           isDamaged,
         });
       }
@@ -230,12 +312,32 @@ export class RoomEditorScene extends Phaser.Scene {
     this.rangeGraphics.clear();
     if (!this.currentItemType) return;
 
+    // Determine the rotated footprint size of the selected blueprint/ghost item
+    let fpW = 1;
+    let fpH = 1;
+    const movingItem = useUIStore.getState().movingItem;
+    if (movingItem) {
+      const placed = useRoomStore.getState().placedItems.find(
+        (p) => p.gridX === movingItem.x && p.gridY === movingItem.y
+      );
+      if (placed) {
+        const isRotatedOdd = placed.rotation === 1 || placed.rotation === 3;
+        fpW = isRotatedOdd ? placed.footprintH : placed.footprintW;
+        fpH = isRotatedOdd ? placed.footprintW : placed.footprintH;
+      }
+    } else {
+      fpW = this.currentItemFootprint?.w ?? 1;
+      fpH = this.currentItemFootprint?.h ?? 1;
+    }
+
     const { primary, alert } = rangeTilesFor(
       this.currentItemType,
       this.currentItemStats,
       originX,
       originY,
       useRoomStore.getState().gridSize ?? 10,
+      fpW,
+      fpH
     );
 
     if (primary.length === 0 && alert.length === 0) return;
@@ -248,5 +350,75 @@ export class RoomEditorScene extends Phaser.Scene {
       this.rangeGraphics, alert, RANGE_FILL_COLOR.alert,
       roomScene.currentRotation, roomScene.offsetX, roomScene.offsetY,
     );
+  }
+
+  update() {
+    const roomScene = this.scene.get('RoomScene') as RoomScene;
+    if (roomScene && roomScene.sys.isActive() && this.cameras && this.cameras.main) {
+      this.cameras.main.scrollX = roomScene.cameras.main.scrollX;
+      this.cameras.main.scrollY = roomScene.cameras.main.scrollY;
+      this.cameras.main.zoom = roomScene.cameras.main.zoom;
+    }
+  }
+
+  private drawEditorGrid(rotation: number): void {
+    if (this.gridGraphics) {
+      this.tweens.killTweensOf(this.gridGraphics);
+      this.gridGraphics.destroy();
+    }
+    this.gridGraphics = this.add.graphics();
+
+    const roomScene = this.scene.get('RoomScene') as RoomScene;
+    const offsetX = roomScene ? roomScene.offsetX : this.scale.width / 2;
+    const offsetY = roomScene ? roomScene.offsetY : this.scale.height / 4;
+    const size = useRoomStore.getState().gridSize ?? 10;
+    const wallColor = useRoomStore.getState().cosmetics?.wallColor ?? 0x4ade80;
+
+    // Layer 1: Beveled glowing base
+    this.gridGraphics.lineStyle(4, wallColor, 0.25);
+    for (let x = 0; x <= size; x++) {
+      // Draw grid lines along Y axis
+      const startPos1 = IsometricEngine.worldToScreen(x, 0, rotation, size);
+      const endPos1 = IsometricEngine.worldToScreen(x, size, rotation, size);
+      this.gridGraphics.moveTo(startPos1.x + offsetX, startPos1.y + offsetY);
+      this.gridGraphics.lineTo(endPos1.x + offsetX, endPos1.y + offsetY);
+
+      // Draw grid lines along X axis
+      const startPos2 = IsometricEngine.worldToScreen(0, x, rotation, size);
+      const endPos2 = IsometricEngine.worldToScreen(size, x, rotation, size);
+      this.gridGraphics.moveTo(startPos2.x + offsetX, startPos2.y + offsetY);
+      this.gridGraphics.lineTo(endPos2.x + offsetX, endPos2.y + offsetY);
+    }
+    this.gridGraphics.strokePath();
+
+    // Layer 2: Vibrant sharp core
+    this.gridGraphics.lineStyle(1.5, wallColor, 0.65);
+    for (let x = 0; x <= size; x++) {
+      // Draw grid lines along Y axis
+      const startPos1 = IsometricEngine.worldToScreen(x, 0, rotation, size);
+      const endPos1 = IsometricEngine.worldToScreen(x, size, rotation, size);
+      this.gridGraphics.moveTo(startPos1.x + offsetX, startPos1.y + offsetY);
+      this.gridGraphics.lineTo(endPos1.x + offsetX, endPos1.y + offsetY);
+
+      // Draw grid lines along X axis
+      const startPos2 = IsometricEngine.worldToScreen(0, x, rotation, size);
+      const endPos2 = IsometricEngine.worldToScreen(size, x, rotation, size);
+      this.gridGraphics.moveTo(startPos2.x + offsetX, startPos2.y + offsetY);
+      this.gridGraphics.lineTo(endPos2.x + offsetX, endPos2.y + offsetY);
+    }
+    this.gridGraphics.strokePath();
+
+    this.gridGraphics.setDepth(0.1); // Sit above floor but below items
+
+    // Pulsing breathing alpha tween on the reactive neon grid lines
+    this.gridGraphics.setAlpha(0.5);
+    this.tweens.add({
+      targets: this.gridGraphics,
+      alpha: { from: 0.5, to: 0.95 },
+      yoyo: true,
+      repeat: -1,
+      duration: 1800,
+      ease: 'Sine.easeInOut',
+    });
   }
 }

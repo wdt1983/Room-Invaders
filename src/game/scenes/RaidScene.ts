@@ -133,6 +133,9 @@ export class RaidScene extends Phaser.Scene {
   public gridSize: number = 10;
   public offsetX: number = 0;
   public offsetY: number = 0;
+  private lastCameraScrollX: number = 0;
+  private lastCameraScrollY: number = 0;
+  private lastCameraZoom: number = 0;
 
   private fixture!: NpcRoomFixture;
   private floorTiles: Phaser.GameObjects.Image[] = [];
@@ -1459,6 +1462,7 @@ export class RaidScene extends Phaser.Scene {
    *                handler line up with the tick's time basis.
    */
   public update(time: number): void {
+    this.cullTiles();
     if (useRaidStore.getState().phase !== 'active') return;
     this.turretAI?.tick(time);
     this.bossAI?.tick(time, this.squadEntities);
@@ -2454,5 +2458,47 @@ export class RaidScene extends Phaser.Scene {
     ctx.restore();
 
     canvasTexture.refresh();
+  }
+
+  private cullTiles(): void {
+    const cam = this.cameras.main;
+    if (
+      cam.scrollX === this.lastCameraScrollX &&
+      cam.scrollY === this.lastCameraScrollY &&
+      cam.zoom === this.lastCameraZoom
+    ) {
+      return;
+    }
+
+    this.lastCameraScrollX = cam.scrollX;
+    this.lastCameraScrollY = cam.scrollY;
+    this.lastCameraZoom = cam.zoom;
+
+    const bounds = cam.worldView;
+    const padding = 128; // Padding prevents visual pop-in near borders
+
+    for (const tile of this.floorTiles) {
+      if (tile) {
+        const visible = (
+          tile.x >= bounds.x - padding &&
+          tile.x <= bounds.x + bounds.width + padding &&
+          tile.y >= bounds.y - padding &&
+          tile.y <= bounds.y + bounds.height + padding
+        );
+        tile.setVisible(visible);
+      }
+    }
+
+    for (const item of this.furnitureItems) {
+      if (item) {
+        const visible = (
+          item.x >= bounds.x - padding &&
+          item.x <= bounds.x + bounds.width + padding &&
+          item.y >= bounds.y - padding &&
+          item.y <= bounds.y + bounds.height + padding
+        );
+        item.setVisible(visible);
+      }
+    }
   }
 }

@@ -80,6 +80,7 @@ export const TURRET_STATS_BY_SPRITE_KEY: Record<string, TurretStats> = {
   turret_tesla: { damage: 18, range: 3, fire_rate: 1.1, ammo: 20, chain_targets: 3 },
   turret_autocannon: { damage: 45, range: 5, fire_rate: 1.8, ammo: 12 },
   turret_shotgun: { damage: 25, range: 2, fire_rate: 1.4, ammo: 10, spread_cone: true },
+  turret_autocannon_mk2: { damage: 25, range: 6, fire_rate: 1.5, ammo: 10 },
 };
 
 /** How long an alert from a tripwire lasts, in ms. Extends all turrets

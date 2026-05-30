@@ -38,11 +38,16 @@ interface UIState {
   levelUpOverlay: { isOpen: boolean; previousLevel: number; newLevel: number } | null;
   showLevelUpOverlay: (previousLevel: number, newLevel: number) => void;
   closeLevelUpOverlay: () => void;
+  movingItem: { x: number; y: number } | null;
+  setMovingItem: (item: { x: number; y: number } | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   mode: 'view',
-  setMode: (mode) => set({ mode }),
+  setMode: (mode) => set((state) => ({
+    mode,
+    movingItem: mode === 'edit' ? state.movingItem : null,
+  })),
   selectedItemKey: null,
   setSelectedItemKey: (key) => set({ selectedItemKey: key }),
   contextMenu: null,
@@ -58,5 +63,7 @@ export const useUIStore = create<UIState>((set) => ({
   showLevelUpOverlay: (previousLevel, newLevel) =>
     set({ levelUpOverlay: { isOpen: true, previousLevel, newLevel } }),
   closeLevelUpOverlay: () => set({ levelUpOverlay: null }),
+  movingItem: null,
+  setMovingItem: (movingItem) => set({ movingItem }),
 }));
 

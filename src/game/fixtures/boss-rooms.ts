@@ -298,7 +298,7 @@ const BOSS_CIRCUIT: BossRoomFixture = {
     defeat: '“Bugs successfully quarantined and incinerated. System operating at 100% capacity.”'
   },
   firstClearRewards: {
-    uniqueItemSpriteKey: 'trap_emp_mine',
+    uniqueItemSpriteKey: 'trap_circuit_emp_mine',
     scrap: 1000,
     components: 80,
     credits: 300,

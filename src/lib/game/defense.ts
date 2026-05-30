@@ -200,6 +200,8 @@ export function rangeTilesFor(
   originX: number,
   originY: number,
   gridSize: number,
+  footprintW: number = 1,
+  footprintH: number = 1,
 ): RangeTiles {
   const result: RangeTiles = { primary: [], alert: [] };
   if (!type || !Number.isFinite(gridSize) || gridSize <= 0) return result;
@@ -207,13 +209,37 @@ export function rangeTilesFor(
   const fillChebyshev = (bucket: RangeTile[], rawRadius: number): void => {
     const radius = Math.floor(Number(rawRadius) || 0);
     if (radius <= 0) return;
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const x = originX + dx;
-        const y = originY + dy;
-        if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) continue;
-        bucket.push({ x, y });
+
+    const added = new Set<string>();
+
+    for (let fx = 0; fx < footprintW; fx++) {
+      for (let fy = 0; fy < footprintH; fy++) {
+        const cellX = originX + fx;
+        const cellY = originY + fy;
+
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const x = cellX + dx;
+            const y = cellY + dy;
+
+            if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) continue;
+
+            // Exclude tiles inside the item's own footprint
+            const isInsideFootprint =
+              x >= originX &&
+              x < originX + footprintW &&
+              y >= originY &&
+              y < originY + footprintH;
+
+            if (isInsideFootprint) continue;
+
+            const key = `${x},${y}`;
+            if (!added.has(key)) {
+              added.add(key);
+              bucket.push({ x, y });
+            }
+          }
+        }
       }
     }
   };

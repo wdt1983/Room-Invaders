@@ -93,11 +93,15 @@ export async function buyAndPlaceFurniture(spriteKey: string, gridX: number, gri
     // Get item — need id, cost, type (2.0.6 placement rules) AND stats (2.0.8 defense rating)
     const { data: item, error: itemError } = await supabase
       .from('items')
-      .select('id, cost, type, stats, tech_tree_node')
+      .select('id, cost, type, stats, tech_tree_node, required_boss_clear')
       .eq('sprite_key', spriteKey)
-      .single();
+      .limit(1)
+      .maybeSingle();
+
+    console.log("buyAndPlaceFurniture FETCH:", { spriteKey, item, itemError });
 
     if (itemError || !item) {
+      console.warn("buyAndPlaceFurniture ITEM NOT FOUND:", { spriteKey, itemError });
       return { success: false as const, error: 'Item not found' };
     }
 
@@ -112,6 +116,21 @@ export async function buyAndPlaceFurniture(spriteKey: string, gridX: number, gri
 
       if (techError || !techUnlocks) {
         return { success: false as const, error: 'Research required in Squad Core to unlock this item.' };
+      }
+    }
+
+    // --- Faction Boss Clear validation ---
+    if ((item as any).required_boss_clear) {
+      const { data: clearRecord, error: clearError } = await supabase
+        .from('boss_clears')
+        .select('id')
+        .eq('player_id', user.id)
+        .eq('boss_id', (item as any).required_boss_clear)
+        .limit(1)
+        .maybeSingle();
+
+      if (clearError || !clearRecord) {
+        return { success: false as const, error: 'Defeating the corresponding Faction Boss is required to place this item.' };
       }
     }
 
@@ -395,6 +414,140 @@ export async function rotatePlacedItem(gridX: number, gridY: number) {
     return { success: false as const, error: err.message || 'An unexpected error occurred rotating item.' };
   }
 }
+
+export async function movePlacedItem(oldX: number, oldY: number, newX: number, newY: number) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false as const, error: 'Unauthorized' };
+    }
+
+    // 1. Locate the item at old coordinates with its footprint and rotation
+    const { data: placed, error: findError } = await (supabase.from('player_items') as any)
+      .select('id, item_id, rotation, items ( type, stats, footprint )')
+      .eq('owner_id', user.id)
+      .eq('placed_in_room', true)
+      .contains('grid_position', { x: oldX, y: oldY })
+      .limit(1)
+      .single();
+
+    if (findError || !placed) {
+      return { success: false as const, error: 'Placed item not found' };
+    }
+
+    const itemData = Array.isArray(placed.items) ? placed.items[0] : placed.items;
+    const itemType = itemData?.type as string;
+    const baseW = itemData?.footprint?.w ?? 1;
+    const baseH = itemData?.footprint?.h ?? 1;
+
+    // Swapping footprint dimensions if rotation step is odd (1 or 3)
+    const isRotatedOdd = placed.rotation === 1 || placed.rotation === 3;
+    const footprintW = isRotatedOdd ? baseH : baseW;
+    const footprintH = isRotatedOdd ? baseW : baseH;
+
+    // 2. Fetch room info for validation
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('grid_size, entry_points')
+      .eq('owner_id', user.id)
+      .single();
+
+    if (roomError || !room) {
+      return { success: false as const, error: 'Room not found' };
+    }
+
+    const gridSize = (room as any).grid_size ?? 10;
+
+    // 3. Grid bounds checks for all cells in the footprint
+    if (!Number.isInteger(newX) || !Number.isInteger(newY)) {
+      return { success: false as const, error: 'Invalid grid coordinates' };
+    }
+    for (let x = newX; x < newX + footprintW; x++) {
+      for (let y = newY; y < newY + footprintH; y++) {
+        if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) {
+          return { success: false as const, error: 'Out of bounds' };
+        }
+      }
+    }
+
+    // 4. Entry point check for all cells
+    const entryPoints = coerceEntryPoints((room as any).entry_points, gridSize);
+    for (let x = newX; x < newX + footprintW; x++) {
+      for (let y = newY; y < newY + footprintH; y++) {
+        const onEntryPoint = entryPoints.some((ep) => {
+          const tile = entryTileFor(ep, gridSize);
+          return tile !== null && tile.x === x && tile.y === y;
+        });
+        if (onEntryPoint) {
+          return { success: false as const, error: 'Cannot place on an entry point' };
+        }
+      }
+    }
+
+    // 5. Turret perimeter check for all cells
+    if (itemType === 'turret') {
+      const max = gridSize - 1;
+      for (let x = newX; x < newX + footprintW; x++) {
+        for (let y = newY; y < newY + footprintH; y++) {
+          const onPerimeter = x === 0 || x === max || y === 0 || y === max;
+          if (!onPerimeter) {
+            return { success: false as const, error: 'Turrets must be placed against a wall' };
+          }
+        }
+      }
+    }
+
+    // 6. Double placement check (excluding the item's own original footprint)
+    const originalX = oldX;
+    const originalY = oldY;
+
+    for (let tx = newX; tx < newX + footprintW; tx++) {
+      for (let ty = newY; ty < newY + footprintH; ty++) {
+        const isSelfPart =
+          tx >= originalX &&
+          tx < originalX + footprintW &&
+          ty >= originalY &&
+          ty < originalY + footprintH;
+
+        if (!isSelfPart) {
+          const { data: existing } = await (supabase.from('player_items') as any)
+            .select('id')
+            .eq('owner_id', user.id)
+            .eq('placed_in_room', true)
+            .contains('grid_position', { x: tx, y: ty })
+            .limit(1);
+
+          if (Array.isArray(existing) && existing.length > 0) {
+            return { success: false as const, error: 'Tile already occupied' };
+          }
+        }
+      }
+    }
+
+    // 7. Update coordinates
+    const { error: updateError } = await (supabase.from('player_items') as any)
+      .update({ grid_position: { x: newX, y: newY } })
+      .eq('id', placed.id)
+      .eq('owner_id', user.id);
+
+    if (updateError) {
+      console.error('Failed to move item in DB:', updateError);
+      return { success: false as const, error: 'Failed to move item' };
+    }
+
+    return { success: true as const };
+  } catch (err: any) {
+    console.error("[movePlacedItem] Exception caught:", err);
+    Sentry.captureException(err, {
+      tags: { action: "movePlacedItem" },
+      extra: { oldX, oldY, newX, newY },
+    });
+    return { success: false as const, error: err.message || 'An unexpected error occurred moving item.' };
+  }
+}
+
 
 export async function syncInventoryState(payload: { scrap: number, components: number, credits: number, intel: number, contraband: number }) {
   const supabase = await createClient();

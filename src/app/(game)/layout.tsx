@@ -109,6 +109,13 @@ export default async function GameLayout({
     .maybeSingle();
   const districtId = currentMember?.district_id || null;
 
+  // 7. Fetch user boss clears history
+  const { data: bossClearsData } = await supabase
+    .from('boss_clears')
+    .select('boss_id')
+    .eq('player_id', user.id);
+  const clearedBosses = (bossClearsData || []).map((b: any) => b.boss_id);
+
   if (invError || profError || techError || squadError) {
     console.error("[GameLayout] Core state fetch errors:", { 
       invError: invError ? JSON.stringify(invError) : null, 
@@ -172,6 +179,7 @@ export default async function GameLayout({
         activeBadge={(finalProfile as any).active_badge ?? null}
         activeBorder={(finalProfile as any).active_border ?? null}
         activeRoomSkin={(finalProfile as any).active_room_skin ?? null}
+        clearedBosses={clearedBosses}
       />
       <TopBar />
       <main className="relative flex-1 overflow-hidden">

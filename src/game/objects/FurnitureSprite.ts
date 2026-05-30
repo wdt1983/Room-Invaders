@@ -11,6 +11,8 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
   /** Base footprint dims as authored in the catalog — preserved for round-trips. */
   private readonly baseFootprintW: number;
   private readonly baseFootprintH: number;
+  /** The base sprite key without the directional suffix. */
+  private readonly baseTextureKey: string;
   /** Discrete 90° step: 0=0°, 1=90°, 2=180°, 3=270°. */
   public rotationStep: number = 0;
   /** Current HP when destructible. `null` means indestructible — the
@@ -33,6 +35,7 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
   ) {
     super(scene, 0, 0, textureKey);
     this.isDamaged = !!options.isDamaged;
+    this.baseTextureKey = textureKey;
 
     // Anchor to the bottom center so it sits correctly on the grid floor
     this.setOrigin(0.5, 1);
@@ -54,6 +57,7 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
     }
 
     this.updateIsometricPosition(0);
+    this.setFurnitureRotation(0);
 
     scene.add.existing(this);
   }
@@ -65,8 +69,43 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
   ): void {
     const gridSize = (this.scene as any).gridSize || (this.scene as any).grid_size || 10;
     const screenPos = IsometricEngine.worldToScreen(this.gridX, this.gridY, rotation, gridSize);
-    this.x = screenPos.x + offsetX;
-    this.y = screenPos.y + offsetY;
+    
+    // Dynamic Wall Snapping Offsets
+    let shiftX = 0;
+    let shiftY = 0;
+
+    let rotX = this.gridX;
+    let rotY = this.gridY;
+    const MAX = gridSize - 1;
+
+    switch (rotation % 4) {
+      case 1: // 90 deg CW
+        rotX = MAX - this.gridY;
+        rotY = this.gridX;
+        break;
+      case 2: // 180 deg
+        rotX = MAX - this.gridX;
+        rotY = MAX - this.gridY;
+        break;
+      case 3: // 270 deg CW
+        rotX = this.gridY;
+        rotY = MAX - this.gridX;
+        break;
+      default: // 0 deg
+        break;
+    }
+
+    if (rotY === 0) {
+      shiftX += 2;
+      shiftY += 4;
+    }
+    if (rotX === 0) {
+      shiftX -= 2;
+      shiftY += 4;
+    }
+
+    this.x = screenPos.x + offsetX + shiftX;
+    this.y = screenPos.y + offsetY + shiftY;
 
     // Depth Sorting
     // Floor tiles are at depth 0. Furniture sits above them.
@@ -74,9 +113,9 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
   }
 
   /**
-   * Apply a discrete 90° rotation step (0-3). Updates the Phaser image angle
-   * so the sprite visually rotates, and swaps the effective footprint
-   * dimensions when the rotation is odd (1 or 3) so future multi-tile
+   * Apply a discrete 90° rotation step (0-3). Updates the Phaser image texture
+   * to load the correct pre-generated isometric rotation, and swaps the effective
+   * footprint dimensions when the rotation is odd (1 or 3) so future multi-tile
    * occupancy checks see the correct orientation.
    *
    * Keeps `baseFootprintW`/`baseFootprintH` (catalog values) intact so
@@ -85,7 +124,15 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
   public setFurnitureRotation(step: number): void {
     const normalized = ((step % 4) + 4) % 4;
     this.rotationStep = normalized;
-    this.setAngle(normalized * 90);
+
+    // Swapping the texture directly corrects the 2.5D visual isometric perspective
+    const key = `${this.baseTextureKey}_dir_${normalized}`;
+    if (this.scene.textures.exists(key)) {
+      this.setTexture(key);
+    } else {
+      this.setTexture(this.baseTextureKey);
+    }
+
     if (normalized % 2 === 1) {
       this.footprintW = this.baseFootprintH;
       this.footprintH = this.baseFootprintW;
@@ -93,5 +140,10 @@ export class FurnitureSprite extends Phaser.GameObjects.Image {
       this.footprintW = this.baseFootprintW;
       this.footprintH = this.baseFootprintH;
     }
+  }
+
+  public occupies(x: number, y: number): boolean {
+    return x >= this.gridX && x < this.gridX + this.footprintW &&
+           y >= this.gridY && y < this.gridY + this.footprintH;
   }
 }

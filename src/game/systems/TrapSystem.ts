@@ -104,6 +104,9 @@ export const TRAP_STATS_BY_SPRITE_KEY: Record<string, TrapStats> = {
   trap_laser_grid: { damage: 0, alert_radius: 15, uses: 99 },
   trap_shock_wire: { damage: 15, stun_duration: 2.5, uses: 2 },
   trap_emp_mine: { damage: 0, emp_duration: 12.0, uses: 1 },
+  trap_bear_trap: { damage: 30, stun_duration: 2.0, uses: 2 },
+  trap_ghost_wire: { damage: 0, alert_radius: 8, uses: 3 },
+  trap_circuit_emp_mine: { damage: 5, stun_duration: 4.0, uses: 1 },
 };
 
 /**

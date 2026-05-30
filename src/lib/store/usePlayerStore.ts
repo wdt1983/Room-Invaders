@@ -114,6 +114,7 @@ interface PlayerState {
   techPoints: number;
   unlockedTechs: string[];
   activeEffects: ReturnType<typeof compileActiveEffects>;
+  clearedBosses: string[];
 
   // Cosmetics
   activeBadge: string | null;
@@ -154,6 +155,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   techPoints: 1,
   unlockedTechs: [],
   activeEffects: DEFAULT_ACTIVE_EFFECTS,
+  clearedBosses: [],
 
   // Cosmetic defaults
   activeBadge: null,

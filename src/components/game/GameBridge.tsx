@@ -8,9 +8,11 @@ import {
   removePlacedItem,
   rotatePlacedItem,
   repairPlacedItem,
+  movePlacedItem,
 } from "@/app/(game)/room/actions";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { useRoomStore, CatalogItem } from "@/lib/store/useRoomStore";
+import { useUIStore } from "@/lib/store/useUIStore";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function syncDefenseStats(result: any) {
@@ -45,18 +47,42 @@ function catalogInfo(spriteKey: string): { name: string; scrapCost: number; entr
 export function GameBridge() {
   useEffect(() => {
     const handlePlacementRequest = async (payload: { key: string; x: number; y: number }) => {
+      const uiState = useUIStore.getState();
+      const movingItem = uiState.movingItem;
       const { name, scrapCost } = catalogInfo(payload.key);
-      const result = await buyAndPlaceFurniture(payload.key, payload.x, payload.y);
 
-      if (result.success && result.newScrap !== undefined) {
-        usePlayerStore.getState().setInventory({ scrap: result.newScrap });
-        syncDefenseStats(result);
-        EventBus.emit("placement-success", payload);
-        toast.success(`Placed ${name}`, {
-          description: scrapCost > 0 ? `−${scrapCost} Scrap` : undefined,
-        });
+      if (movingItem) {
+        const result = await movePlacedItem(movingItem.x, movingItem.y, payload.x, payload.y);
+
+        if (result.success) {
+          uiState.setMovingItem(null);
+          uiState.setSelectedItemKey(null);
+          uiState.setMode("view");
+          
+          EventBus.emit("move-success", {
+            oldX: movingItem.x,
+            oldY: movingItem.y,
+            newX: payload.x,
+            newY: payload.y,
+          });
+
+          toast.success(`Moved ${name}`);
+        } else {
+          toast.error("Move failed", { description: result.error });
+        }
       } else {
-        toast.error("Placement failed", { description: result.error });
+        const result = await buyAndPlaceFurniture(payload.key, payload.x, payload.y);
+
+        if (result.success && result.newScrap !== undefined) {
+          usePlayerStore.getState().setInventory({ scrap: result.newScrap });
+          syncDefenseStats(result);
+          EventBus.emit("placement-success", payload);
+          toast.success(`Placed ${name}`, {
+            description: scrapCost > 0 ? `−${scrapCost} Scrap` : undefined,
+          });
+        } else {
+          toast.error("Placement failed", { description: result.error });
+        }
       }
     };
 

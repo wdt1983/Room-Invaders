@@ -1,6 +1,151 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.26.0] — 2026-05-29 — Milestone 9J: Volumetric Color Shading & Direct Move Relocation Tool
+
+### Added
+- **Volumetric 3D Color Shading Sync**:
+  - Dynamically shades and tints procedural 3D back walls in `RoomScene.ts` based on the player's active custom `wallColor` preset.
+  - Implemented `adjustColor(color, factor)` inside `RoomScene.ts` to scale RGB channels. Scales by `0.22` for the lighter right-facing panels and `0.15` for the darker left-facing panels, producing gorgeous, highly premium, responsive HSL-like volumetric shadows that avoid flat, saturated colors.
+  - Dynamically colors the top neon lighting conduit with the vibrant custom `wallColor` (or modular entry color if a Door, Window, or Vent) to create a beautiful, cohesive glowing theme.
+- **Zero-Cost Relocation Move Tool**:
+  - Introduced a comprehensive, **100% free-of-scrap** interactive furniture relocator. Players can click **Move Furniture** in the cyan context menu to pick up any placed furniture/defense onto their cursor as a ghost in Edit Mode.
+  - Relocating furniture/defenses is completely free of scrap costs and validates standard rules (bounds, occupied spaces, entry point limits, turret perimeter rules).
+  - Tapping a valid tile places the item and triggers the new `movePlacedItem` secure Server Action in `actions.ts` to update coordinates in the `player_items` table.
+  - Played a satisfying, organic squash-and-stretch spring pop tween (`scaleY: 1.25, scaleX: 0.8` back to `1.0` over `400ms`) accompanied by a placement sound FX when items pop into their new coordinates.
+  - Integrated full Zustand state synchronization (`movePlacedItemAt` in `useRoomStore.ts`) and automatic cleanup of the moving item ghost if the user exits Edit Mode or selects another action in `useUIStore.ts`.
+- **Authoritative Footprint Verification & Multi-tile Calculations**:
+  - Fully integrated catalog item `footprint` dimensions (`w` and `h`) throughout Phaser scenes, Next.js Server Components, and the Zustand state store (`useRoomStore.ts`, `ItemPanel.tsx`, `ContextMenu.tsx`).
+  - Completely rewrote grid occupancy calculations in `RoomScene.ts` to block out the complete multi-tile footprint.
+  - Upgraded both Phaser client-side `isPlaceableFor` and server-side `movePlacedItem` Server Action to validate every coordinate cell of the rotated bounding box, fully resolving placement self-collisions by ignoring the item's original bounding footprint.
+- **Multi-tile Firing & Alert Range Resizing**:
+  - Rewrote `rangeTilesFor` inside `defense.ts` to calculate Chebyshev disk boundaries extending symmetrically from the entire rotated outline of multi-tile items rather than just their bottom-left anchor cells, while explicitly excluding any interior footprint tiles.
+  - Wired up footprint and active rotation calculations in `drawRangeOverlay` (`RoomEditorScene.ts`) and `drawDefenseViewOverlay` (`RoomScene.ts`) to cleanly project dynamic, orientation-aware range overlays for multi-tile turrets and traps.
+- **Dynamic 3D Wall Snapping (Clipping Prevention)**:
+  - Modified `updateIsometricPosition` in `FurnitureSprite.ts` to apply custom visual screen offsets (`+2px` or `-2px` along `x`, `+4px` along `y`) whenever placed or moved adjacent to the visually active 3D back-wall bulkheads.
+  - The offset snaps items flush with beveled wall panels based on the active grid rotation step, preventing visual clipping artifacts.
+- **GPU-Accelerated Breathing Neon Grid & Cybernetic Particles**:
+  - Implemented a smooth, GPU-accelerated breathing tween using Phaser's `Sine.easeInOut` to animate the neon wireframe floor grid alpha between `0.5` and `0.95` inside Edit Mode.
+  - Syncs grid and visual particle tints dynamically to match the player's active `wallColor` preset, triggering procedurally colored circle particle bursts on successful relocations.
+
+### Fixed
+- **Relocation Coordinate Snapping & Validation**: Intercepted placement requests in `GameBridge.tsx` when a relocate action is active. Ensured the relocator successfully permits moving an item back onto its own original tile by introducing an `isOriginalSpot` bypass in Phaser's client-side validation (`isPlaceableFor`).
+
+## [0.25.3] — 2026-05-29 — Bedroom Visuals, Direct Interaction & Blueprint Overhaul
+
+### Fixed
+- **Direct Right-Click Selecting & Scrapping**: Disabled standard browser context menus on the Phaser canvas. Handled right-clicks (`pointer.rightButtonDown() || pointer.button === 2`) in both `RoomScene.ts` and `RoomEditorScene.ts` to instantly open context menus at the mouse pointer's coordinates for any clicked item, bypassing player pathfinding and grid-walkability boundaries. This allows players to immediately scrap/recycle out-of-bounds beds stuck at `(9,2)`.
+- **Chrome Context Menu Global Override**: Added `onContextMenu={(e) => e.preventDefault()}` on the parent React `<GameCanvas />` container in `GameCanvas.tsx`. This intercepts and blocks Chrome's native right-click menu globally across the entire game screen, ensuring right-clicks are processed exclusively and smoothly by Phaser.
+- **Full-Time View & Edit Mode Recycling**: Removed the `mode === 'edit'` restriction from the `canRemove` flag in `ContextMenu.tsx`. This allows players to directly Recycle/Scrap or Rotate placed items in both View Mode and Edit Mode at all times, preventing UX confusion and bypassing any mode transition state resets.
+- **Phaser Editor Ghost Cancellation**: Right-clicking in Edit Mode now cancels any active blueprint placement ghost sprite and clears range overlays.
+- **Parallel Scene Camera & Rotated Grid Sync**: Synchronized the two parallel scenes (`RoomScene` and `RoomEditorScene`) by creating an `update()` loop in `RoomEditorScene.ts` that copies the `scrollX`, `scrollY`, and `zoom` camera values from `RoomScene` at every frame. Additionally, captured the `'grid-rotated'` EventBus event to redraw the green wireframe grid (`drawEditorGrid`) in `RoomEditorScene` using the active rotation state and offsets. This permanently eliminates the grid-layer and overlay misalignment during pan, zoom, and rotation, preventing players from placing items outside grid boundaries.
+
+### Added
+- **Volumetric 3D Cyberpunk Walls**: Overhauled the flat 2D lines inside the bedroom into procedural 3D isometric metallic wall panels (64px high) rendered on the back corner edges (North/West etc. based on active rotation) to avoid blocking visibility. Features beveled bulkheads, vertical panel seams, dynamic isometric lighting (lighter/darker slate panels), and a thick glowing neon cyber-conduit border.
+- **Custom Modular Entry Inserts**:
+  - **Doors**: Renders glowing neon orange slide-door frames, hazard warning stripes, and active indicator lights.
+  - **Windows**: Renders glowing semi-transparent cyan viewports (`alpha = 0.3`) containing cyan laser security grids.
+  - **Vents**: Renders dark ventilation duct grates backlit by active glowing neon orange duct lights.
+- **Glowing Front Laser Rails**: Renders sleek, low-profile floor-level glowing cyan laser border rail indicators on the front two boundaries (South/East etc.) to prevent obstructing player view.
+- **Ambient Blueprint Glow Particles**: Implemented a procedural glowing particle manager in `RoomScene.ts` that spawns drifting, glowing cyan/teal/blue micro-particles floating slowly upwards from the floor, simulating an active blueprint customizer atmosphere.
+- **Tactical Context Menu Styling**: Renamed `"Remove (50% refund)"` to `"Recycle (+50% Scrap)"` inside `ContextMenu.tsx` and polished the layout with an emerald-green glowing glassmorphic appearance.
+
+## [0.25.2] — 2026-05-29 — Room Defense Placement & Faction Boss Locks
+
+### Fixed
+- **Bedroom Defense Placement Bug**: Deduplicated the `sprite_key` collision between the standard EMP Mine and Circuit's EMP Mine in `seed.sql`, mapping Circuit's boss reward version to a unique `'trap_circuit_emp_mine'` key. This permanently resolves the `PGRST116` database error (multiple rows returned on single-row query) that caused client-side placement failures with "Item not found" toasts.
+- **Phaser Asset Registrations**: Added missing catalog and guard asset registrations (`turret_power_node`, `guard_drone`, `guard_dog`, `guard_decoy`, `trap_circuit_emp_mine`) in `BootScene.ts`, ensuring that unlocks load aesthetic volumetric textures correctly instead of throwing asset errors.
+
+### Added
+- **Boss Clear State Hydration**: Expanded Next.js Server Components in `layout.tsx` to authoritatively query player boss victory records in the `boss_clears` table and propagate the results as `clearedBosses: string[]` down into the client's global Zustand `usePlayerStore`.
+- **Cyberpunk Shop Padlocks & Descriptions**: Extended the bedroom shop editor (`ItemPanel.tsx`) to show glowing red target padlocks and explicit descriptive tooltips (e.g., `Defeat Circuit to unlock`) for boss-locked catalog items.
+- **Server Action Boss Validation**: Hardened the `buyAndPlaceFurniture` Server Action inside `actions.ts` to query `boss_clears` and block placement attempts of boss reward items unless the player has securely completed the corresponding boss raid.
+
+## [0.25.1] — 2026-05-28 — Runtime Polishing & Build Resolution
+
+### Fixed
+- **Next.js Turbopack RSC Compilation Conflict**: Added `"use client";` boundary directive to `StoreInitializer.tsx`, resolving server-component compilation failures under Next.js Turbopack and ensuring 100% build-time compilation.
+- **React Hydration / Multi-Render State Warning**: Refactored the client-side Zustand store hydration logic in `StoreInitializer.tsx` from the inline render cycle into standard React `useEffect()` hooks, permanently eliminating React 19's "Cannot update a component while rendering a different component" console warning.
+- **Database Schema Syncing**: Applied pending local migrations (00024 through 00029) to the remote Supabase database instance using `supabase db push`. This synchronized the physical tables and resolved the missing `room_size_tier` column mismatch that triggered Next.js server-side `roomError` on `page.tsx`.
+
+## [0.25.0] — 2026-05-28 — Milestone 10F: High-Fidelity 3D Volumetric Procedural Asset Overhaul
+
+### Added
+- **Procedural 3D Sub-Block Assemblies**:
+  - Replaced the simple flat geometric block fills and flat vector drawing lines with actual, multi-layered 3D isometric sub-block assemblies using a new `drawVolumetricSubBlock` pipeline in `BootScene.ts`.
+  - **Furniture Assets**: Twin Bed (wooden frame, headboard, footboard, raised mattress, blanket layer, volumetric neon pillow), Wooden Desk (four independent leg posts, wood top slab, drawer unit cabinet, standing monitor, keyboard), Office Chair (star base spokes, riser, seat cushion, back bar, backrest), Metal Shelf (four corner poles, shelf plates, box, toolboxes, glowing canisters), TV Flatscreen (media console, compartment, deck receiver, TV neck, screen panel), Dresser (chest, three inset drawer panels), folding tables, potted plants (pot, soil, stem, layered voxel leaf sheets), floor lamps (base, vertical pole, glowing yellow lamp shade dome).
+  - **Defense/Barricades**: Flipped Bookshelf (backboard, vertical shelves, spilled tilted books), Flipped Table (tabletop shield, horizontal legs), Sandbags (three overlapping canvas bag blocks).
+  - **Turrets**: Pyramidal steel armor bases, swivel collars, gun housings, twin volumetric barrels, capacitor coils, brass taser spikes, copper rings, energy core top spheres.
+  - **Entities/Stashes**: Hovering central body sphere, horizontal quadcopter struts, spinning rotor discs, golden vault chest with titanium straps.
+
+## [0.24.0] — 2026-05-28 — Milestone 10E: Volumetric Isometric Voxel/Pixel Art Upgrade
+
+### Added
+- **True 3D Isometric Rotations (No 2D Angle Hacks)**:
+  - Preloaded and cached **4 distinct directional textures** (`_dir_0` through `_dir_3`) in `BootScene.ts` for all 30+ items in the catalog (furniture, traps, turrets, barricades, entities, stashes).
+  - Designed local unit-basis coordinate projections (`getPoint(u, v)`) mapped dynamically to rotated dimensions, ensuring details like bed pillows, keyboards, taser coils, and sandbags rotate correctly around the vertical Z-axis.
+  - Swaps textures in `FurnitureSprite.ts` via `setTexture` upon rotating, correcting the 2.5D visual perspective and maintaining perfect alignment with floor tiles.
+- **Volumetric Lighting & Bevel Rendering**:
+  - Implemented multi-stop shaded gradients on Top, Left, and Right faces inside `generateIsoBlock` to simulate overhead and side lighting.
+  - Rendered high-contrast white rim bevel highlights on top edges and dark seams on bottom corners for premium voxel-like dimension.
+- **Contact Ground Shadows (Ambient Occlusion)**:
+  - Programmed semi-transparent dark base shadows drawn directly on the floor below placed items, visually anchoring assets in the room.
+- **Polished Cyberpunk Details & Creases**:
+  - Added wood grain bands to desks/dressers, glowing monitor/keyboard panels, rounded cozy curved bedding fabric using bezier lines, electrical copper coils, metallic spikes, hazard warning lines, and realistic Sandbag meshes.
+
+### Fixed
+- **NextJS/TypeScript Build Conflict**:
+  - Restricted `"include"` paths in `tsconfig.json` to `src/**/*.ts*`, permanently preventing Next's TS typechecker from scanning `.ts` imports in Deno Edge Functions under `supabase/`. Enabled a 100% clean production build compile.
+
+## [0.23.0] — 2026-05-28 — Milestone 4L: Player Level-Up Polish & Unit Test Solidification
+
+### Added
+- **TypeScript-Native Progression Unit Tests (`tests/game/progression.test.ts`)**:
+  - Implemented 9 rigorous, TypeScript-native unit tests using Vitest to thoroughly verify the math, boundaries, and logic of `xpForLevel`, `levelForXp`, and `levelProgress` helper functions.
+  - Asserted exact cumulative XP requirements at core progression landmarks (e.g. L2: 100 XP, L5: 1000 XP, L20: 19000 XP, L100: 495000 XP).
+  - Validated boundary clamping logic (levels bounded between `1` and `MAX_PLAYER_LEVEL` (100)).
+  - Confirmed accurate fractional leveling progress calculation and remaining XP reporting for in-between level states.
+
+### Changed
+- **Ledger Alignment**: Checked off and resolved the duplication/partial discrepancy of Task 4.0.13 in `docs/tasks.md`. Fully aligned all phase entries to reflect 100% completion of the premium player level-up progression overlay, milestones tracking, and Sentry telemetry integrations.
+- Bumped application version to `0.23.0`.
+
+## [0.22.0] — 2026-05-28 — Milestone 10D: Complete Defense-Cost and Plundering Balance Pass
+
+### Added
+- **Boss Unique Item Extensions**: Added `trap_bear_trap`, `trap_ghost_wire` and `turret_autocannon_mk2` to static client stats maps (`TrapSystem.ts`, `DefenseAI.ts`) and Deno server-side Edge Function maps (`replaySystems.ts`) for full offline and chronological replay validation coverage. Updated `trap_ghost_wire` to feature an 8 Chebyshev alert radius and 3 uses.
+
+### Changed
+- **Comprehensive Database Catalog Balance Pass (`supabase/seed.sql`)**:
+  - Reduced starting trap and turret Component costs to match starting player resources (200 Scrap, 50 Components). Pressure Plate component cost reduced from `10` to `2` components; Spike Strip from `8` to `3`; Shock Pad from `20` to `6`; Glue Trap from `12` to `4`; Tripwire from `5` to `2`. Nail Gun Turret component cost went from `25` to `15` and Taser Turret from `30` to `18` components.
+  - Balanced cost-to-HP ratios for basic barricades: Flipped Table (30 HP) -> 10 Scrap; Bookshelf (50 HP) -> 20 Scrap; Sandbags (75 HP) -> 35 Scrap.
+  - Re-scaled all advanced and boss defenses to serve as robust mid-to-late game progression sinks.
+- Bumped application version to `0.22.0`.
+
+## [0.21.0] — 2026-05-28 — Milestone 10C: Performance: Viewport-Based Tile Culling
+
+### Added
+- **Dynamic Viewport-Based Tile & Furniture Culling**:
+  - Implemented an efficient grid and object culling algorithm in `RoomScene.ts` and `RaidScene.ts` utilizing `Phaser.Cameras.Scene2D.Camera.worldView`.
+  - Hides (`visible = false`) floor tiles and placed furniture/defense sprites falling outside the active camera bounds, successfully reducing Phaser rendering draw calls and vertex processing.
+  - Implemented high-performance culling throttling by cache-checking camera `scrollX`, `scrollY`, and `zoom` properties. Avoids running bounding calculations on static viewports, ensuring 0ms static overhead.
+  - Added a `128px` margin buffer padding around the viewport edges to completely eliminate visual pop-in or clipping.
+
+### Changed
+- Bumped application version to `0.21.0`.
+
+## [0.20.0] — 2026-05-28 — Milestone 10B: Expanded Core Game Unit Tests
+
+### Added
+- **Expanded Game Systems Unit Tests (`tests/game/`)**:
+  - Created `tests/game/CombatSystem.test.ts` verifying HP tracking, positive/negative/non-finite damage bounds, death thresholds/kill events, healing permanence/limits, and placed indestructible vs destructible targets (barricades).
+  - Created `tests/game/TrapSystem.test.ts` testing trap registration, step-on triggers via EventBus, uses depletion, tripwire alarms, and active effects store upgrades (`trapDamageMult`, `trapUsesBonus`, `trapStunBonus`).
+  - Created `tests/game/DefenseAI.test.ts` testing turret registration, Chebyshev acquisition ranges, firing tickers/cooldowns, ammunition exhaustion, tripwire alert range boosts, and upgrades/penalties (`turretAmmoMult`, `turretRangeBonus`, `sector_blackout`, `turret_malfunction`).
+  - Created `tests/game/BossAI.test.ts` testing phase shift triggers (HP ratios), enrage/lockdown/minions/self-heal events, special ability ranges/cooldowns, basic attacks, and GridSystem-based movement AI.
+
+### Changed
+- Bumped application version to `0.20.0`.
+
 ## [0.19.0] — 2026-05-28 — Milestone 10A: Automated E2E and Unit Testing Foundations
 
 ### Added

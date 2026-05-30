@@ -38,6 +38,7 @@ const TRAPS: readonly SpriteDescriptor[] = [
   ['trap_emp_mine',        1, 1,  5, 0x2980b9],
   ['trap_bear_trap',       1, 1,  6, 0xef4444],
   ['trap_ghost_wire',      1, 1,  4, 0x10b981],
+  ['trap_circuit_emp_mine', 1, 1,  5, 0x06b6d4],
 ];
 
 const TURRETS: readonly SpriteDescriptor[] = [
@@ -47,6 +48,7 @@ const TURRETS: readonly SpriteDescriptor[] = [
   ['turret_autocannon', 2, 2, 64, 0x2c3e50],
   ['turret_shotgun',    1, 1, 44, 0xd35400],
   ['turret_autocannon_mk2', 2, 2, 64, 0x3b82f6],
+  ['turret_power_node', 1, 1, 40, 0x3b82f6],
 ];
 
 const BARRICADES: readonly SpriteDescriptor[] = [
@@ -57,6 +59,9 @@ const BARRICADES: readonly SpriteDescriptor[] = [
 
 const ENTITIES: readonly SpriteDescriptor[] = [
   ['entity_drone', 1, 1, 40, 0xf1c40f],
+  ['guard_drone',  1, 1, 40, 0xf1c40f],
+  ['guard_dog',    1, 1, 30, 0x9a3412],
+  ['guard_decoy',  1, 1, 32, 0xa855f7],
   ['boss_ironjaw', 1, 1, 56, 0xef4444],
   ['boss_whisper', 1, 1, 48, 0x10b981],
   ['boss_volkov',  1, 1, 52, 0x3b82f6],
@@ -97,7 +102,12 @@ export class BootScene extends Phaser.Scene {
     // Entry-point textures are room-structure markers (not catalog items).
     for (const group of [FURNITURE, TRAPS, TURRETS, BARRICADES, ENTITIES, ENTRY_POINTS, STASH]) {
       for (const [key, w, h, heightPx, color] of group) {
-        this.generateIsoBlock(key, w, h, heightPx, color);
+        // Generate base key as direction 0
+        this.generateIsoBlock(key, w, h, heightPx, color, 0);
+        // Generate all four direction keys
+        for (let dir = 0; dir < 4; dir++) {
+          this.generateIsoBlock(`${key}_dir_${dir}`, w, h, heightPx, color, dir);
+        }
       }
     }
   }
@@ -270,26 +280,30 @@ export class BootScene extends Phaser.Scene {
     widthTiles: number,
     depthTiles: number,
     heightPixels: number,
-    color: number
+    color: number,
+    dir: number = 0
   ): void {
     const graphics = this.make.graphics();
     const TILE_W = 64;
     const TILE_H = 32;
 
-    const shiftX = depthTiles * (TILE_W / 2);
+    const wTiles = (dir % 2 === 1) ? depthTiles : widthTiles;
+    const dTiles = (dir % 2 === 1) ? widthTiles : depthTiles;
+
+    const shiftX = dTiles * (TILE_W / 2);
 
     const ptTop = { x: shiftX, y: 0 };
     const ptRight = {
-      x: shiftX + widthTiles * (TILE_W / 2),
-      y: widthTiles * (TILE_H / 2)
+      x: shiftX + wTiles * (TILE_W / 2),
+      y: wTiles * (TILE_H / 2)
     };
     const ptBottom = {
-      x: shiftX + (widthTiles - depthTiles) * (TILE_W / 2),
-      y: (widthTiles + depthTiles) * (TILE_H / 2)
+      x: shiftX + (wTiles - dTiles) * (TILE_W / 2),
+      y: (wTiles + dTiles) * (TILE_H / 2)
     };
     const ptLeft = {
-      x: shiftX - depthTiles * (TILE_W / 2),
-      y: depthTiles * (TILE_H / 2)
+      x: shiftX - dTiles * (TILE_W / 2),
+      y: dTiles * (TILE_H / 2)
     };
 
     const centerX = (ptTop.x + ptBottom.x) / 2;
@@ -302,15 +316,20 @@ export class BootScene extends Phaser.Scene {
       return (r << 16) | (g << 8) | b;
     };
 
-    // Calculate vibrant neon glow color
+    const lighten = (c: number, f: number) => {
+      const r = Math.min(255, Math.floor(((c >> 16) & 0xff) * f));
+      const g = Math.min(255, Math.floor(((c >> 8) & 0xff) * f));
+      const b = Math.min(255, Math.floor((c & 0xff) * f));
+      return (r << 16) | (g << 8) | b;
+    };
+
     const getNeonGlowColor = (baseColor: number) => {
       const r = (baseColor >> 16) & 0xff;
       const g = (baseColor >> 8) & 0xff;
       const b = baseColor & 0xff;
       const maxVal = Math.max(r, g, b);
-      if (maxVal === 0) return 0x00ffff; // default cyan
+      if (maxVal === 0) return 0x00ffff;
       const factor = 255 / maxVal;
-      // Boost brightness to make it stand out as a neon glow source
       const nr = Math.min(255, Math.floor(r * factor * 1.3));
       const ng = Math.min(255, Math.floor(g * factor * 1.3));
       const nb = Math.min(255, Math.floor(b * factor * 1.3));
@@ -318,699 +337,572 @@ export class BootScene extends Phaser.Scene {
     };
 
     const neonColor = getNeonGlowColor(color);
-    
-    // Core Cyberpunk styling based on block type key prefix
+
     const isFurniture = key.startsWith('furniture');
     const isTrap = key.startsWith('trap');
     const isTurret = key.startsWith('turret');
     const isBarricade = key.startsWith('barricade');
-    const isEntity = key.startsWith('entity') || key === 'loot_stash';
+    const isEntity = key.startsWith('entity') || key.startsWith('boss') || key === 'loot_stash';
 
-    // Base colors
-    const colorTop = color;
-    const colorRight = darken(color, 0.8);
-    const colorLeft = darken(color, 0.6);
+    // Unit-coordinate projection helper (True Rotations around Z-axis)
+    const getPoint = (uOrig: number, vOrig: number) => {
+      let u = uOrig;
+      let v = vOrig;
+      if (dir === 1) {
+        u = 1 - vOrig;
+        v = uOrig;
+      } else if (dir === 2) {
+        u = 1 - uOrig;
+        v = 1 - vOrig;
+      } else if (dir === 3) {
+        u = vOrig;
+        v = 1 - uOrig;
+      }
+      return {
+        x: ptTop.x + (ptRight.x - ptTop.x) * u + (ptLeft.x - ptTop.x) * v,
+        y: ptTop.y + (ptRight.y - ptTop.y) * u + (ptLeft.y - ptTop.y) * v
+      };
+    };
 
-    // 1. TOP FACE FILL
-    graphics.fillStyle(colorTop, 1);
+    // Soft Ambient Occlusion Contact Floor Shadow
+    graphics.fillStyle(0x000000, 0.22);
     graphics.beginPath();
-    graphics.moveTo(ptTop.x, ptTop.y);
-    graphics.lineTo(ptRight.x, ptRight.y);
-    graphics.lineTo(ptBottom.x, ptBottom.y);
-    graphics.lineTo(ptLeft.x, ptLeft.y);
+    graphics.moveTo(ptTop.x, ptTop.y + heightPixels);
+    graphics.lineTo(ptRight.x + 3, ptRight.y + heightPixels + 1.5);
+    graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels + 3);
+    graphics.lineTo(ptLeft.x - 3, ptLeft.y + heightPixels + 1.5);
     graphics.closePath();
     graphics.fillPath();
 
-    // Draw dark structural outlines for the face
-    graphics.lineStyle(1.5, darken(color, 0.35), 0.7);
-    graphics.strokePath();
+    // 3D Volumetric Sub-Block Drawer (Draws elements block-by-block with correct depth and coordinates)
+    const drawVolumetricSubBlock = (
+      uStart: number,
+      vStart: number,
+      zStart: number,
+      uSize: number,
+      vSize: number,
+      zSize: number,
+      baseColor: number,
+      options: {
+        wood?: boolean;
+        fabric?: boolean;
+        neon?: boolean;
+        screen?: boolean;
+        drawers?: boolean;
+        metalGrid?: boolean;
+        sandbag?: boolean;
+        panel?: boolean;
+        alpha?: number;
+      } = {}
+    ) => {
+      const alphaVal = options.alpha !== undefined ? options.alpha : 1;
+      const subColorTop = options.screen ? baseColor : lighten(baseColor, 1.05);
+      const subColorRight = darken(baseColor, 0.7);
+      const subColorLeft = darken(baseColor, 0.55);
 
-    // 2. TECH GRAPHICS / DETAILED TEXTURES ON TOP FACE
-    if (isFurniture) {
-      if (key === 'furniture_bed_twin') {
-        // Draw wood frame border
-        graphics.lineStyle(2, 0x3d2b1f, 1);
-        graphics.beginPath();
-        graphics.moveTo(ptTop.x, ptTop.y);
-        graphics.lineTo(ptRight.x, ptRight.y);
-        graphics.lineTo(ptBottom.x, ptBottom.y);
-        graphics.lineTo(ptLeft.x, ptLeft.y);
-        graphics.closePath();
-        graphics.strokePath();
+      const pt = (u: number, v: number, z: number) => {
+        const pTop = getPoint(u, v);
+        return {
+          x: pTop.x,
+          y: pTop.y + (heightPixels - z)
+        };
+      };
 
-        // Draw mattress (inset off-white polygon)
-        graphics.fillStyle(0xdddddd, 1);
-        graphics.beginPath();
-        graphics.moveTo(ptTop.x * 0.9 + ptBottom.x * 0.1, ptTop.y * 0.9 + ptBottom.y * 0.1);
-        graphics.lineTo(ptRight.x * 0.9 + ptLeft.x * 0.1, ptRight.y * 0.9 + ptLeft.y * 0.1);
-        graphics.lineTo(ptBottom.x * 0.95 + ptTop.x * 0.05, ptBottom.y * 0.95 + ptTop.y * 0.05);
-        graphics.lineTo(ptLeft.x * 0.9 + ptRight.x * 0.1, ptLeft.y * 0.9 + ptRight.y * 0.1);
-        graphics.closePath();
-        graphics.fillPath();
+      const zEnd = zStart + zSize;
 
-        // Draw pillow
-        graphics.fillStyle(0x06b6d4, 1);
-        graphics.beginPath();
-        graphics.moveTo(ptTop.x * 0.75 + ptBottom.x * 0.25, ptTop.y * 0.75 + ptBottom.y * 0.25);
-        graphics.lineTo(ptRight.x * 0.75 + ptLeft.x * 0.25, ptRight.y * 0.75 + ptLeft.y * 0.25);
-        graphics.lineTo(ptRight.x * 0.5 + ptLeft.x * 0.5, ptRight.y * 0.5 + ptLeft.y * 0.5);
-        graphics.lineTo(ptTop.x * 0.5 + ptBottom.x * 0.5, ptTop.y * 0.5 + ptBottom.y * 0.5);
-        graphics.closePath();
-        graphics.fillPath();
+      const pt0 = pt(uStart, vStart, zEnd);
+      const pt1 = pt(uStart + uSize, vStart, zEnd);
+      const pt2 = pt(uStart + uSize, vStart + vSize, zEnd);
+      const pt3 = pt(uStart, vStart + vSize, zEnd);
 
-        // Draw blanket cover (cyan)
-        graphics.fillStyle(0x0891b2, 0.85);
-        graphics.beginPath();
-        graphics.moveTo(ptTop.x * 0.4 + ptBottom.x * 0.6, ptTop.y * 0.4 + ptBottom.y * 0.6);
-        graphics.lineTo(ptRight.x * 0.4 + ptLeft.x * 0.6, ptRight.y * 0.4 + ptLeft.y * 0.6);
-        graphics.lineTo(ptBottom.x * 0.95, ptBottom.y * 0.95);
-        graphics.lineTo(ptLeft.x * 0.9 + ptRight.x * 0.1, ptLeft.y * 0.9 + ptRight.y * 0.1);
-        graphics.closePath();
-        graphics.fillPath();
-      } 
-      else if (key === 'furniture_desk_wooden' || key === 'furniture_table_folding') {
-        // Draw wood planks
-        graphics.lineStyle(1, 0x4a3b32, 0.8);
-        for (let f = 0.25; f <= 0.75; f += 0.25) {
-          graphics.beginPath();
-          graphics.moveTo(ptTop.x + (ptLeft.x - ptTop.x) * f, ptTop.y + (ptLeft.y - ptTop.y) * f);
-          graphics.lineTo(ptRight.x + (ptBottom.x - ptRight.x) * f, ptRight.y + (ptBottom.y - ptRight.y) * f);
-          graphics.strokePath();
-        }
-        
-        if (key === 'furniture_desk_wooden') {
-          // Draw a glowing keyboard/laptop in the center
-          graphics.fillStyle(0x00ffff, 0.9);
-          graphics.fillRect(centerX - 8, centerY - 4, 16, 8);
-          graphics.lineStyle(1.5, 0xffffff, 0.9);
-          graphics.strokeRect(centerX - 8, centerY - 4, 16, 8);
-        }
-      }
-      else if (key === 'furniture_chair_office') {
-        // Draw steel pole and star base
-        graphics.lineStyle(2, 0xbababa, 1);
-        graphics.beginPath();
-        graphics.moveTo(centerX, centerY);
-        graphics.lineTo(centerX, centerY + 12);
-        graphics.strokePath();
+      const pt0B = pt(uStart, vStart, zStart);
+      const pt1B = pt(uStart + uSize, vStart, zStart);
+      const pt2B = pt(uStart + uSize, vStart + vSize, zStart);
+      const pt3B = pt(uStart, vStart + vSize, zStart);
 
-        // Draw star spokes
-        graphics.lineStyle(1.5, 0x333333, 1);
-        for (let i = 0; i < 5; i++) {
-          const angle = (i * Math.PI * 2) / 5;
-          graphics.beginPath();
-          graphics.moveTo(centerX, centerY + 12);
-          graphics.lineTo(centerX + Math.cos(angle) * 8, centerY + 12 + Math.sin(angle) * 4);
-          graphics.strokePath();
-        }
-
-        // Draw seat back cushion
-        graphics.fillStyle(0x374151, 1);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY - 6, 8, 0, Math.PI * 2);
-        graphics.fillPath();
-
-        // Draw backrest
-        graphics.fillStyle(0x1f2937, 1);
-        graphics.fillRect(centerX - 4, centerY - 18, 8, 12);
-      }
-      else if (key === 'furniture_dresser_wooden') {
-        // Dresser dividers and details
-        graphics.lineStyle(2, 0x3d2b1f, 1);
-        graphics.beginPath();
-        graphics.moveTo(ptTop.x, ptTop.y);
-        graphics.lineTo(ptRight.x, ptRight.y);
-        graphics.lineTo(ptBottom.x, ptBottom.y);
-        graphics.lineTo(ptLeft.x, ptLeft.y);
-        graphics.closePath();
-        graphics.strokePath();
-      }
-      else if (key === 'furniture_tv_flatscreen') {
-        // Draw flat TV display bezel
-        graphics.fillStyle(0x111827, 1);
-        graphics.fillRect(centerX - 24, centerY - 16, 48, 24);
-        
-        // Glowing screen showing static matrix lines
-        graphics.fillStyle(0x8b5cf6, 0.8);
-        graphics.fillRect(centerX - 22, centerY - 14, 44, 20);
-        graphics.lineStyle(1.5, 0xa78bfa, 0.95);
-        graphics.strokeRect(centerX - 22, centerY - 14, 44, 20);
-
-        graphics.lineStyle(1, 0xd8b4fe, 0.4);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 22, centerY - 4);
-        graphics.lineTo(centerX + 22, centerY - 4);
-        graphics.moveTo(centerX - 10, centerY - 14);
-        graphics.lineTo(centerX - 10, centerY + 6);
-        graphics.strokePath();
-      }
-      else if (key === 'furniture_rug_area') {
-        // Glowing neon concentric rug outline diamonds
-        for (let i = 0.2; i <= 0.8; i += 0.2) {
-          graphics.lineStyle(1.5, neonColor, 0.8 - i * 0.5);
-          graphics.beginPath();
-          graphics.moveTo(ptTop.x * (1-i) + ptBottom.x * i, ptTop.y * (1-i) + ptBottom.y * i);
-          graphics.lineTo(ptRight.x * (1-i) + ptLeft.x * i, ptRight.y * (1-i) + ptLeft.y * i);
-          graphics.lineTo(ptBottom.x * (1-i) + ptTop.x * i, ptBottom.y * (1-i) + ptTop.y * i);
-          graphics.lineTo(ptLeft.x * (1-i) + ptRight.x * i, ptLeft.y * (1-i) + ptRight.y * i);
-          graphics.closePath();
-          graphics.strokePath();
-        }
-      }
-      else if (key === 'furniture_lamp_floor') {
-        // Draw soft lighting circle
-        graphics.fillStyle(0xfef08a, 0.35);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 24, 0, Math.PI * 2);
-        graphics.fillPath();
-
-        // Draw central stand and glowing base
-        graphics.fillStyle(0xfac20a, 0.9);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 5, 0, Math.PI * 2);
-        graphics.fillPath();
-      }
-      else if (key === 'furniture_plant_potted') {
-        // Draw terra-cotta pot
-        graphics.fillStyle(0xb45309, 1);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 6, 0, Math.PI * 2);
-        graphics.fillPath();
-
-        // Overlapping rich green leaves
-        graphics.fillStyle(0x15803d, 0.9);
-        graphics.beginPath();
-        graphics.arc(centerX - 4, centerY - 2, 5, 0, Math.PI * 2);
-        graphics.arc(centerX + 4, centerY - 3, 4, 0, Math.PI * 2);
-        graphics.arc(centerX, centerY - 6, 6, 0, Math.PI * 2);
-        graphics.fillPath();
-
-        graphics.fillStyle(0x22c55e, 1);
-        graphics.beginPath();
-        graphics.arc(centerX - 1, centerY - 3, 3, 0, Math.PI * 2);
-        graphics.fillPath();
-      }
-      else {
-        // Draw standard sleek grid divisions for base furniture
-        graphics.lineStyle(1, darken(color, 0.5), 0.25);
-        for (let f = 0.33; f <= 0.67; f += 0.33) {
-          graphics.beginPath();
-          graphics.moveTo(ptTop.x + (ptLeft.x - ptTop.x) * f, ptTop.y + (ptLeft.y - ptTop.y) * f);
-          graphics.lineTo(ptRight.x + (ptBottom.x - ptRight.x) * f, ptRight.y + (ptBottom.y - ptRight.y) * f);
-          graphics.strokePath();
-
-          graphics.beginPath();
-          graphics.moveTo(ptTop.x + (ptRight.x - ptTop.x) * f, ptTop.y + (ptRight.y - ptTop.y) * f);
-          graphics.lineTo(ptLeft.x + (ptBottom.x - ptLeft.x) * f, ptLeft.y + (ptBottom.y - ptLeft.y) * f);
-          graphics.strokePath();
-        }
-      }
-    } else if (isTrap) {
-      if (key === 'trap_pressure_plate') {
-        // concentric orange circles
-        graphics.lineStyle(2, 0xf97316, 0.95);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 8, 0, Math.PI * 2);
-        graphics.strokePath();
-        graphics.fillStyle(0xf97316, 0.5);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 4, 0, Math.PI * 2);
-        graphics.fillPath();
-      } 
-      else if (key === 'trap_spike_strip') {
-        // sharp steel spikes
-        graphics.fillStyle(0x9ca3af, 1);
-        graphics.lineStyle(1, 0x4b5563, 1);
-        for (let sx = -16; sx <= 16; sx += 8) {
-          for (let sy = -8; sy <= 8; sy += 4) {
-            graphics.beginPath();
-            graphics.moveTo(centerX + sx, centerY + sy);
-            graphics.lineTo(centerX + sx + 4, centerY + sy - 10);
-            graphics.lineTo(centerX + sx + 8, centerY + sy);
-            graphics.closePath();
-            graphics.fillPath();
-            graphics.strokePath();
-          }
-        }
-      }
-      else if (key === 'trap_shock_pad') {
-        // electrical shock wire spirals
-        graphics.lineStyle(1.5, 0x06b6d4, 1);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 12, 0, Math.PI * 2);
-        graphics.strokePath();
-
-        graphics.lineStyle(1, 0xffffff, 0.9);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 8, centerY - 8);
-        graphics.lineTo(centerX + 8, centerY + 8);
-        graphics.moveTo(centerX + 8, centerY - 8);
-        graphics.lineTo(centerX - 8, centerY + 8);
-        graphics.strokePath();
-      }
-      else if (key === 'trap_glue') {
-        // yellow gooey sludge puddle
-        graphics.fillStyle(0xf59e0b, 0.7);
-        graphics.fillEllipse(centerX, centerY, 36, 18);
-
-        // draw bubble circles inside
-        graphics.fillStyle(0xfef08a, 0.9);
-        graphics.beginPath();
-        graphics.arc(centerX - 4, centerY - 2, 2, 0, Math.PI * 2);
-        graphics.arc(centerX + 6, centerY + 2, 3, 0, Math.PI * 2);
-        graphics.fillPath();
-      }
-      else if (key === 'trap_tripwire_alarm') {
-        // draw small posts on side edges
-        graphics.fillStyle(0x374151, 1);
-        graphics.fillRect(ptLeft.x + 2, ptLeft.y - 12, 4, 12);
-        graphics.fillRect(ptRight.x - 6, ptRight.y - 12, 4, 12);
-
-        // red glowing tripwire laser
-        graphics.lineStyle(2.0, 0xef4444, 0.95);
-        graphics.beginPath();
-        graphics.moveTo(ptLeft.x + 4, ptLeft.y - 8);
-        graphics.lineTo(ptRight.x - 4, ptRight.y - 8);
-        graphics.strokePath();
-      }
-      else {
-        // Traps get diagonal warning lines (hazard strip style!)
-        graphics.lineStyle(2, neonColor, 0.4);
-        for (let f = 0.2; f <= 0.8; f += 0.2) {
-          graphics.beginPath();
-          graphics.moveTo(ptLeft.x + (ptTop.x - ptLeft.x) * f, ptLeft.y + (ptTop.y - ptLeft.y) * f);
-          graphics.lineTo(ptBottom.x + (ptRight.x - ptBottom.x) * f, ptBottom.y + (ptRight.y - ptBottom.y) * f);
-          graphics.strokePath();
-        }
-        
-        graphics.lineStyle(2, neonColor, 0.85);
-        graphics.beginPath();
-        graphics.moveTo(ptTop.x * 0.7 + ptBottom.x * 0.3, ptTop.y * 0.7 + ptBottom.y * 0.3);
-        graphics.lineTo(ptRight.x * 0.7 + ptLeft.x * 0.3, ptRight.y * 0.7 + ptLeft.y * 0.3);
-        graphics.lineTo(ptBottom.x * 0.7 + ptTop.x * 0.3, ptBottom.y * 0.7 + ptTop.y * 0.3);
-        graphics.lineTo(ptLeft.x * 0.7 + ptRight.x * 0.3, ptLeft.y * 0.7 + ptRight.y * 0.3);
-        graphics.closePath();
-        graphics.strokePath();
-      }
-    } else if (isTurret) {
-      // Swivel turret base
-      graphics.fillStyle(0x374151, 1);
-      graphics.fillEllipse(centerX, centerY, 24, 12);
-
-      if (key === 'turret_nailgun') {
-        // Draw dual barrels pointing forward
-        graphics.lineStyle(3, 0x4b5563, 1);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 3, centerY);
-        graphics.lineTo(centerX - 3, centerY - 18);
-        graphics.moveTo(centerX + 3, centerY);
-        graphics.lineTo(centerX + 3, centerY - 18);
-        graphics.strokePath();
-      }
-      else if (key === 'turret_taser') {
-        // Taser spikes emitting blue arcs
-        graphics.lineStyle(2, 0x06b6d4, 1);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 4, centerY);
-        graphics.lineTo(centerX - 6, centerY - 14);
-        graphics.moveTo(centerX + 4, centerY);
-        graphics.lineTo(centerX + 6, centerY - 14);
-        graphics.strokePath();
-
-        // blue arcs
-        graphics.lineStyle(1.5, 0xffffff, 0.9);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 6, centerY - 14);
-        graphics.lineTo(centerX, centerY - 20);
-        graphics.lineTo(centerX + 6, centerY - 14);
-        graphics.strokePath();
-      }
-      else if (key === 'turret_tesla') {
-        // tesla coil tower layers
-        graphics.fillStyle(0x4b5563, 1);
-        graphics.fillRect(centerX - 4, centerY - 20, 8, 20);
-
-        graphics.fillStyle(0x9ca3af, 1);
-        graphics.fillEllipse(centerX, centerY - 8, 20, 10);
-        graphics.fillEllipse(centerX, centerY - 16, 16, 8);
-
-        // Giant purple/pink sphere on top
-        graphics.fillStyle(0xa855f7, 0.95);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY - 24, 7, 0, Math.PI * 2);
-        graphics.fillPath();
-        graphics.lineStyle(1.5, 0xffffff, 0.9);
-        graphics.strokePath();
-      }
-      else if (key === 'turret_autocannon') {
-        // Massive double long barrels pointing out
-        graphics.lineStyle(4, 0x1f2937, 1);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 4, centerY);
-        graphics.lineTo(centerX - 6, centerY - 26);
-        graphics.moveTo(centerX + 4, centerY);
-        graphics.lineTo(centerX + 6, centerY - 26);
-        graphics.strokePath();
-        
-        // thick armor drum box
-        graphics.fillStyle(0x111827, 1);
-        graphics.fillRect(centerX - 8, centerY - 2, 16, 10);
-      }
-      else if (key === 'turret_shotgun') {
-        // Squat wide box with 3 small shotgun barrels spreading in a fan
-        graphics.lineStyle(2.5, 0x1f2937, 1);
-        graphics.beginPath();
-        graphics.moveTo(centerX, centerY);
-        graphics.lineTo(centerX, centerY - 16);
-        graphics.moveTo(centerX, centerY);
-        graphics.lineTo(centerX - 8, centerY - 14);
-        graphics.moveTo(centerX, centerY);
-        graphics.lineTo(centerX + 8, centerY - 14);
-        graphics.strokePath();
-      }
-      else {
-        // standard glowing energy core
-        graphics.fillStyle(neonColor, 0.9);
-        graphics.lineStyle(1.5, 0xffffff, 0.85);
-        graphics.beginPath();
-        graphics.arc(centerX, centerY, 6, 0, Math.PI * 2);
-        graphics.fillPath();
-        graphics.strokePath();
-      }
-    } else if (isEntity) {
-      if (key === 'entity_drone') {
-        // Quadcopter drone rotors
-        graphics.lineStyle(2, 0x9ca3af, 1);
-        graphics.beginPath();
-        graphics.moveTo(centerX - 10, centerY - 10);
-        graphics.lineTo(centerX + 10, centerY + 10);
-        graphics.moveTo(centerX + 10, centerY - 10);
-        graphics.lineTo(centerX - 10, centerY + 10);
-        graphics.strokePath();
-
-        // 4 small rotor circles
-        graphics.fillStyle(0x06b6d4, 0.8);
-        graphics.beginPath();
-        graphics.arc(centerX - 10, centerY - 10, 3, 0, Math.PI * 2);
-        graphics.arc(centerX + 10, centerY - 10, 3, 0, Math.PI * 2);
-        graphics.arc(centerX - 10, centerY + 10, 3, 0, Math.PI * 2);
-        graphics.arc(centerX + 10, centerY + 10, 3, 0, Math.PI * 2);
-        graphics.fillPath();
-      }
-      
-      // Drone or Stash: Draw beautiful glowing inner cores
-      graphics.fillStyle(0xffffff, 0.95);
-      graphics.lineStyle(1.5, neonColor, 0.9);
+      // 1. TOP FACE FILL
+      graphics.fillStyle(subColorTop, alphaVal);
       graphics.beginPath();
-      graphics.arc(centerX, centerY, 5, 0, Math.PI * 2);
-      graphics.fillPath();
-      graphics.strokePath();
-    }
-
-    if (heightPixels > 0) {
-      // 3. RIGHT FACE FILL & TECH BANDS
-      graphics.fillStyle(colorRight, 1);
-      graphics.beginPath();
-      graphics.moveTo(ptRight.x, ptRight.y);
-      graphics.lineTo(ptBottom.x, ptBottom.y);
-      graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels);
-      graphics.lineTo(ptRight.x, ptRight.y + heightPixels);
+      graphics.moveTo(pt0.x, pt0.y);
+      graphics.lineTo(pt1.x, pt1.y);
+      graphics.lineTo(pt2.x, pt2.y);
+      graphics.lineTo(pt3.x, pt3.y);
       graphics.closePath();
       graphics.fillPath();
 
-      graphics.lineStyle(1.5, darken(color, 0.45), 0.7);
-      graphics.strokePath();
-
-      // 4. LEFT FACE FILL & TECH BANDS
-      graphics.fillStyle(colorLeft, 1);
-      graphics.beginPath();
-      graphics.moveTo(ptLeft.x, ptLeft.y);
-      graphics.lineTo(ptBottom.x, ptBottom.y);
-      graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels);
-      graphics.lineTo(ptLeft.x, ptLeft.y + heightPixels);
-      graphics.closePath();
-      graphics.fillPath();
-
-      graphics.lineStyle(1.5, darken(color, 0.35), 0.7);
-      graphics.strokePath();
-
-      // Draw specialized side panel textures
-      if (isBarricade) {
-        if (key === 'barricade_bookshelf') {
-          // Draw fallen bookshelf with vertical partitions
-          graphics.lineStyle(2, 0x4a3b32, 1);
+      // Top face wood grains
+      if (options.wood) {
+        graphics.lineStyle(1.0, darken(baseColor, 0.65), 0.75 * alphaVal);
+        for (let f = 0.2; f <= 0.8; f += 0.25) {
+          const ws = pt(uStart, vStart + vSize * f, zEnd);
+          const we = pt(uStart + uSize, vStart + vSize * f, zEnd);
           graphics.beginPath();
-          graphics.moveTo(ptLeft.x, ptLeft.y);
-          graphics.lineTo(ptRight.x, ptRight.y);
-          graphics.strokePath();
-
-          // draw book colors inside right face
-          graphics.fillStyle(0xef4444, 0.95); // red book
-          graphics.fillRect(centerX - 12, centerY + 2, 4, 10);
-          graphics.fillStyle(0x3b82f6, 0.95); // blue book
-          graphics.fillRect(centerX - 6, centerY + 2, 4, 10);
-          graphics.fillStyle(0x10b981, 0.95); // green book
-          graphics.fillRect(centerX, centerY + 2, 4, 10);
-        }
-        else if (key === 'barricade_flipped_table') {
-          // Draw table face standing vertically, legs sticking out
-          graphics.lineStyle(3, 0x78350f, 1);
-          graphics.beginPath();
-          graphics.moveTo(centerX, centerY);
-          graphics.lineTo(centerX - 10, centerY - 14);
-          graphics.moveTo(centerX, centerY);
-          graphics.lineTo(centerX + 10, centerY - 14);
+          graphics.moveTo(ws.x, ws.y);
+          graphics.lineTo(we.x, we.y);
           graphics.strokePath();
         }
-        else if (key === 'barricade_sandbags') {
-          // overlapping rounded sandbags
-          graphics.fillStyle(0xd1d5db, 1);
-          graphics.lineStyle(1.5, 0x6b7280, 1);
-          
-          // Row 1 sandbags (bottom)
-          graphics.fillEllipse(centerX - 10, centerY + heightPixels - 6, 24, 12);
-          graphics.strokeEllipse(centerX - 10, centerY + heightPixels - 6, 24, 12);
-          graphics.fillEllipse(centerX + 10, centerY + heightPixels - 6, 24, 12);
-          graphics.strokeEllipse(centerX + 10, centerY + heightPixels - 6, 24, 12);
+      }
 
-          // Row 2 sandbags (top)
-          graphics.fillStyle(0x9ca3af, 1);
-          graphics.fillEllipse(centerX, centerY + 6, 28, 14);
-          graphics.strokeEllipse(centerX, centerY + 6, 28, 14);
+      // Top face neon styling
+      if (options.neon) {
+        graphics.lineStyle(1.5, neonColor, 0.85 * alphaVal);
+        graphics.beginPath();
+        graphics.moveTo(pt0.x, pt0.y);
+        graphics.lineTo(pt1.x, pt1.y);
+        graphics.lineTo(pt2.x, pt2.y);
+        graphics.lineTo(pt3.x, pt3.y);
+        graphics.closePath();
+        graphics.strokePath();
+      }
+
+      // Screen styling
+      if (options.screen) {
+        graphics.fillStyle(color, 0.8 * alphaVal);
+        const s0 = pt(uStart + uSize * 0.08, vStart + vSize * 0.08, zEnd);
+        const s1 = pt(uStart + uSize * 0.92, vStart + vSize * 0.08, zEnd);
+        const s2 = pt(uStart + uSize * 0.92, vStart + vSize * 0.92, zEnd);
+        const s3 = pt(uStart + uSize * 0.08, vStart + vSize * 0.92, zEnd);
+        graphics.beginPath();
+        graphics.moveTo(s0.x, s0.y);
+        graphics.lineTo(s1.x, s1.y);
+        graphics.lineTo(s2.x, s2.y);
+        graphics.lineTo(s3.x, s3.y);
+        graphics.closePath();
+        graphics.fillPath();
+
+        graphics.lineStyle(0.8, 0xffffff, 0.3 * alphaVal);
+        for (let yPos = s0.y + 2; yPos < s3.y - 1; yPos += 2) {
+          graphics.beginPath();
+          graphics.moveTo(s0.x, yPos);
+          graphics.lineTo(s1.x, yPos);
+          graphics.strokePath();
         }
-        else {
-          // Heavy horizontal slats
-          graphics.lineStyle(2, darken(color, 0.25), 0.7);
-          for (let offset = 0.2; offset <= 0.8; offset += 0.2) {
-            const hOffset = Math.floor(heightPixels * offset);
+      }
+
+      // 2. SIDE WALLS (if height > 0)
+      if (zSize > 0) {
+        // Right face
+        graphics.fillStyle(subColorRight, alphaVal);
+        graphics.beginPath();
+        graphics.moveTo(pt1.x, pt1.y);
+        graphics.lineTo(pt2.x, pt2.y);
+        graphics.lineTo(pt2B.x, pt2B.y);
+        graphics.lineTo(pt1B.x, pt1B.y);
+        graphics.closePath();
+        graphics.fillPath();
+
+        // Left face
+        graphics.fillStyle(subColorLeft, alphaVal);
+        graphics.beginPath();
+        graphics.moveTo(pt3.x, pt3.y);
+        graphics.lineTo(pt2.x, pt2.y);
+        graphics.lineTo(pt2B.x, pt2B.y);
+        graphics.lineTo(pt3B.x, pt3B.y);
+        graphics.closePath();
+        graphics.fillPath();
+
+        if (options.drawers) {
+          graphics.lineStyle(1.5, darken(baseColor, 0.45), 1.0 * alphaVal);
+          const handleColor = 0xfac20a;
+          for (let f = 0.33; f <= 0.67; f += 0.33) {
+            const h = zStart + zSize * f;
+            const lStart = pt(uStart, vStart + vSize, h);
+            const lEnd = pt(uStart + uSize, vStart + vSize, h);
             graphics.beginPath();
-            graphics.moveTo(ptRight.x, ptRight.y + hOffset);
-            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
+            graphics.moveTo(lStart.x, lStart.y);
+            graphics.lineTo(lEnd.x, lEnd.y);
             graphics.strokePath();
 
-            graphics.beginPath();
-            graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
-            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
-            graphics.strokePath();
-          }
-        }
-      } else if (isTurret) {
-        // Turrets get glowing heat-vent vertical lines
-        graphics.lineStyle(1.5, neonColor, 0.4);
-        for (let f = 0.25; f <= 0.75; f += 0.25) {
-          const rx = ptRight.x + (ptBottom.x - ptRight.x) * f;
-          const ry = ptRight.y + (ptBottom.y - ptRight.y) * f;
-          graphics.beginPath();
-          graphics.moveTo(rx, ry + 4);
-          graphics.lineTo(rx, ry + heightPixels - 4);
-          graphics.strokePath();
-
-          const lx = ptLeft.x + (ptBottom.x - ptLeft.x) * f;
-          const ly = ptLeft.y + (ptBottom.y - ptLeft.y) * f;
-          graphics.beginPath();
-          graphics.moveTo(lx, ly + 4);
-          graphics.lineTo(lx, ly + heightPixels - 4);
-          graphics.strokePath();
-        }
-      } else if (isFurniture) {
-        if (key === 'furniture_dresser_wooden') {
-          // Drawer horizontal panel lines on dresser sides
-          graphics.lineStyle(2.0, 0x3d2b1f, 1);
-          for (let offset = 0.33; offset <= 0.67; offset += 0.33) {
-            const hOffset = Math.floor(heightPixels * offset);
-            graphics.beginPath();
-            graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
-            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
-            graphics.strokePath();
-
-            // draw tiny handle dots (gold/cyan)
-            graphics.fillStyle(0xfac20a, 1);
-            const midX = (ptLeft.x + ptBottom.x) / 2;
-            const midY = (ptLeft.y + ptBottom.y) / 2 + hOffset - 4;
+            graphics.fillStyle(handleColor, alphaVal);
+            const midX = (lStart.x + lEnd.x) / 2;
+            const midY = (lStart.y + lEnd.y) / 2 - 2;
             graphics.beginPath();
             graphics.arc(midX, midY, 1.5, 0, Math.PI * 2);
             graphics.fillPath();
           }
         }
-        else if (key === 'furniture_shelf_metal') {
-          // Open steel grid framing lines
-          graphics.lineStyle(1.5, 0x4b5563, 0.85);
-          for (let offset = 0.25; offset <= 0.75; offset += 0.25) {
-            const hOffset = Math.floor(heightPixels * offset);
-            graphics.beginPath();
-            graphics.moveTo(ptLeft.x, ptLeft.y + hOffset);
-            graphics.lineTo(ptBottom.x, ptBottom.y + hOffset);
-            graphics.lineTo(ptRight.x, ptRight.y + hOffset);
-            graphics.strokePath();
-          }
-        }
-        else if (key.startsWith('furniture_custom_poster')) {
-          // Draw a carbon border frame around the vertical Left face
-          graphics.lineStyle(2.5, 0x1e293b, 1.0);
-          graphics.beginPath();
-          graphics.moveTo(ptLeft.x + 3, ptLeft.y + 2);
-          graphics.lineTo(ptBottom.x - 3, ptBottom.y + 2);
-          graphics.lineTo(ptBottom.x - 3, ptBottom.y + heightPixels - 2);
-          graphics.lineTo(ptLeft.x + 3, ptLeft.y + heightPixels - 2);
-          graphics.closePath();
-          graphics.strokePath();
-
-          // Draw a slightly smaller inner frame on Left face
-          graphics.fillStyle(0x0f172a, 0.9);
-          graphics.beginPath();
-          graphics.moveTo(ptLeft.x + 5, ptLeft.y + 3);
-          graphics.lineTo(ptBottom.x - 5, ptBottom.y + 3);
-          graphics.lineTo(ptBottom.x - 5, ptBottom.y + heightPixels - 3);
-          graphics.lineTo(ptLeft.x + 5, ptLeft.y + heightPixels - 3);
-          graphics.closePath();
-          graphics.fillPath();
-
-          // Draw the exact same borders on the Right face
-          graphics.lineStyle(2.5, darken(0x1e293b, 0.8), 1.0);
-          graphics.beginPath();
-          graphics.moveTo(ptRight.x - 3, ptRight.y + 2);
-          graphics.lineTo(ptBottom.x + 3, ptBottom.y + 2);
-          graphics.lineTo(ptBottom.x + 3, ptBottom.y + heightPixels - 2);
-          graphics.lineTo(ptRight.x - 3, ptRight.y + heightPixels - 2);
-          graphics.closePath();
-          graphics.strokePath();
-
-          graphics.fillStyle(darken(0x0f172a, 0.8), 0.9);
-          graphics.beginPath();
-          graphics.moveTo(ptRight.x - 5, ptRight.y + 3);
-          graphics.lineTo(ptBottom.x + 5, ptBottom.y + 3);
-          graphics.lineTo(ptBottom.x + 5, ptBottom.y + heightPixels - 3);
-          graphics.lineTo(ptRight.x - 5, ptRight.y + heightPixels - 3);
-          graphics.closePath();
-          graphics.fillPath();
-
-          // Render indicators inside both faces based on the moderation state
-          if (key === 'furniture_custom_poster') {
-            // Blueprint schematics (neon cyan grid or diamond)
-            graphics.lineStyle(1.0, 0x06b6d4, 0.7);
-            graphics.beginPath();
-            graphics.moveTo((ptLeft.x + ptBottom.x) / 2, (ptLeft.y + ptBottom.y) / 2 + 6);
-            graphics.lineTo(ptBottom.x - 10, (ptLeft.y + ptBottom.y) / 2 + heightPixels / 2);
-            graphics.lineTo((ptLeft.x + ptBottom.x) / 2, (ptLeft.y + ptBottom.y) / 2 + heightPixels - 6);
-            graphics.lineTo(ptLeft.x + 10, (ptLeft.y + ptBottom.y) / 2 + heightPixels / 2);
-            graphics.closePath();
-            graphics.strokePath();
-
-            graphics.lineStyle(1.0, darken(0x06b6d4, 0.8), 0.7);
-            graphics.beginPath();
-            graphics.moveTo((ptRight.x + ptBottom.x) / 2, (ptRight.y + ptBottom.y) / 2 + 6);
-            graphics.lineTo(ptBottom.x + 10, (ptRight.y + ptBottom.y) / 2 + heightPixels / 2);
-            graphics.lineTo((ptRight.x + ptBottom.x) / 2, (ptRight.y + ptBottom.y) / 2 + heightPixels - 6);
-            graphics.lineTo(ptRight.x - 10, (ptRight.y + ptBottom.y) / 2 + heightPixels / 2);
-            graphics.closePath();
-            graphics.strokePath();
-          } else if (key === 'furniture_custom_poster_pending') {
-            // Amber glowing warning/caution stripes
-            graphics.lineStyle(1.5, 0xf59e0b, 0.75);
-            for (let d = 8; d <= 24; d += 8) {
-              graphics.beginPath();
-              graphics.moveTo(ptLeft.x + d, ptLeft.y + 6);
-              graphics.lineTo(ptLeft.x + d + 3, ptLeft.y + heightPixels - 6);
-              graphics.strokePath();
-            }
-
-            graphics.lineStyle(1.5, darken(0xf59e0b, 0.8), 0.75);
-            for (let d = 8; d <= 24; d += 8) {
-              graphics.beginPath();
-              graphics.moveTo(ptRight.x - d, ptRight.y + 6);
-              graphics.lineTo(ptRight.x - d - 3, ptRight.y + heightPixels - 6);
-              graphics.strokePath();
-            }
-          } else if (key === 'furniture_custom_poster_rejected') {
-            // Red warning X symbol
-            graphics.lineStyle(2.0, 0xef4444, 0.9);
-            graphics.beginPath();
-            graphics.moveTo(ptLeft.x + 8, ptLeft.y + 6);
-            graphics.lineTo(ptBottom.x - 8, ptBottom.y + heightPixels - 6);
-            graphics.moveTo(ptBottom.x - 8, ptBottom.y + 6);
-            graphics.lineTo(ptLeft.x + 8, ptLeft.y + heightPixels - 6);
-            graphics.strokePath();
-
-            graphics.lineStyle(2.0, darken(0xef4444, 0.8), 0.9);
-            graphics.beginPath();
-            graphics.moveTo(ptRight.x - 8, ptRight.y + 6);
-            graphics.lineTo(ptBottom.x + 8, ptBottom.y + heightPixels - 6);
-            graphics.moveTo(ptBottom.x + 8, ptBottom.y + 6);
-            graphics.lineTo(ptRight.x - 8, ptRight.y + heightPixels - 6);
-            graphics.strokePath();
-          }
-        }
       }
-    }
 
-    // 5. GLOWING NEON HIGHLIGHT EDGES (AESTHETIC UPGRADE)
-    graphics.lineStyle(4, neonColor, 0.35); // outer thick glow
-    graphics.beginPath();
-    graphics.moveTo(ptTop.x, ptTop.y);
-    graphics.lineTo(ptRight.x, ptRight.y);
-    graphics.lineTo(ptBottom.x, ptBottom.y);
-    graphics.lineTo(ptLeft.x, ptLeft.y);
-    graphics.closePath();
-    graphics.strokePath();
-
-    if (heightPixels > 0) {
+      // Outlines / beveled seams
+      graphics.lineStyle(1.0, darken(baseColor, 0.35), 0.7 * alphaVal);
       graphics.beginPath();
-      graphics.moveTo(ptLeft.x, ptLeft.y + heightPixels);
-      graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels);
-      graphics.lineTo(ptRight.x, ptRight.y + heightPixels);
+      graphics.moveTo(pt0.x, pt0.y);
+      graphics.lineTo(pt1.x, pt1.y);
+      graphics.lineTo(pt2.x, pt2.y);
+      graphics.lineTo(pt3.x, pt3.y);
+      graphics.closePath();
       graphics.strokePath();
+
+      if (zSize > 0) {
+        graphics.beginPath();
+        graphics.moveTo(pt3.x, pt3.y);
+        graphics.lineTo(pt3B.x, pt3B.y);
+        graphics.moveTo(pt2.x, pt2.y);
+        graphics.lineTo(pt2B.x, pt2B.y);
+        graphics.moveTo(pt1.x, pt1.y);
+        graphics.lineTo(pt1B.x, pt1B.y);
+        graphics.strokePath();
+
+        graphics.beginPath();
+        graphics.moveTo(pt3B.x, pt3B.y);
+        graphics.lineTo(pt2B.x, pt2B.y);
+        graphics.lineTo(pt1B.x, pt1B.y);
+        graphics.strokePath();
+      }
+    };
+
+    let drawnCustomModel = false;
+
+    // A. PREMIUM VOLUMETRIC FURNITURE CUSTOM MODELS
+    if (key.startsWith('furniture_bed_twin')) {
+      // Wood frame bottom
+      drawVolumetricSubBlock(0, 0, 0, 1, 1, 6, 0x3d2b1f, { wood: true });
+      // Headboard
+      drawVolumetricSubBlock(0, 0, 0, 0.08, 1, 20, 0x271911, { wood: true });
+      // Footboard
+      drawVolumetricSubBlock(0.92, 0, 0, 0.08, 1, 12, 0x271911, { wood: true });
+      // Raised comfortable mattress
+      drawVolumetricSubBlock(0.08, 0.04, 6, 0.84, 0.92, 8, 0xe2e8f0);
+      // Textured cozy blanket sheet
+      drawVolumetricSubBlock(0.35, 0.04, 6.1, 0.57, 0.92, 8.2, 0x0891b2, { fabric: true });
+      // Folded sheet top border rim
+      drawVolumetricSubBlock(0.31, 0.04, 14.3, 0.04, 0.92, 0.2, 0xffffff);
+      // Soft volumetric neon cyber pillow
+      drawVolumetricSubBlock(0.12, 0.15, 14, 0.16, 0.7, 3, 0x06b6d4, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_desk_wooden')) {
+      // Volumetric leg support pillars
+      drawVolumetricSubBlock(0.05, 0.05, 0, 0.08, 0.08, heightPixels - 4, 0x271911);
+      drawVolumetricSubBlock(0.05, 0.87, 0, 0.08, 0.08, heightPixels - 4, 0x271911);
+      drawVolumetricSubBlock(0.87, 0.05, 0, 0.08, 0.08, heightPixels - 4, 0x271911);
+      drawVolumetricSubBlock(0.87, 0.87, 0, 0.08, 0.08, heightPixels - 4, 0x271911);
+      // Desktop slab
+      drawVolumetricSubBlock(0, 0, heightPixels - 4, 1, 1, 4, 0x5c4033, { wood: true });
+      // Side drawer cabinet unit
+      drawVolumetricSubBlock(0.6, 0.08, 0, 0.28, 0.84, heightPixels - 4, 0x3d2b1f, { drawers: true });
       
-      graphics.beginPath();
-      graphics.moveTo(ptBottom.x, ptBottom.y);
-      graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels);
-      graphics.strokePath();
+      // Volumetric stand-up terminal monitor
+      // base plate
+      drawVolumetricSubBlock(0.35, 0.35, heightPixels, 0.12, 0.12, 1, 0x1e293b);
+      // support neck
+      drawVolumetricSubBlock(0.4, 0.4, heightPixels + 1, 0.04, 0.04, 4, 0x0f172a);
+      // terminal screen
+      drawVolumetricSubBlock(0.2, 0.38, heightPixels + 5, 0.45, 0.06, 12, 0x0f172a, { screen: true });
+      // keyboard console
+      drawVolumetricSubBlock(0.3, 0.6, heightPixels, 0.28, 0.16, 1, 0x1e293b, { neon: true });
+
+      drawnCustomModel = true;
     }
+    else if (key.startsWith('furniture_chair_office')) {
+      // Spokes base
+      drawVolumetricSubBlock(0.3, 0.3, 0, 0.4, 0.4, 3, 0x111827);
+      // Lift pole
+      drawVolumetricSubBlock(0.44, 0.44, 3, 0.12, 0.12, 12, 0xbababa);
+      // Seat cushion
+      drawVolumetricSubBlock(0.15, 0.15, 15, 0.7, 0.7, 5, 0x374151, { fabric: true });
+      // Spine backing bar
+      drawVolumetricSubBlock(0.45, 0.05, 15, 0.1, 0.1, 16, 0x1f2937);
+      // Backrest
+      drawVolumetricSubBlock(0.2, 0.05, 27, 0.6, 0.1, 10, 0x374151, { fabric: true });
 
-    // Draw primary thin high-vibrancy glowing outline
-    graphics.lineStyle(1.5, neonColor, 1.0); // inner neon beam
-    graphics.beginPath();
-    graphics.moveTo(ptTop.x, ptTop.y);
-    graphics.lineTo(ptRight.x, ptRight.y);
-    graphics.lineTo(ptBottom.x, ptBottom.y);
-    graphics.lineTo(ptLeft.x, ptLeft.y);
-    graphics.closePath();
-    graphics.strokePath();
-
-    if (heightPixels > 0) {
-      graphics.beginPath();
-      graphics.moveTo(ptLeft.x, ptLeft.y + heightPixels);
-      graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels);
-      graphics.lineTo(ptRight.x, ptRight.y + heightPixels);
-      graphics.strokePath();
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_shelf_metal')) {
+      // Vertical framing pillars
+      drawVolumetricSubBlock(0.04, 0.04, 0, 0.06, 0.06, heightPixels, 0x4b5563);
+      drawVolumetricSubBlock(0.04, 0.9, 0, 0.06, 0.06, heightPixels, 0x4b5563);
+      drawVolumetricSubBlock(0.9, 0.04, 0, 0.06, 0.06, heightPixels, 0x4b5563);
+      drawVolumetricSubBlock(0.9, 0.9, 0, 0.06, 0.06, heightPixels, 0x4b5563);
       
-      graphics.beginPath();
-      graphics.moveTo(ptBottom.x, ptBottom.y);
-      graphics.lineTo(ptBottom.x, ptBottom.y + heightPixels);
-      graphics.strokePath();
+      const h1 = Math.floor(heightPixels * 0.2);
+      const h2 = Math.floor(heightPixels * 0.45);
+      const h3 = Math.floor(heightPixels * 0.7);
+      const h4 = heightPixels - 2;
+
+      // 4 metal wireframe shelves
+      drawVolumetricSubBlock(0.04, 0.04, h1, 0.92, 0.92, 2, 0x1e293b, { metalGrid: true });
+      drawVolumetricSubBlock(0.04, 0.04, h2, 0.92, 0.92, 2, 0x1e293b, { metalGrid: true });
+      drawVolumetricSubBlock(0.04, 0.04, h3, 0.92, 0.92, 2, 0x1e293b, { metalGrid: true });
+      drawVolumetricSubBlock(0.04, 0.04, h4, 0.92, 0.92, 2, 0x1e293b, { metalGrid: true });
+
+      // Loot canisters & boxes scattered on shelf tiers
+      drawVolumetricSubBlock(0.2, 0.2, h1 + 2, 0.35, 0.45, 10, 0xb45309, { wood: true });
+      drawVolumetricSubBlock(0.4, 0.1, h2 + 2, 0.3, 0.5, 6, 0xef4444);
+      drawVolumetricSubBlock(0.15, 0.3, h3 + 2, 0.25, 0.25, 12, 0x06b6d4, { neon: true });
+      drawVolumetricSubBlock(0.55, 0.3, h3 + 2, 0.25, 0.25, 12, 0x06b6d4, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_tv_flatscreen')) {
+      // Wooden media console table
+      drawVolumetricSubBlock(0, 0, 0, 1, 1, 12, 0x1e293b, { wood: true });
+      // Inner media compartment bay
+      drawVolumetricSubBlock(0.06, 0.06, 1, 0.88, 0.88, 10, 0x0f172a);
+      // Media player deck receiver
+      drawVolumetricSubBlock(0.25, 0.25, 1.5, 0.3, 0.4, 3, 0x334155, { neon: true });
+      // Volumetric monitor stand
+      drawVolumetricSubBlock(0.4, 0.4, 12, 0.2, 0.2, 1, 0x111827);
+      drawVolumetricSubBlock(0.47, 0.47, 13, 0.06, 0.06, 4, 0x111827);
+      // Volumetric flat TV screen
+      drawVolumetricSubBlock(0.15, 0.45, 17, 0.7, 0.1, 18, 0x111827, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_dresser_wooden')) {
+      // Wood frame cabinet box
+      drawVolumetricSubBlock(0, 0, 0, 1, 1, heightPixels, 0x5c4033, { wood: true });
+      // Three modular wood drawer compartments
+      const dH = Math.floor((heightPixels - 8) / 3);
+      drawVolumetricSubBlock(0.04, 0.04, 2, 0.92, 0.92, dH, 0x8b5a2b, { drawers: true });
+      drawVolumetricSubBlock(0.04, 0.04, 4 + dH, 0.92, 0.92, dH, 0x8b5a2b, { drawers: true });
+      drawVolumetricSubBlock(0.04, 0.04, 6 + dH * 2, 0.92, 0.92, dH, 0x8b5a2b, { drawers: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_table_folding')) {
+      // Four structural steel folding legs
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.05, 0.05, heightPixels - 2, 0x4b5563);
+      drawVolumetricSubBlock(0.08, 0.87, 0, 0.05, 0.05, heightPixels - 2, 0x4b5563);
+      drawVolumetricSubBlock(0.87, 0.08, 0, 0.05, 0.05, heightPixels - 2, 0x4b5563);
+      drawVolumetricSubBlock(0.87, 0.87, 0, 0.05, 0.05, heightPixels - 2, 0x4b5563);
+      // Plastic folding tabletop panel
+      drawVolumetricSubBlock(0, 0, heightPixels - 2, 1, 1, 2, 0xd2b48c, { wood: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_lamp_floor')) {
+      // Heavy carbon base plate
+      drawVolumetricSubBlock(0.3, 0.3, 0, 0.4, 0.4, 2, 0x111827);
+      // Tall iron riser rod
+      drawVolumetricSubBlock(0.46, 0.46, 2, 0.08, 0.08, heightPixels - 12, 0x78716c);
+      // Retro glowing lamp shade dome
+      drawVolumetricSubBlock(0.25, 0.25, heightPixels - 12, 0.5, 0.5, 12, 0xfac20a, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_plant_potted')) {
+      // Terracotta flower pot
+      drawVolumetricSubBlock(0.3, 0.3, 0, 0.4, 0.4, 10, 0xb45309);
+      // Mud soil inside pot
+      drawVolumetricSubBlock(0.33, 0.33, 9, 0.34, 0.34, 1.2, 0x451a03);
+      // Plant stem shoot
+      drawVolumetricSubBlock(0.46, 0.46, 10, 0.08, 0.08, 12, 0x15803d);
+      // Voxel lush plant green layers
+      drawVolumetricSubBlock(0.2, 0.2, 16, 0.6, 0.6, 6, 0x166534, { fabric: true });
+      drawVolumetricSubBlock(0.25, 0.25, 22, 0.5, 0.5, 5, 0x15803d, { fabric: true });
+      drawVolumetricSubBlock(0.35, 0.35, 27, 0.3, 0.3, 4, 0x22c55e, { fabric: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('furniture_custom_poster')) {
+      // Outer poster backboard mounting frame
+      drawVolumetricSubBlock(0.04, 0.45, 0, 0.92, 0.1, heightPixels, 0x1e293b, { wood: true });
+      // Inner artwork print core
+      drawVolumetricSubBlock(0.08, 0.47, 2, 0.84, 0.06, heightPixels - 4, 0x0f172a, { screen: true });
+
+      drawnCustomModel = true;
     }
 
-    const totalWidth = (widthTiles + depthTiles) * (TILE_W / 2);
-    const totalHeight = (widthTiles + depthTiles) * (TILE_H / 2) + heightPixels;
+    // B. PREMIUM VOLUMETRIC BARRICADES
+    else if (key.startsWith('barricade_bookshelf')) {
+      // Flipped wood backing plate
+      drawVolumetricSubBlock(0, 0, 0, 1, 1, 4, 0x5c4033, { wood: true });
+      // Vertical shelf boards (leaning/lying on ground)
+      drawVolumetricSubBlock(0, 0, 4, 0.06, 1, 20, 0x3d2b1f);
+      drawVolumetricSubBlock(0.94, 0, 4, 0.06, 1, 20, 0x3d2b1f);
+      drawVolumetricSubBlock(0.3, 0, 4, 0.05, 1, 20, 0x3d2b1f);
+      drawVolumetricSubBlock(0.63, 0, 4, 0.05, 1, 20, 0x3d2b1f);
+      
+      // Spilled volumetric multi-colored books inside shelf sections
+      drawVolumetricSubBlock(0.1, 0.15, 4, 0.15, 0.7, 14, 0xef4444);
+      drawVolumetricSubBlock(0.2, 0.25, 4, 0.08, 0.5, 14, 0x3b82f6);
+      drawVolumetricSubBlock(0.42, 0.3, 4, 0.12, 0.5, 12, 0xeab308);
+      drawVolumetricSubBlock(0.5, 0.1, 4, 0.1, 0.7, 14, 0x10b981);
+      drawVolumetricSubBlock(0.72, 0.2, 4, 0.15, 0.6, 12, 0x8b5cf6);
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('barricade_flipped_table')) {
+      // Tabletop shielding panel (wood)
+      drawVolumetricSubBlock(0, 0.42, 0, 1, 0.16, heightPixels, 0xa0522d, { wood: true });
+      // Four table legs extending horizontally
+      drawVolumetricSubBlock(0.06, 0.08, heightPixels - 6, 0.08, 0.34, 0.08, 0x78350f);
+      drawVolumetricSubBlock(0.06, 0.58, heightPixels - 6, 0.08, 0.34, 0.08, 0x78350f);
+      drawVolumetricSubBlock(0.86, 0.08, heightPixels - 6, 0.08, 0.34, 0.08, 0x78350f);
+      drawVolumetricSubBlock(0.86, 0.58, heightPixels - 6, 0.08, 0.34, 0.08, 0x78350f);
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('barricade_sandbags')) {
+      // Overlapping layered canvas sandbag components
+      drawVolumetricSubBlock(0.05, 0.05, 0, 0.42, 0.9, 10, 0xbdc3c7, { fabric: true });
+      drawVolumetricSubBlock(0.53, 0.05, 0, 0.42, 0.9, 10, 0xbdc3c7, { fabric: true });
+      drawVolumetricSubBlock(0.22, 0.1, 10, 0.56, 0.8, 10, 0x9ca3af, { fabric: true });
+
+      drawnCustomModel = true;
+    }
+
+    // C. HIGH-FIDELITY DEFENSIVE TURRETS
+    else if (key.startsWith('turret_nailgun')) {
+      // Octagonal armored steel base
+      drawVolumetricSubBlock(0.12, 0.12, 0, 0.76, 0.76, 16, 0x34495e, { panel: true });
+      // Swivel rotor stem riser
+      drawVolumetricSubBlock(0.38, 0.38, 16, 0.24, 0.24, 6, 0x1e293b);
+      // Automated gun housing block
+      drawVolumetricSubBlock(0.2, 0.25, 22, 0.6, 0.6, 12, 0x475569, { neon: true });
+      // Dual beveled steel gun barrels projecting forward
+      drawVolumetricSubBlock(0.3, 0.05, 25, 0.12, 0.2, 4, 0x111827);
+      drawVolumetricSubBlock(0.58, 0.05, 25, 0.12, 0.2, 4, 0x111827);
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('turret_taser')) {
+      // purple armored base
+      drawVolumetricSubBlock(0.15, 0.15, 0, 0.7, 0.7, 12, 0x581c87, { panel: true });
+      // central riser pole
+      drawVolumetricSubBlock(0.35, 0.35, 12, 0.3, 0.3, 10, 0x3b0764);
+      // condenser coil sphere
+      drawVolumetricSubBlock(0.25, 0.25, 22, 0.5, 0.5, 12, 0x7e22ce, { neon: true });
+      // dual brass shock spikes extending out
+      drawVolumetricSubBlock(0.32, 0.1, 26, 0.08, 0.15, 4, 0xeab308);
+      drawVolumetricSubBlock(0.6, 0.1, 26, 0.08, 0.15, 4, 0xeab308);
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('turret_tesla')) {
+      // Tower levels
+      drawVolumetricSubBlock(0.15, 0.15, 0, 0.7, 0.7, 16, 0x1e293b, { panel: true });
+      drawVolumetricSubBlock(0.25, 0.25, 16, 0.5, 0.5, 14, 0x475569, { panel: true });
+      drawVolumetricSubBlock(0.35, 0.35, 30, 0.3, 0.3, 12, 0x334155);
+      // Copper coil rings
+      drawVolumetricSubBlock(0.25, 0.25, 42, 0.5, 0.5, 3, 0xb45309, { neon: true });
+      drawVolumetricSubBlock(0.3, 0.3, 47, 0.4, 0.4, 3, 0xb45309, { neon: true });
+      // Energy core on top
+      drawVolumetricSubBlock(0.38, 0.38, 50, 0.24, 0.24, 6, 0xa855f7, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('turret_autocannon') || key.startsWith('turret_autocannon_mk2')) {
+      // 2x2 large heavy armored base plates
+      drawVolumetricSubBlock(0.1, 0.1, 0, 0.8, 0.8, 20, 0x1e293b, { panel: true });
+      // Heavy rotary stem
+      drawVolumetricSubBlock(0.3, 0.3, 20, 0.4, 0.4, 8, 0x0f172a);
+      // Giant cannon head
+      drawVolumetricSubBlock(0.15, 0.2, 28, 0.7, 0.65, 18, 0x334155, { neon: true });
+      // Massive dual long barrels extending forward
+      drawVolumetricSubBlock(0.26, 0.04, 32, 0.14, 0.2, 5, 0x0f172a);
+      drawVolumetricSubBlock(0.6, 0.04, 32, 0.14, 0.2, 5, 0x0f172a);
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('turret_shotgun')) {
+      // Armor base
+      drawVolumetricSubBlock(0.12, 0.12, 0, 0.76, 0.76, 14, 0xd35400, { panel: true });
+      // neck
+      drawVolumetricSubBlock(0.36, 0.36, 14, 0.28, 0.28, 6, 0x1e293b);
+      // wide head box
+      drawVolumetricSubBlock(0.18, 0.22, 20, 0.64, 0.64, 12, 0x475569, { neon: true });
+      // Triple fanned barrels
+      drawVolumetricSubBlock(0.22, 0.06, 23, 0.1, 0.2, 3, 0x0f172a);
+      drawVolumetricSubBlock(0.45, 0.04, 24, 0.1, 0.2, 3, 0x0f172a);
+      drawVolumetricSubBlock(0.68, 0.06, 23, 0.1, 0.2, 3, 0x0f172a);
+
+      drawnCustomModel = true;
+    }
+
+    // D. PREMIUM VOLUMETRIC TRAPS
+    else if (key.startsWith('trap_pressure_plate')) {
+      // Thin metal pad on floor
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 1.5, 0xe67e22);
+      // Red raised trigger button in center
+      drawVolumetricSubBlock(0.35, 0.35, 1.5, 0.3, 0.3, 1.5, 0xef4444, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('trap_spike_strip')) {
+      // Carbon baseline bar
+      drawVolumetricSubBlock(0.05, 0.2, 0, 0.9, 0.6, 2, 0x4b5563);
+      // Rows of sharp volumetric metal spikes sticking out
+      for (let u = 0.15; u <= 0.85; u += 0.22) {
+        drawVolumetricSubBlock(u, 0.3, 2, 0.06, 0.12, 6, 0x9ca3af);
+        drawVolumetricSubBlock(u, 0.58, 2, 0.06, 0.12, 6, 0x9ca3af);
+      }
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('trap_shock_pad')) {
+      // Rubber insulated pad
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 2, 0x334155);
+      // Brass electrical contact rows on top
+      drawVolumetricSubBlock(0.18, 0.18, 2, 0.64, 0.12, 0.5, 0xd97706, { neon: true });
+      drawVolumetricSubBlock(0.18, 0.44, 2, 0.64, 0.12, 0.5, 0xd97706, { neon: true });
+      drawVolumetricSubBlock(0.18, 0.7, 2, 0.64, 0.12, 0.5, 0xd97706, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('trap_glue')) {
+      // Slime puddle base diamond
+      drawVolumetricSubBlock(0.1, 0.1, 0, 0.8, 0.8, 1, 0xd97706, { alpha: 0.8 });
+      // Glowing voxel slime details
+      drawVolumetricSubBlock(0.25, 0.25, 1, 0.3, 0.3, 1, 0xfac20a, { neon: true });
+      drawVolumetricSubBlock(0.55, 0.45, 1, 0.2, 0.2, 1, 0xfac20a, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('trap_tripwire_alarm')) {
+      // Base plate
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 1.5, 0x475569);
+      // Left side sensor post
+      drawVolumetricSubBlock(0.1, 0.42, 1.5, 0.12, 0.16, 10, 0x1e293b);
+      // Right side sensor post
+      drawVolumetricSubBlock(0.78, 0.42, 1.5, 0.12, 0.16, 10, 0x1e293b);
+      // Glowing neon red tripwire laser block bridging them
+      drawVolumetricSubBlock(0.22, 0.46, 8, 0.56, 0.08, 1, 0xef4444, { neon: true });
+
+      drawnCustomModel = true;
+    }
+
+    // E. ENTITIES / DRONES & CHESTS
+    else if (key.startsWith('entity_drone') || key.startsWith('guard_drone')) {
+      // Hovering body sphere (suspended at z=12)
+      drawVolumetricSubBlock(0.33, 0.33, 12, 0.34, 0.34, 8, 0xeab308, { neon: true });
+      // Horizontal rotor arms
+      drawVolumetricSubBlock(0.08, 0.08, 15, 0.84, 0.06, 2, 0x475569);
+      drawVolumetricSubBlock(0.08, 0.86, 15, 0.84, 0.06, 2, 0x475569);
+      // 4 glowing rotor blades discs on corners
+      drawVolumetricSubBlock(0.04, 0.04, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.8, 0.04, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.04, 0.8, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.8, 0.8, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('loot_stash')) {
+      // Armored gold vault chest
+      drawVolumetricSubBlock(0.12, 0.12, 0, 0.76, 0.76, 14, 0xd97706, { wood: true });
+      // Titanium enforcement grid straps
+      drawVolumetricSubBlock(0.12, 0.28, 0.1, 0.76, 0.12, 14.1, 0x475569);
+      drawVolumetricSubBlock(0.12, 0.60, 0.1, 0.76, 0.12, 14.1, 0x475569);
+      // Cyber display screen center lock
+      drawVolumetricSubBlock(0.44, 0.44, 14, 0.12, 0.12, 1.5, 0x06b6d4, { neon: true });
+
+      drawnCustomModel = true;
+    }
+
+    // F. DEFAULT FALLBACK BLOCK GENERATION (Standard sleek beveled octagonal prism)
+    if (!drawnCustomModel) {
+      drawVolumetricSubBlock(0, 0, 0, 1, 1, heightPixels, color, {
+        panel: true,
+        wood: isFurniture && (key.includes('wooden') || key.includes('wood') || key.includes('dresser')),
+        neon: isTrap || isTurret || isEntity,
+        screen: key.includes('monitor') || key.includes('panel')
+      });
+    }
+
+    const totalWidth = (wTiles + dTiles) * (TILE_W / 2);
+    const totalHeight = (wTiles + dTiles) * (TILE_H / 2) + heightPixels;
 
     graphics.generateTexture(key, totalWidth, totalHeight);
     graphics.destroy();

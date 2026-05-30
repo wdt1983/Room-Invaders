@@ -9,6 +9,7 @@ import {
   EntryPointWall,
 } from '@/lib/store/useRoomStore';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
+import { useUIStore } from '@/lib/store/useUIStore';
 import { entryTileFor } from '@/lib/game/entryPoints';
 import { EntitySprite } from '@/game/objects/EntitySprite';
 import { rangeTilesFor } from '@/lib/game/defense';
@@ -53,10 +54,20 @@ export class RoomScene extends Phaser.Scene {
   private defenseViewTweens: Phaser.Tweens.Tween[] = [];
   private holographicMarkers: Map<string, Phaser.GameObjects.Graphics> = new Map();
   public gridSize: number = 10;
+  private lastCameraScrollX: number = 0;
+  private lastCameraScrollY: number = 0;
+  private lastCameraZoom: number = 0;
 
   constructor() {
     super({ key: 'RoomScene' });
     this.gridSystem = new GridSystem();
+  }
+
+  public adjustColor(color: number, factor: number): number {
+    const r = Math.min(255, Math.max(0, Math.floor(((color >> 16) & 0xff) * factor)));
+    const g = Math.min(255, Math.max(0, Math.floor(((color >> 8) & 0xff) * factor)));
+    const b = Math.min(255, Math.max(0, Math.floor((color & 0xff) * factor)));
+    return (r << 16) | (g << 8) | b;
   }
 
   /** Tile-state to restore when an occupant is removed — preserves entry-point invariant. */
@@ -76,12 +87,60 @@ export class RoomScene extends Phaser.Scene {
    *
    * Mirrored server-side in `buyAndPlaceFurniture` — both sides must agree.
    */
-  public isPlaceableFor(type: string | null | undefined, gridX: number, gridY: number): boolean {
-    if (!this.gridSystem.isTileWalkable(gridX, gridY)) return false;
+  public isPlaceableFor(
+    type: string | null | undefined,
+    gridX: number,
+    gridY: number,
+    footprintW: number = 1,
+    footprintH: number = 1
+  ): boolean {
+    const movingItem = useUIStore.getState().movingItem;
+    let originalX = -1;
+    let originalY = -1;
+    let originalW = 0;
+    let originalH = 0;
+
+    if (movingItem) {
+      const placed = useRoomStore.getState().placedItems.find(
+        (p) => p.gridX === movingItem.x && p.gridY === movingItem.y
+      );
+      if (placed) {
+        originalX = placed.gridX;
+        originalY = placed.gridY;
+        const isRotatedOdd = placed.rotation === 1 || placed.rotation === 3;
+        originalW = isRotatedOdd ? placed.footprintH : placed.footprintW;
+        originalH = isRotatedOdd ? placed.footprintW : placed.footprintH;
+      }
+    }
+
+    // Scan target bounding box
+    for (let x = gridX; x < gridX + footprintW; x++) {
+      for (let y = gridY; y < gridY + footprintH; y++) {
+        // Bounds check
+        if (x < 0 || x >= this.gridSize || y < 0 || y >= this.gridSize) return false;
+
+        // Skip check if it is part of the item's original footprint
+        const isSelfPart =
+          movingItem &&
+          x >= originalX &&
+          x < originalX + originalW &&
+          y >= originalY &&
+          y < originalY + originalH;
+
+        if (!isSelfPart && !this.gridSystem.isTileWalkable(x, y)) {
+          return false;
+        }
+      }
+    }
 
     if (type === 'turret') {
       const max = this.gridSize - 1;
-      return gridX === 0 || gridX === max || gridY === 0 || gridY === max;
+      for (let x = gridX; x < gridX + footprintW; x++) {
+        for (let y = gridY; y < gridY + footprintH; y++) {
+          const onPerimeter = x === 0 || x === max || y === 0 || y === max;
+          if (!onPerimeter) return false;
+        }
+      }
     }
 
     return true;
@@ -162,6 +221,28 @@ export class RoomScene extends Phaser.Scene {
       this.entryPointSprites.push(sprite);
     }
 
+    // Create a 2x2 white dot texture for particles
+    const dotGraphics = new Phaser.GameObjects.Graphics(this);
+    dotGraphics.fillStyle(0xffffff, 1);
+    dotGraphics.fillCircle(2, 2, 2);
+    dotGraphics.generateTexture('glow_particle', 4, 4);
+    dotGraphics.destroy();
+
+    // Floating blueprint particles to give the room scene some high-tech cyberpunk flare
+    const particleEmitter = this.add.particles(0, 0, 'glow_particle', {
+        x: { min: this.offsetX - 400, max: this.offsetX + 400 },
+        y: { min: this.offsetY - 150, max: this.offsetY + 350 },
+        lifespan: { min: 4000, max: 8000 },
+        speedY: { min: -10, max: -35 },
+        speedX: { min: -8, max: 8 },
+        scale: { start: 0.3, end: 1.2 },
+        alpha: { start: 0.6, end: 0 },
+        tint: [0x06b6d4, 0x00ffcc, 0x3b82f6],
+        frequency: 220,
+        maxParticles: 40
+    });
+    particleEmitter.setDepth(0.35); // Sit above floor (0) and below furniture/markers
+
     // Centering the Camera & Dynamic Zoom Auto-Scaling (Task 9.0.24)
     const baseZoom = 10 / this.gridSize;
     this.cameras.main.setZoom(baseZoom);
@@ -207,8 +288,6 @@ export class RoomScene extends Phaser.Scene {
     placedItems.forEach((item, index) => {
       // Prevent placing items out of bounds just in case of stale DB state
       if (this.gridSystem.isTileWalkable(item.gridX, item.gridY)) {
-        this.gridSystem.setTileState(item.gridX, item.gridY, 'occupied');
-
         const sprite = new FurnitureSprite(
             this,
             item.gridX,
@@ -225,6 +304,13 @@ export class RoomScene extends Phaser.Scene {
           sprite.setAlpha(0.7);
         }
         this.furnitureItems.push(sprite);
+        
+        // Occupy all tiles covered by the rotated footprint
+        for (let x = sprite.gridX; x < sprite.gridX + sprite.footprintW; x++) {
+          for (let y = sprite.gridY; y < sprite.gridY + sprite.footprintH; y++) {
+            this.gridSystem.setTileState(x, y, 'occupied');
+          }
+        }
         
         // Dynamic custom poster rendering checks
         this.applyCustomPosterTexture(sprite, item);
@@ -273,6 +359,13 @@ export class RoomScene extends Phaser.Scene {
         const sprite = this.furnitureItems[idx];
         this.furnitureItems.splice(idx, 1);
 
+        // Reset all grid tiles in the footprint
+        for (let x = sprite.gridX; x < sprite.gridX + sprite.footprintW; x++) {
+          for (let y = sprite.gridY; y < sprite.gridY + sprite.footprintH; y++) {
+            this.gridSystem.setTileState(x, y, this.baseTileStateFor(x, y));
+          }
+        }
+
         SoundManager.getInstance().playSfx('click');
         this.tweens.add({
           targets: sprite,
@@ -287,7 +380,6 @@ export class RoomScene extends Phaser.Scene {
           }
         });
       }
-      this.gridSystem.setTileState(payload.x, payload.y, this.baseTileStateFor(payload.x, payload.y));
       useRoomStore.getState().removePlacedItemAt(payload.x, payload.y);
     };
 
@@ -380,6 +472,60 @@ export class RoomScene extends Phaser.Scene {
       }
     };
 
+    const handleMoveSuccess = (payload: { oldX: number; oldY: number; newX: number; newY: number }) => {
+      if (!this.sys || !this.sys.isActive()) return;
+      const sprite = this.furnitureItems.find(
+        (f) => f.gridX === payload.oldX && f.gridY === payload.oldY,
+      );
+      if (sprite) {
+        // Reset all grid tiles in the old footprint
+        for (let x = sprite.gridX; x < sprite.gridX + sprite.footprintW; x++) {
+          for (let y = sprite.gridY; y < sprite.gridY + sprite.footprintH; y++) {
+            this.gridSystem.setTileState(x, y, this.baseTileStateFor(x, y));
+          }
+        }
+
+        // Update coordinate properties on the sprite
+        sprite.gridX = payload.newX;
+        sprite.gridY = payload.newY;
+        sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
+
+        // Occupy all grid tiles in the new footprint
+        for (let x = sprite.gridX; x < sprite.gridX + sprite.footprintW; x++) {
+          for (let y = sprite.gridY; y < sprite.gridY + sprite.footprintH; y++) {
+            this.gridSystem.setTileState(x, y, 'occupied');
+          }
+        }
+
+        SoundManager.getInstance().playSfx('place_item');
+        sprite.setScale(0.8, 1.25);
+        this.tweens.add({
+          targets: sprite,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 400,
+          ease: 'Back.easeOut',
+          easeParams: [1.5],
+        });
+
+        // Spawn a beautiful visual holographic particle burst in custom wallColor
+        const wallColor = useRoomStore.getState().cosmetics?.wallColor ?? 0x06b6d4;
+        const particles = this.add.particles(sprite.x, sprite.y - 16, 'glow_particle', {
+          speed: { min: 40, max: 130 },
+          scale: { start: 0.9, end: 0 },
+          alpha: { start: 0.85, end: 0 },
+          lifespan: 500,
+          tint: wallColor,
+          maxParticles: 12,
+          blendMode: 'ADD',
+        });
+        this.time.delayedCall(600, () => {
+          particles.destroy();
+        });
+      }
+      useRoomStore.getState().movePlacedItemAt(payload.oldX, payload.oldY, payload.newX, payload.newY);
+    };
+
     EventBus.on('change-mode', handleChangeMode);
     EventBus.on('removal-success', handleRemovalSuccess);
     EventBus.on('rotation-success', handleRotationSuccess);
@@ -390,6 +536,7 @@ export class RoomScene extends Phaser.Scene {
     EventBus.on('pvp-attacker-moved', handlePvpAttackerMoved);
     EventBus.on('pvp-raid-completed', handlePvpRaidCompleted);
     EventBus.on('poster-updated', handlePosterUpdated);
+    EventBus.on('move-success', handleMoveSuccess);
 
     const cleanup = () => {
       SoundManager.getInstance().stopMusic();
@@ -403,6 +550,7 @@ export class RoomScene extends Phaser.Scene {
       EventBus.off('pvp-attacker-moved', handlePvpAttackerMoved);
       EventBus.off('pvp-raid-completed', handlePvpRaidCompleted);
       EventBus.off('poster-updated', handlePosterUpdated);
+      EventBus.off('move-success', handleMoveSuccess);
       this.holographicMarkers.forEach(marker => marker.destroy());
       this.holographicMarkers.clear();
       this.exitDefenseView();
@@ -415,7 +563,37 @@ export class RoomScene extends Phaser.Scene {
     this.playerEntity = new EntitySprite(this, 0, 0, 'entity_drone');
     this.playerEntity.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
 
+    // Disable default browser context menu on canvas
+    this.input.mouse?.disableContextMenu();
+
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Right Click Context Menu (Direct selection bypassing player walking and out-of-bounds restrictions)
+      if (pointer.rightButtonDown() || pointer.button === 2) {
+        const worldCoords = IsometricEngine.screenToWorld(
+          pointer.worldX, pointer.worldY,
+          this.offsetX, this.offsetY,
+          this.currentRotation,
+          this.gridSize
+        );
+        const targetFurniture = this.furnitureItems.find(f => f.occupies(worldCoords.x, worldCoords.y));
+        if (targetFurniture) {
+          const spriteKey = targetFurniture.texture.key;
+          const isDamaged = targetFurniture.isDamaged;
+          const targetX = targetFurniture.gridX;
+          const targetY = targetFurniture.gridY;
+          
+          EventBus.emit('open-context-menu', {
+            spriteKey: spriteKey,
+            x: pointer.x,
+            y: pointer.y,
+            gridX: targetX,
+            gridY: targetY,
+            isDamaged
+          });
+        }
+        return;
+      }
+
       if (this.currentMode !== 'view') return;
 
       const worldCoords = IsometricEngine.screenToWorld(pointer.worldX, pointer.worldY, this.offsetX, this.offsetY, this.currentRotation, this.gridSize);
@@ -446,17 +624,19 @@ export class RoomScene extends Phaser.Scene {
           if (path) {
               this.drawDebugPath(path);
               this.playerEntity.walkPath(path, this.offsetX, this.offsetY, this.currentRotation, () => {
-                  const targetFurniture = this.furnitureItems.find(f => f.gridX === worldCoords.x && f.gridY === worldCoords.y);
+                  const targetFurniture = this.furnitureItems.find(f => f.occupies(worldCoords.x, worldCoords.y));
                   const spriteKey = targetFurniture ? targetFurniture.texture.key : 'placed_item';
                   const isDamaged = targetFurniture ? targetFurniture.isDamaged : false;
-                  const screenPos = IsometricEngine.worldToScreen(worldCoords.x, worldCoords.y, this.currentRotation, this.gridSize);
+                  const targetX = targetFurniture ? targetFurniture.gridX : worldCoords.x;
+                  const targetY = targetFurniture ? targetFurniture.gridY : worldCoords.y;
+                  const screenPos = IsometricEngine.worldToScreen(targetX, targetY, this.currentRotation, this.gridSize);
                   
                   EventBus.emit('open-context-menu', {
                       spriteKey: spriteKey,
                       x: screenPos.x + this.offsetX,
                       y: screenPos.y + this.offsetY,
-                      gridX: worldCoords.x,
-                      gridY: worldCoords.y,
+                      gridX: targetX,
+                      gridY: targetY,
                       isDamaged
                   });
               });
@@ -536,6 +716,8 @@ export class RoomScene extends Phaser.Scene {
     if (this.defenseViewActive) {
       this.drawDefenseViewOverlay();
     }
+
+    EventBus.emit('grid-rotated', this.currentRotation);
   }
 
   /**
@@ -608,12 +790,19 @@ export class RoomScene extends Phaser.Scene {
     for (const placed of placedItems) {
       const entry = catalogByKey.get(placed.spriteKey);
       if (!entry) continue;
+
+      const isRotatedOdd = placed.rotation === 1 || placed.rotation === 3;
+      const fpW = isRotatedOdd ? placed.footprintH : placed.footprintW;
+      const fpH = isRotatedOdd ? placed.footprintW : placed.footprintH;
+
       const { primary, alert } = rangeTilesFor(
         entry.type,
         entry.stats,
         placed.gridX,
         placed.gridY,
         this.gridSize,
+        fpW,
+        fpH
       );
       if (primary.length === 0 && alert.length === 0) continue;
 
@@ -642,9 +831,28 @@ export class RoomScene extends Phaser.Scene {
     const cosmetics = useRoomStore.getState().cosmetics;
     const wallColor = cosmetics?.wallColor ?? WALL_COLOR;
 
-    const colorFor = (wall: EntryPointWall, position: number): number => {
-      const ep = entryPoints.find((e) => e.wall === wall && e.position === position);
-      return ep ? ENTRY_WALL_COLORS[ep.type] : wallColor;
+    // Calculate back corner based on actual screen projections
+    const corners = [
+      { name: 'A', x: 0,    y: 0 },
+      { name: 'B', x: size, y: 0 },
+      { name: 'C', x: size, y: size },
+      { name: 'D', x: 0,    y: size }
+    ];
+
+    const projected = corners.map(c => {
+      const pos = IsometricEngine.worldToScreen(c.x, c.y, this.currentRotation, size);
+      return { ...c, screenX: pos.x, screenY: pos.y };
+    });
+
+    projected.sort((a, b) => a.screenY - b.screenY);
+    const backCorner = projected[0];
+
+    const isBackWall = (wall: EntryPointWall): boolean => {
+      if (backCorner.name === 'A') return wall === 'north' || wall === 'west';
+      if (backCorner.name === 'B') return wall === 'north' || wall === 'east';
+      if (backCorner.name === 'C') return wall === 'south' || wall === 'east';
+      if (backCorner.name === 'D') return wall === 'south' || wall === 'west';
+      return false;
     };
 
     const segment = (
@@ -655,11 +863,179 @@ export class RoomScene extends Phaser.Scene {
     ): void => {
       const s = IsometricEngine.worldToScreen(start.x, start.y, this.currentRotation, this.gridSize);
       const e = IsometricEngine.worldToScreen(end.x, end.y, this.currentRotation, this.gridSize);
-      this.wallGraphics.lineStyle(WALL_THICKNESS, colorFor(wall, position), 1.0);
-      this.wallGraphics.beginPath();
-      this.wallGraphics.moveTo(s.x + this.offsetX, s.y + this.offsetY);
-      this.wallGraphics.lineTo(e.x + this.offsetX, e.y + this.offsetY);
-      this.wallGraphics.strokePath();
+      const startX = s.x + this.offsetX;
+      const startY = s.y + this.offsetY;
+      const endX = e.x + this.offsetX;
+      const endY = e.y + this.offsetY;
+
+      const ep = entryPoints.find((item) => item.wall === wall && item.position === position);
+
+      if (isBackWall(wall)) {
+        // High-Fidelity 3D Wall Segment
+        const H = 64; // Wall Height
+
+        // Dynamic Lighting: Lighter shade for back-right, darker for back-left based on cosmetics
+        const faceColor = (startX < endX)
+          ? this.adjustColor(wallColor, 0.22)
+          : this.adjustColor(wallColor, 0.15);
+        const panelOutlineColor = (startX < endX)
+          ? this.adjustColor(wallColor, 0.28)
+          : this.adjustColor(wallColor, 0.20);
+
+        // 1. Draw solid wall background polygon
+        this.wallGraphics.fillStyle(faceColor, 1.0);
+        this.wallGraphics.beginPath();
+        this.wallGraphics.moveTo(startX, startY);
+        this.wallGraphics.lineTo(endX, endY);
+        this.wallGraphics.lineTo(endX, endY - H);
+        this.wallGraphics.lineTo(startX, startY - H);
+        this.wallGraphics.closePath();
+        this.wallGraphics.fillPath();
+
+        // 2. Custom inserts for entry points
+        if (ep) {
+          if (ep.type === 'door') {
+            // Door Segment: draw high-tech sliding door frame
+            this.wallGraphics.fillStyle(0x0a0f1d, 1.0);
+            // Draw inset door panel
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - 5);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - 5);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - H + 10);
+            this.wallGraphics.lineTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - H + 10);
+            this.wallGraphics.closePath();
+            this.wallGraphics.fillPath();
+
+            // Draw glowing door arch
+            this.wallGraphics.lineStyle(4, 0xf97316, 1.0); // Neon Orange Door Frame
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15);
+            this.wallGraphics.lineTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - H + 10);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - H + 10);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15);
+            this.wallGraphics.strokePath();
+
+            // Hazard stripe indicators
+            this.wallGraphics.lineStyle(2, 0xffcc00, 0.8);
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.3, startY + (endY - startY) * 0.3 - H + 18);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.3, endY - (endY - startY) * 0.3 - H + 18);
+            this.wallGraphics.strokePath();
+            
+            // Indicator light
+            this.wallGraphics.fillStyle(0x10b981, 1.0); // Active Green
+            this.wallGraphics.fillCircle((startX + endX) / 2, (startY + endY) / 2 - H + 25, 3);
+          } else if (ep.type === 'window') {
+            // Window Segment: semi-transparent glowing laser pane
+            this.wallGraphics.fillStyle(0x06b6d4, 0.3); // Cyan laser glass
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.1, startY + (endY - startY) * 0.1 - 10);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, endY - (endY - startY) * 0.1 - 10);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, endY - (endY - startY) * 0.1 - H + 10);
+            this.wallGraphics.lineTo(startX + (endX - startX) * 0.1, startY + (endY - startY) * 0.1 - H + 10);
+            this.wallGraphics.closePath();
+            this.wallGraphics.fillPath();
+
+            // Window frame border
+            this.wallGraphics.lineStyle(3, 0x334155, 1.0);
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.1, startY + (endY - startY) * 0.1 - 10);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, endY - (endY - startY) * 0.1 - 10);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, endY - (endY - startY) * 0.1 - H + 10);
+            this.wallGraphics.lineTo(startX + (endX - startX) * 0.1, startY + (endY - startY) * 0.1 - H + 10);
+            this.wallGraphics.closePath();
+            this.wallGraphics.strokePath();
+
+            // Laser grids
+            this.wallGraphics.lineStyle(1, 0x06b6d4, 0.7);
+            const midY = (startY + endY) / 2 - H / 2;
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.1, midY);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, midY);
+            this.wallGraphics.strokePath();
+
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo((startX + endX) / 2, (startY + endY) / 2 - 10);
+            this.wallGraphics.lineTo((startX + endX) / 2, (startY + endY) / 2 - H + 10);
+            this.wallGraphics.strokePath();
+          } else if (ep.type === 'vent') {
+            // Vent Segment: orange backlight + louvers
+            this.wallGraphics.fillStyle(0xf97316, 0.7); // Orange glow
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - 12);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - 12);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - H + 12);
+            this.wallGraphics.lineTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - H + 12);
+            this.wallGraphics.closePath();
+            this.wallGraphics.fillPath();
+
+            // Charcoal grill blades
+            this.wallGraphics.lineStyle(3, 0x0f172a, 1.0);
+            for (let i = 1; i <= 4; i++) {
+              const fraction = i / 5;
+              const hOffset = H * fraction;
+              this.wallGraphics.beginPath();
+              this.wallGraphics.moveTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - hOffset);
+              this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - hOffset);
+              this.wallGraphics.strokePath();
+            }
+
+            // Vent Frame border
+            this.wallGraphics.lineStyle(2, 0x475569, 1.0);
+            this.wallGraphics.beginPath();
+            this.wallGraphics.moveTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - 12);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - 12);
+            this.wallGraphics.lineTo(endX - (endX - startX) * 0.15, endY - (endY - startY) * 0.15 - H + 12);
+            this.wallGraphics.lineTo(startX + (endX - startX) * 0.15, startY + (endY - startY) * 0.15 - H + 12);
+            this.wallGraphics.closePath();
+            this.wallGraphics.strokePath();
+          }
+        } else {
+          // Standard Wall: Draw sleek bulkhead panels
+          this.wallGraphics.lineStyle(1.5, panelOutlineColor, 1.0);
+          this.wallGraphics.beginPath();
+          this.wallGraphics.moveTo(startX + (endX - startX) * 0.1, startY + (endY - startY) * 0.1 - 10);
+          this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, endY - (endY - startY) * 0.1 - 10);
+          this.wallGraphics.lineTo(endX - (endX - startX) * 0.1, endY - (endY - startY) * 0.1 - H + 10);
+          this.wallGraphics.lineTo(startX + (endX - startX) * 0.1, startY + (endY - startY) * 0.1 - H + 10);
+          this.wallGraphics.closePath();
+          this.wallGraphics.strokePath();
+
+          // Draw an aesthetic vertical conduit line inside the panel
+          this.wallGraphics.lineStyle(1.0, panelOutlineColor, 0.6);
+          this.wallGraphics.beginPath();
+          this.wallGraphics.moveTo((startX + endX) / 2, (startY + endY) / 2 - 10);
+          this.wallGraphics.lineTo((startX + endX) / 2, (startY + endY) / 2 - H + 10);
+          this.wallGraphics.strokePath();
+        }
+
+        // 3. Glowing neon tube border along the top
+        const neonColor = ep ? ENTRY_WALL_COLORS[ep.type] : wallColor; // Custom vibrant wallColor default
+        this.wallGraphics.lineStyle(4, neonColor, 1.0);
+        this.wallGraphics.beginPath();
+        this.wallGraphics.moveTo(startX, startY - H);
+        this.wallGraphics.lineTo(endX, endY - H);
+        this.wallGraphics.strokePath();
+
+        // 4. Double vertical seam between panels
+        this.wallGraphics.lineStyle(2, 0x0a0f1d, 1.0);
+        this.wallGraphics.beginPath();
+        this.wallGraphics.moveTo(startX, startY);
+        this.wallGraphics.lineTo(startX, startY - H);
+        this.wallGraphics.strokePath();
+      } else {
+        // Low-Profile Glowing Boundary Laser Rail for Front Walls
+        const laserColor = ep ? ENTRY_WALL_COLORS[ep.type] : 0x00ffcc; // Light Teal/Cyan Laser border
+        this.wallGraphics.lineStyle(3, laserColor, 0.7);
+        this.wallGraphics.beginPath();
+        this.wallGraphics.moveTo(startX, startY);
+        this.wallGraphics.lineTo(endX, endY);
+        this.wallGraphics.strokePath();
+
+        // Draw a tiny neon node at start and end
+        this.wallGraphics.fillStyle(laserColor, 0.9);
+        this.wallGraphics.fillCircle(startX, startY, 2);
+      }
     };
 
     for (let p = 0; p < size; p++) {
@@ -671,17 +1047,23 @@ export class RoomScene extends Phaser.Scene {
   }
 
   public placeFurniture(key: string, gridX: number, gridY: number): boolean {
-    // Verify it's still walkable (double-check)
-    if (!this.gridSystem.isTileWalkable(gridX, gridY)) return false;
+    const catalogItem = useRoomStore.getState().catalog.find((c) => c.sprite_key === key);
+    const footprintW = catalogItem?.footprint?.w ?? 1;
+    const footprintH = catalogItem?.footprint?.h ?? 1;
 
-    // For MVP: Assume 1x1 footprint for grid occupation logic to maintain velocity. 
-    // Advanced footprint iteration can be deferred to Phase 2.
-    this.gridSystem.setTileState(gridX, gridY, 'occupied');
+    // Verify all tiles are walkable
+    for (let x = gridX; x < gridX + footprintW; x++) {
+      for (let y = gridY; y < gridY + footprintH; y++) {
+        if (!this.gridSystem.isTileWalkable(x, y)) return false;
+      }
+    }
 
-    // Retrieve footprint data (Mock for now, or pull from a constant dictionary if you built one)
-    // Default to 1x1 if unknown
-    const footprintW = 1; 
-    const footprintH = 1;
+    // Occupy all tiles in the footprint
+    for (let x = gridX; x < gridX + footprintW; x++) {
+      for (let y = gridY; y < gridY + footprintH; y++) {
+        this.gridSystem.setTileState(x, y, 'occupied');
+      }
+    }
 
     // Instantiate and position the sprite
     const item = new FurnitureSprite(this, gridX, gridY, key, footprintW, footprintH);
@@ -840,5 +1222,51 @@ export class RoomScene extends Phaser.Scene {
     ctx.restore();
 
     canvasTexture.refresh();
+  }
+
+  private cullTiles(): void {
+    const cam = this.cameras.main;
+    if (
+      cam.scrollX === this.lastCameraScrollX &&
+      cam.scrollY === this.lastCameraScrollY &&
+      cam.zoom === this.lastCameraZoom
+    ) {
+      return;
+    }
+
+    this.lastCameraScrollX = cam.scrollX;
+    this.lastCameraScrollY = cam.scrollY;
+    this.lastCameraZoom = cam.zoom;
+
+    const bounds = cam.worldView;
+    const padding = 128; // Padding prevents visual pop-in near borders
+
+    for (const tile of this.floorTiles) {
+      if (tile) {
+        const visible = (
+          tile.x >= bounds.x - padding &&
+          tile.x <= bounds.x + bounds.width + padding &&
+          tile.y >= bounds.y - padding &&
+          tile.y <= bounds.y + bounds.height + padding
+        );
+        tile.setVisible(visible);
+      }
+    }
+
+    for (const item of this.furnitureItems) {
+      if (item) {
+        const visible = (
+          item.x >= bounds.x - padding &&
+          item.x <= bounds.x + bounds.width + padding &&
+          item.y >= bounds.y - padding &&
+          item.y <= bounds.y + bounds.height + padding
+        );
+        item.setVisible(visible);
+      }
+    }
+  }
+
+  update(): void {
+    this.cullTiles();
   }
 }

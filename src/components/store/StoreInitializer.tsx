@@ -1,5 +1,6 @@
 "use client";
-import { useRef } from 'react';
+
+import { useEffect } from 'react';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
 import { useRoomStore, PlacedItem, CatalogItem, EntryPoint } from '@/lib/store/useRoomStore';
 
@@ -44,8 +45,7 @@ export default function StoreInitializer({
         floorType: 'wood' | 'carpet' | 'tile' | 'concrete';
     };
 }) {
-    const initialized = useRef(false);
-    if (!initialized.current) {
+    useEffect(() => {
         usePlayerStore.getState().setInventory({
             scrap: inventory.scrap,
             components: inventory.components,
@@ -56,9 +56,6 @@ export default function StoreInitializer({
             safeModeUntil,
         });
         usePlayerStore.getState().setPlayerState({ playerLevel });
-        // Hydrate last-known XP total from `profiles.xp` so the TopBar
-        // progress bar + RaidResolver level-up check (3.0.19) have a
-        // baseline before the first post-raid resolve call.
         usePlayerStore.getState().applyXpAndLevel(xp, playerLevel);
         useRoomStore.getState().setRoomState(gridSize, placedItems, roomSizeTier);
         useRoomStore.getState().setCatalog(catalog);
@@ -72,7 +69,22 @@ export default function StoreInitializer({
         if (cosmetics) {
             useRoomStore.getState().setCosmetics(cosmetics);
         }
-        initialized.current = true;
-    }
+    }, [
+        inventory,
+        gridSize,
+        roomSizeTier,
+        placedItems,
+        playerLevel,
+        xp,
+        safeModeUntil,
+        catalog,
+        entryPoints,
+        roomLevel,
+        defenseRating,
+        defenseSlotsUsed,
+        defenseSlotsCap,
+        cosmetics,
+    ]);
+
     return null; // This component renders nothing
 }

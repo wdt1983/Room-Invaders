@@ -23,6 +23,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FIXTURES, MAX_RAID_SECONDS } from "./fixtures.ts";
 import { rollLoot } from "./lootSystem.ts";
 import { levelForXp } from "./progression.ts";
+import { validateReplay } from "./replay/replayValidator.ts";
+
 
 // deno-lint-ignore no-explicit-any
 declare const Deno: any;
@@ -399,6 +401,8 @@ Deno.serve(async (req: Request) => {
   let gridSize = 10;
   let entryPoints: any[] = [];
   let isFirstClearResult = false;
+  let pvpPlacedItems: any[] = [];
+
 
   if (isPvP) {
     const defenderId = body.fixtureId;
@@ -430,6 +434,27 @@ Deno.serve(async (req: Request) => {
 
     gridSize = dRoom.grid_size ?? 10;
     entryPoints = dRoom.entry_points ?? [];
+
+    // Fetch undamaged placed items for PvP replay simulation
+    const { data: dItems } = await supabase
+      .from("player_items")
+      .select("grid_position, rotation, items ( sprite_key, type, stats )")
+      .eq("owner_id", defenderId)
+      .eq("placed_in_room", true)
+      .eq("is_damaged", false);
+
+    pvpPlacedItems = (dItems ?? []).map((row: any) => {
+      const itemData = Array.isArray(row.items) ? row.items[0] : row.items;
+      return {
+        spriteKey: itemData?.sprite_key,
+        type: itemData?.type,
+        gridX: row.grid_position?.x,
+        gridY: row.grid_position?.y,
+        rotation: row.rotation,
+        stats: itemData?.stats,
+      };
+    });
+
 
     // Fetch attacker room details to enforce Matchmaking Level Brackets
     const { data: aRoom } = await (supabase.from("rooms") as any)
@@ -898,10 +923,33 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // --- Chronological Replay Validation (Task 3.0.22) ---
+  const unlockedTechs = (techUnlocks || []).map((t: any) => t.node_id);
+  const validationResult = await validateReplay({
+    fixtureId: body.fixtureId,
+    outcome: body.outcome,
+    secondsElapsed: body.secondsElapsed,
+    squadHp: body.squadHp,
+    squadMaxHp: body.squadMaxHp,
+    actionLog: body.actionLog,
+    isPvP,
+    entryPoints,
+    gridSize,
+    placedItems: isPvP ? pvpPlacedItems : [],
+    unlockedTechs,
+    activeEvent: null, // support events here if required
+  });
+
+  if (!validationResult.success) {
+    console.warn(`[resolve-raid] Replay validation failed for user ${user.id}: ${validationResult.error}`);
+    return json({ success: false, error: validationResult.error }, 400);
+  }
+
   // Damage taken from HP delta — server-computed, not taken from the client.
   const damageTaken = Math.max(0, body.squadMaxHp - body.squadHp);
 
   // --- Commit loot + XP ---
+
   // If it's a joint raid lobby, split the rolled loot and credit all participants.
   if (body.jointLobbyId) {
     // 1. Verify lobby exists and is active
@@ -1306,7 +1354,7 @@ Deno.serve(async (req: Request) => {
             'boss-ironjaw': 'trap_bear_trap',
             'boss-whisper': 'trap_ghost_wire',
             'boss-volkov': 'turret_autocannon_mk2',
-            'boss-circuit': 'trap_emp_mine',
+            'boss-circuit': 'trap_circuit_emp_mine',
             'boss-warden': 'cosmetic_warden_key',
           };
           const itemSpriteKey = uniqueItemKeys[body.fixtureId];

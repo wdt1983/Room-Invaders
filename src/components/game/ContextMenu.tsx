@@ -5,11 +5,18 @@ import { useUIStore } from '@/lib/store/useUIStore';
 import { EventBus } from '@/game/EventBus';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, RotateCw, FileImage } from 'lucide-react';
+import { Trash2, RotateCw, FileImage, Move } from 'lucide-react';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 
 export function ContextMenu() {
-  const { contextMenu, openContextMenu, closeContextMenu } = useUIStore();
+  const {
+    contextMenu,
+    openContextMenu,
+    closeContextMenu,
+    setMovingItem,
+    setSelectedItemKey,
+    setMode,
+  } = useUIStore();
   const mode = useUIStore((state) => state.mode);
   const catalog = useRoomStore((state) => state.catalog);
 
@@ -40,7 +47,6 @@ export function ContextMenu() {
   const repairCost = Math.max(5, Math.floor(originalScrapCost * 0.4));
 
   const canRemove =
-    mode === 'edit' &&
     typeof contextMenu.gridX === 'number' &&
     typeof contextMenu.gridY === 'number';
 
@@ -101,6 +107,29 @@ export function ContextMenu() {
               <>
                 <Button
                   size="sm"
+                  variant="default"
+                  className="w-full justify-start cursor-pointer border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/40 hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] transition-all duration-300 rounded-lg text-xs group"
+                  onClick={() => {
+                    if (typeof contextMenu.gridX === 'number' && typeof contextMenu.gridY === 'number' && contextMenu.spriteKey) {
+                      const catalogItem = catalog.find((c) => c.sprite_key === contextMenu.spriteKey);
+                      setMovingItem({ x: contextMenu.gridX, y: contextMenu.gridY });
+                      setSelectedItemKey(contextMenu.spriteKey);
+                      EventBus.emit('item-selected', {
+                        key: contextMenu.spriteKey,
+                        type: catalogItem?.type ?? 'furniture',
+                        stats: catalogItem?.stats ?? {},
+                        footprint: catalogItem?.footprint ?? { w: 1, h: 1 },
+                      });
+                      setMode('edit');
+                    }
+                    closeContextMenu();
+                  }}
+                >
+                  <Move className="mr-2 size-3.5 transition-transform duration-300 group-hover:scale-115 text-cyan-400" />
+                  Move Furniture
+                </Button>
+                <Button
+                  size="sm"
                   variant="secondary"
                   className="w-full justify-start cursor-pointer border border-border/20 bg-muted/20 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300 rounded-lg text-xs group"
                   onClick={() => {
@@ -116,8 +145,8 @@ export function ContextMenu() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="destructive"
-                  className="w-full justify-start cursor-pointer border border-transparent hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive hover:shadow-[0_0_12px_rgba(239,68,68,0.2)] transition-all duration-300 rounded-lg text-xs group"
+                  variant="default"
+                  className="w-full justify-start cursor-pointer border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_12px_rgba(16,185,129,0.25)] transition-all duration-300 rounded-lg text-xs group"
                   onClick={() => {
                     EventBus.emit('request-removal', {
                       x: contextMenu.gridX,
@@ -126,8 +155,8 @@ export function ContextMenu() {
                     closeContextMenu();
                   }}
                 >
-                  <Trash2 className="mr-2 size-3.5 transition-transform duration-300 group-hover:scale-115 text-destructive-foreground/60 group-hover:text-destructive" />
-                  Remove (50% refund)
+                  <Trash2 className="mr-2 size-3.5 transition-transform duration-300 group-hover:scale-115 text-emerald-400/70 group-hover:text-emerald-400" />
+                  Recycle (+50% Scrap)
                 </Button>
               </>
             ) : (
