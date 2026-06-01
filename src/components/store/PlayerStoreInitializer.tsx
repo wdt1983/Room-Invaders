@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from 'react';
-import { usePlayerStore } from '@/lib/store/usePlayerStore';
+import { usePlayerStore, type RaiderCosmetics } from '@/lib/store/usePlayerStore';
 import { useSquadStore } from '@/lib/store/useSquadStore';
 import { createClient } from "@/lib/supabase/client";
 import { trackEvent } from "@/lib/game/analytics";
@@ -23,6 +23,7 @@ export default function PlayerStoreInitializer({
   activeBadge,
   activeBorder,
   activeRoomSkin,
+  raiderCosmetics,
   clearedBosses,
 }: {
   inventory: {
@@ -44,15 +45,23 @@ export default function PlayerStoreInitializer({
   activeBadge: string | null;
   activeBorder: string | null;
   activeRoomSkin: string | null;
+  raiderCosmetics: RaiderCosmetics | null;
   clearedBosses: string[];
 }) {
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).useSquadStore = useSquadStore;
+      (window as any).usePlayerStore = usePlayerStore;
+    }
     // 0. Hydrate active cosmetic states
     usePlayerStore.getState().setCosmeticsState({
       activeBadge,
       activeBorder,
       activeRoomSkin,
     });
+    if (raiderCosmetics) {
+      usePlayerStore.getState().setRaiderCosmetics(raiderCosmetics);
+    }
 
     // 1. Hydrate inventory details
     usePlayerStore.getState().setInventory({
@@ -86,6 +95,18 @@ export default function PlayerStoreInitializer({
          selectedEntryPoint: null,
       }))
     );
+
+    if (typeof window !== "undefined") {
+      const roomScene = (window as any).game?.scene?.keys?.RoomScene;
+      if (roomScene) {
+        import("@/game/scenes/BootScene").then(({ BootScene }) => {
+          const cosmetics = usePlayerStore.getState().raiderCosmetics;
+          if (cosmetics) {
+            BootScene.regenerateRaiderTextures(roomScene, cosmetics);
+          }
+        });
+      }
+    }
 
     // 5. Track retention D1 and D7 metrics
     if (createdAt) {
@@ -141,6 +162,7 @@ export default function PlayerStoreInitializer({
     activeBadge,
     activeBorder,
     activeRoomSkin,
+    JSON.stringify(raiderCosmetics),
     JSON.stringify(clearedBosses),
   ]);
 

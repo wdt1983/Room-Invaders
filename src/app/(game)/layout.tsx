@@ -30,7 +30,7 @@ export default async function GameLayout({
   // 1. Authoritatively fetch or auto-create the profiles row first.
   // This is critical because foreign keys in inventories, player_squad, etc. reference profiles(id).
   const profileResult = await (supabase.from('profiles') as any)
-    .select('username, player_level, xp, safe_mode_until, tech_points, created_at, active_badge, active_border, active_room_skin')
+    .select('username, player_level, xp, safe_mode_until, tech_points, created_at, active_badge, active_border, active_room_skin, raider_cosmetics')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -47,7 +47,7 @@ export default async function GameLayout({
         username,
         display_name,
       })
-      .select('username, player_level, xp, safe_mode_until, tech_points, created_at, active_badge, active_border, active_room_skin')
+      .select('username, player_level, xp, safe_mode_until, tech_points, created_at, active_badge, active_border, active_room_skin, raider_cosmetics')
       .maybeSingle();
 
     if (createProfError) {
@@ -142,6 +142,7 @@ export default async function GameLayout({
     safe_mode_until: null,
     tech_points: 1,
     created_at: new Date().toISOString(),
+    raider_cosmetics: null,
   };
 
   // If squadRows is empty, dynamically seed the database with 4 default squad members
@@ -179,6 +180,7 @@ export default async function GameLayout({
         activeBadge={(finalProfile as any).active_badge ?? null}
         activeBorder={(finalProfile as any).active_border ?? null}
         activeRoomSkin={(finalProfile as any).active_room_skin ?? null}
+        raiderCosmetics={(finalProfile as any).raider_cosmetics ?? null}
         clearedBosses={clearedBosses}
       />
       <TopBar />

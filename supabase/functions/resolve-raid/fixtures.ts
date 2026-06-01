@@ -36,11 +36,41 @@ export const FIXTURES: Record<string, FixtureSummary> = {
     stash: { x: 8, y: 7 },
     requiredLevel: 1,
   },
+  "tier1-cottage-ruins": {
+    name: "Cottage Ruins",
+    difficulty: "easy",
+    stash: { x: 8, y: 2 },
+    requiredLevel: 1,
+  },
   "tier1-corner-store": {
     name: "Corner Store",
     difficulty: "medium",
     stash: { x: 1, y: 1 },
     requiredLevel: 3,
+  },
+  "tier2-shattered-apartment": {
+    name: "Shattered Apartment",
+    difficulty: "medium",
+    stash: { x: 1, y: 8 },
+    requiredLevel: 4,
+  },
+  "tier2-corner-bodega": {
+    name: "Corner Bodega",
+    difficulty: "medium",
+    stash: { x: 8, y: 8 },
+    requiredLevel: 6,
+  },
+  "tier3-seeded-depot": {
+    name: "Seeded Depot",
+    difficulty: "hard",
+    stash: { x: 9, y: 1 },
+    requiredLevel: 8,
+  },
+  "tier3-military-outpost": {
+    name: "Military Outpost",
+    difficulty: "hard",
+    stash: { x: 9, y: 9 },
+    requiredLevel: 12,
   },
   "boss-ironjaw": {
     name: "Ironjaw",

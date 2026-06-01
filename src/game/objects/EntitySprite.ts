@@ -55,6 +55,13 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
     if (this.isBoss) {
       this.setScale(1.5);
       this.setTint(0xffcccc); // Red-tinted glow
+    } else {
+      this.setScale(1.2); // Make the squad/minions slightly larger and more premium
+      if (this.isHostile) {
+        this.setTint(0xffaa99); // Curated premium light-red/orange neon glow for hostile drones
+      } else {
+        this.setTint(0x99ff99); // Curated premium light-green neon glow for squad drones!
+      }
     }
 
     const activeEffects = usePlayerStore.getState().activeEffects;
@@ -78,10 +85,14 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
     this.meleeDamage = Math.round(baseDmg);
 
     this.setOrigin(0.5, 1);
+    this.setVisible(true);
+    this.setAlpha(1.0);
     this.scene.add.existing(this);
 
     // Initial depth setting
     this.setDepth(this.currentGridX + this.currentGridY + 2);
+
+    this.scene.events.on("raider-textures-regenerated", this.refreshTexture, this);
   }
 
   public walkPath(path: { x: number; y: number }[], offsetX: number, offsetY: number, currentRotation: number, onComplete?: () => void): void {
@@ -138,5 +149,17 @@ export class EntitySprite extends Phaser.GameObjects.Image implements HasHp {
     const screenPos = IsometricEngine.worldToScreen(this.currentGridX, this.currentGridY, currentRotation, gridSize);
     this.setPosition(screenPos.x + offsetX, screenPos.y + offsetY);
     this.setDepth(this.currentGridX + this.currentGridY + 2);
+  }
+
+  private refreshTexture(): void {
+    if (this.texture && (this.texture.key === 'entity_drone' || this.texture.key.startsWith('entity_drone_dir_'))) {
+      const currentKey = this.texture.key;
+      this.setTexture(currentKey);
+    }
+  }
+
+  public destroy(fromScene?: boolean): void {
+    this.scene.events.off("raider-textures-regenerated", this.refreshTexture, this);
+    super.destroy(fromScene);
   }
 }

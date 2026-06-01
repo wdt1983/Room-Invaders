@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
  * Server Action to unlock a Tech Tree node.
  * Performs rigorous validations:
  *  1. User auth check.
- *  2. Level check (Level 8 required for tech tree).
+ *  2. Level check (Level 3 required for tech tree).
  *  3. Node existence check.
  *  4. Node already unlocked check.
  *  5. Prerequisites check.
@@ -40,8 +40,8 @@ export async function unlockTechNodeAction(nodeId: string) {
     return { success: false as const, error: "Player profile not found" };
   }
 
-  if (profile.player_level < 8) {
-    return { success: false as const, error: "Unlocks at Player Level 8" };
+  if (profile.player_level < 3) {
+    return { success: false as const, error: "Unlocks at Player Level 3" };
   }
 
   if (profile.tech_points < node.cost) {

@@ -105,16 +105,107 @@ const CORNER_STORE: NpcRoomFixture = {
   ],
 };
 
+const COTTAGE_RUINS: NpcRoomFixture = {
+  id: 'tier1-cottage-ruins',
+  name: 'Cottage Ruins',
+  description: 'Residential cottage ruins with light coverage. Perfect for starting squad grinding.',
+  difficulty: 'easy',
+  requiredLevel: 1,
+  gridSize: 10,
+  stash: { x: 8, y: 2 },
+  entryPoints: [{ wall: 'west', type: 'door', position: 3 }],
+  items: [
+    { spriteKey: 'trap_pressure_plate', gridX: 4, gridY: 3, footprintW: 1, footprintH: 1, rotation: 0, type: 'trap' },
+    { spriteKey: 'barricade_sandbags',      gridX: 7, gridY: 2, footprintW: 1, footprintH: 1, rotation: 0, type: 'barricade' },
+  ],
+};
+
+const SHATTERED_APARTMENT: NpcRoomFixture = {
+  id: 'tier2-shattered-apartment',
+  name: 'Shattered Apartment',
+  description: 'A multi-room shattered apartment complex with pressure grids and mixed cover.',
+  difficulty: 'medium',
+  requiredLevel: 4,
+  gridSize: 10,
+  stash: { x: 1, y: 8 },
+  entryPoints: [{ wall: 'north', type: 'door', position: 4 }],
+  items: [
+    { spriteKey: 'trap_tripwire_alarm',     gridX: 4, gridY: 4, footprintW: 1, footprintH: 1, rotation: 0, type: 'trap' },
+    { spriteKey: 'turret_nailgun',          gridX: 0, gridY: 9, footprintW: 1, footprintH: 1, rotation: 0, type: 'turret' },
+    { spriteKey: 'barricade_bookshelf',     gridX: 2, gridY: 7, footprintW: 2, footprintH: 1, rotation: 0, type: 'barricade' },
+  ],
+};
+
+const CORNER_BODEGA: NpcRoomFixture = {
+  id: 'tier2-corner-bodega',
+  name: 'Corner Bodega',
+  description: 'Commercial grocery point with locked inventory barricades and automated taser alarms.',
+  difficulty: 'medium',
+  requiredLevel: 6,
+  gridSize: 10,
+  stash: { x: 8, y: 8 },
+  entryPoints: [{ wall: 'south', type: 'door', position: 5 }],
+  items: [
+    { spriteKey: 'trap_glue',               gridX: 5, gridY: 6, footprintW: 1, footprintH: 1, rotation: 0, type: 'trap' },
+    { spriteKey: 'turret_taser',            gridX: 9, gridY: 9, footprintW: 1, footprintH: 1, rotation: 0, type: 'turret' },
+    { spriteKey: 'barricade_sandbags',      gridX: 7, gridY: 8, footprintW: 1, footprintH: 1, rotation: 0, type: 'barricade' },
+  ],
+};
+
+const SEEDED_DEPOT: NpcRoomFixture = {
+  id: 'tier3-seeded-depot',
+  name: 'Seeded Depot',
+  description: 'Heavy industrial warehouse depot with thick sandbags and dual automated sentries.',
+  difficulty: 'hard',
+  requiredLevel: 8,
+  gridSize: 10,
+  stash: { x: 9, y: 1 },
+  entryPoints: [{ wall: 'west', type: 'door', position: 5 }],
+  items: [
+    { spriteKey: 'trap_shock_pad',          gridX: 5, gridY: 3, footprintW: 1, footprintH: 1, rotation: 0, type: 'trap' },
+    { spriteKey: 'turret_nailgun',          gridX: 8, gridY: 0, footprintW: 1, footprintH: 1, rotation: 0, type: 'turret' },
+    { spriteKey: 'turret_taser',            gridX: 9, gridY: 3, footprintW: 1, footprintH: 1, rotation: 0, type: 'turret' },
+    { spriteKey: 'barricade_sandbags',      gridX: 7, gridY: 1, footprintW: 1, footprintH: 1, rotation: 0, type: 'barricade' },
+  ],
+};
+
+const MILITARY_OUTPOST: NpcRoomFixture = {
+  id: 'tier3-military-outpost',
+  name: 'Military Outpost',
+  description: 'A fortified perimeter outpost equipped with multiple nailguns and shock coils.',
+  difficulty: 'hard',
+  requiredLevel: 12,
+  gridSize: 10,
+  stash: { x: 9, y: 9 },
+  entryPoints: [{ wall: 'north', type: 'door', position: 5 }],
+  items: [
+    { spriteKey: 'trap_spike_strip',        gridX: 5, gridY: 5, footprintW: 1, footprintH: 1, rotation: 0, type: 'trap' },
+    { spriteKey: 'turret_nailgun',          gridX: 9, gridY: 8, footprintW: 1, footprintH: 1, rotation: 0, type: 'turret' },
+    { spriteKey: 'turret_taser',            gridX: 8, gridY: 9, footprintW: 1, footprintH: 1, rotation: 0, type: 'turret' },
+    { spriteKey: 'barricade_sandbags',      gridX: 8, gridY: 8, footprintW: 1, footprintH: 1, rotation: 0, type: 'barricade' },
+  ],
+};
+
 export const NPC_ROOM_FIXTURES: Record<string, NpcRoomFixture> = {
   [ABANDONED_APARTMENT.id]: ABANDONED_APARTMENT,
   [STORAGE_UNIT.id]: STORAGE_UNIT,
   [CORNER_STORE.id]: CORNER_STORE,
+  [COTTAGE_RUINS.id]: COTTAGE_RUINS,
+  [SHATTERED_APARTMENT.id]: SHATTERED_APARTMENT,
+  [CORNER_BODEGA.id]: CORNER_BODEGA,
+  [SEEDED_DEPOT.id]: SEEDED_DEPOT,
+  [MILITARY_OUTPOST.id]: MILITARY_OUTPOST,
 };
 
 export const NPC_ROOM_LIST: NpcRoomFixture[] = [
   ABANDONED_APARTMENT,
   STORAGE_UNIT,
+  COTTAGE_RUINS,
   CORNER_STORE,
+  SHATTERED_APARTMENT,
+  CORNER_BODEGA,
+  SEEDED_DEPOT,
+  MILITARY_OUTPOST,
 ];
 
 // Re-export boss rooms

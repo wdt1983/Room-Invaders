@@ -159,6 +159,7 @@ export class RaidScene extends Phaser.Scene {
   private lastScanlineUpdateTime: number = 0;
   private guardAiTimer: Phaser.Time.TimerEvent | null = null;
   private simulatedDefenderTimer: Phaser.Time.TimerEvent | null = null;
+  private squadCombatTimer: Phaser.Time.TimerEvent | null = null;
 
   /** Active barricade-attack state. `null` when the squad is not
    *  attacking. Set by {@link startBarricadeAttack}; cleared by
@@ -221,6 +222,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   create() {
+    this.hostileEntities = [];
     SoundManager.getInstance().playMusic('briefing_room');
     // Resolve the fixture from the raid store (SSR-hydrated by
     // RaidInitializer on the /raid/[id] page). Unknown ids fall back to the
@@ -229,7 +231,14 @@ export class RaidScene extends Phaser.Scene {
     this.gridSize = target?.gridSize ?? 10;
     this.gridSystem = new GridSystem(this.gridSize);
 
-    if (target?.isPvP || target?.placedItems) {
+    const isBossTarget = isBossFixture(target?.id ?? '');
+    const isStaticNpc = target?.id && (
+      target.id === 'tier1-abandoned-apartment' || 
+      target.id === 'tier1-storage-unit' || 
+      target.id === 'tier1-corner-store'
+    );
+
+    if ((target?.isPvP || target?.placedItems) && !isBossTarget && !isStaticNpc) {
       // Resolve dynamic spawn point adjacent to first entry point
       const entryPoints = target.entryPoints ?? [];
       const firstEp = entryPoints[0];
@@ -275,6 +284,7 @@ export class RaidScene extends Phaser.Scene {
       };
     } else {
       this.fixture = resolveFixture(target?.id ?? DEFAULT_FIXTURE_ID);
+      console.log("[RaidScene] Initialized fixture:", this.fixture.id, "has boss def:", !!(this.fixture as any).boss, "fixture object:", this.fixture);
     }
 
     this.offsetX = this.scale.width / 2;
@@ -365,6 +375,7 @@ export class RaidScene extends Phaser.Scene {
       if (isBlackout) {
         sprite.setTint(0x555566);
       }
+      sprite.setInteractive();
       this.furnitureItems.push(sprite);
       
       // Dynamic custom poster rendering checks in PvP Raids / Replays
@@ -394,7 +405,10 @@ export class RaidScene extends Phaser.Scene {
       // First let's map custom textures or keys. We can use default 'entity_drone' or dynamically resolved textures.
       prepMembers.forEach((member, index) => {
         const spawn = this.resolveSpawnForMember(member);
-        const sprite = new EntitySprite(this, spawn.x, spawn.y, 'entity_drone', {
+        const textureKey = this.textures.exists(`entity_drone_slot_${member.slotNumber}`)
+          ? `entity_drone_slot_${member.slotNumber}`
+          : 'entity_drone';
+        const sprite = new EntitySprite(this, spawn.x, spawn.y, textureKey, {
           entityId: `member_${index}`,
           name: member.name,
           maxHp: Math.round(DEFAULT_SQUAD_HP * (usePlayerStore.getState().activeEffects.squadHpMult ?? 1.0)) + hpBonusPerMember,
@@ -411,18 +425,21 @@ export class RaidScene extends Phaser.Scene {
           sprite.setTint(0x33ffff);
         }
 
+        sprite.setInteractive();
         sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
         this.squadEntities.push(sprite);
       });
     } else {
       // Fallback to single player entity
       const spawn = this.resolveSpawn(this.fixture);
-      const sprite = new EntitySprite(this, spawn.x, spawn.y, 'entity_drone', {
+      const textureKey = this.textures.exists('entity_drone_slot_1') ? 'entity_drone_slot_1' : 'entity_drone';
+      const sprite = new EntitySprite(this, spawn.x, spawn.y, textureKey, {
         entityId: 'player',
         name: 'Vanguard',
         maxHp: DEFAULT_SQUAD_HP,
         speed: 1.0,
       });
+      sprite.setInteractive();
       sprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
       this.squadEntities.push(sprite);
     }
@@ -520,6 +537,7 @@ export class RaidScene extends Phaser.Scene {
         isBoss: true,
         isHostile: true,
       });
+      bossSprite.setInteractive();
       bossSprite.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
       
       this.hostileEntities.push(bossSprite);
@@ -571,6 +589,7 @@ export class RaidScene extends Phaser.Scene {
             speed: 1.2,
             isHostile: true,
           });
+          minion.setInteractive();
           minion.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
           minion.setTint(0xff8888);
           this.hostileEntities.push(minion);
@@ -720,8 +739,6 @@ export class RaidScene extends Phaser.Scene {
     SoundManager.getInstance().playMusic('combat_tension');
     useRaidStore.getState().beginActivePhase();
 
-    this.hostileEntities = [];
-
     // ── PvP Real-Time Channels & AI Systems ──
     const lobbyId = useRaidStore.getState().jointLobbyId;
     if (!this.isReplayMode) {
@@ -797,6 +814,14 @@ export class RaidScene extends Phaser.Scene {
         delay: 1500,
         loop: true,
         callback: () => this.tickHostileGuardDrones(),
+        callbackScope: this
+      });
+
+      // Live Squad Combat Ticker (1.0 second delay)
+      this.squadCombatTimer = this.time.addEvent({
+        delay: 1000,
+        loop: true,
+        callback: () => this.tickSquadCombat(),
         callbackScope: this
       });
     }
@@ -913,9 +938,30 @@ export class RaidScene extends Phaser.Scene {
           });
           
           this.broadcastOperationalEvent(`[${elapsed}s] VICTORY: Boss ${bDef.name} was DEFEATED!`);
+          
+          const bossSprite = this.hostileEntities.find(e => e.entityId === bDef.entityId);
+          if (bossSprite) {
+            this.playExplosionVfx(bossSprite.currentGridX, bossSprite.currentGridY);
+            bossSprite.destroy();
+          }
+          this.hostileEntities = this.hostileEntities.filter(e => e.entityId !== bDef.entityId);
+
           this.finishRaid('victory', 'Boss defeated');
           return;
         }
+      }
+
+      // Check if hostile drone was killed
+      const hostileIndex = this.hostileEntities.findIndex(e => e.entityId === payload.entityId);
+      if (hostileIndex >= 0) {
+        const sprite = this.hostileEntities[hostileIndex];
+        this.playExplosionVfx(sprite.currentGridX, sprite.currentGridY);
+        sprite.destroy();
+        this.hostileEntities.splice(hostileIndex, 1);
+        const st = useRaidStore.getState();
+        const elapsed = Math.max(0, st.durationSeconds - st.timeRemainingSeconds);
+        this.broadcastOperationalEvent(`[${elapsed}s] SECURE UPDATE: Hostile drone destroyed!`);
+        return;
       }
 
       const memberIndex = this.squadEntities.findIndex(e => e.entityId === payload.entityId);
@@ -1371,6 +1417,10 @@ export class RaidScene extends Phaser.Scene {
       this.guardAiTimer.remove(false);
       this.guardAiTimer = null;
     }
+    if (this.squadCombatTimer) {
+      this.squadCombatTimer.remove(false);
+      this.squadCombatTimer = null;
+    }
     if (this.simulatedDefenderTimer) {
       this.simulatedDefenderTimer.remove(false);
       this.simulatedDefenderTimer = null;
@@ -1556,7 +1606,8 @@ export class RaidScene extends Phaser.Scene {
       const screenPos = IsometricEngine.worldToScreen(
         this.playerEntity.currentGridX,
         this.playerEntity.currentGridY,
-        this.currentRotation
+        this.currentRotation,
+        this.gridSize
       );
       
       this.selectionRing.lineStyle(2, 0x00ff00, 0.8);
@@ -1591,8 +1642,10 @@ export class RaidScene extends Phaser.Scene {
 
     this.tweens.killTweensOf(sprite);
     
+    const freezeUntil = Date.now() + seconds * 1000;
+    (sprite as any).stunnedUntilMs = freezeUntil;
+    
     if (sprite === this.playerEntity) {
-      const freezeUntil = Date.now() + seconds * 1000;
       this.stunnedUntilMs = Math.max(this.stunnedUntilMs, freezeUntil);
     }
 
@@ -1777,7 +1830,7 @@ export class RaidScene extends Phaser.Scene {
       (pointer.y - pointer.prevPosition.y) / this.cameras.main.zoom;
   }
 
-  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+  private handlePointerDown(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[] = []): void {
     if (this.isReplayMode) return;
     // Pathfinding is only meaningful while the raid is actively running —
     // prep and results phases are read-only.
@@ -1801,6 +1854,18 @@ export class RaidScene extends Phaser.Scene {
       this.offsetY,
       this.currentRotation,
     );
+
+    // 1) Click to select another squad member via gameObjects click detection first!
+    if (gameObjects && gameObjects.length > 0) {
+      const clickedMember = gameObjects.find(go => go instanceof EntitySprite && this.squadEntities.includes(go) && go.hp > 0) as EntitySprite | undefined;
+      if (clickedMember) {
+        const clickedMemberIndex = this.squadEntities.indexOf(clickedMember);
+        if (clickedMemberIndex >= 0) {
+          this.selectSquadMember(clickedMemberIndex);
+          return;
+        }
+      }
+    }
 
     // Check if in ability target selection mode
     const store = useRaidStore.getState();
@@ -1827,7 +1892,7 @@ export class RaidScene extends Phaser.Scene {
       return;
     }
 
-    // 1) Click to select another squad member
+    // 2) Click to select another squad member via coordinates check if exact
     const clickedMemberIndex = this.squadEntities.findIndex(
       (s) => s.hp > 0 && s.currentGridX === worldCoords.x && s.currentGridY === worldCoords.y
     );
@@ -1836,41 +1901,72 @@ export class RaidScene extends Phaser.Scene {
       return;
     }
 
-    const tileState = this.gridSystem.getTileState(worldCoords.x, worldCoords.y);
+    let targetX = worldCoords.x;
+    let targetY = worldCoords.y;
+
+    let hostileAtTile = this.hostileEntities.find(h => h.hp > 0 && h.currentGridX === targetX && h.currentGridY === targetY);
+    let furnitureAtTile = this.furnitureItems.find(f => f.occupies(targetX, targetY));
+
+    if (gameObjects && gameObjects.length > 0) {
+      // Prioritize clicking hostile EntitySprites (bosses, drones)
+      const clickedHostile = gameObjects.find(go => go instanceof EntitySprite && this.hostileEntities.includes(go) && go.hp > 0) as EntitySprite | undefined;
+      if (clickedHostile) {
+        targetX = clickedHostile.currentGridX;
+        targetY = clickedHostile.currentGridY;
+        hostileAtTile = clickedHostile;
+        furnitureAtTile = undefined;
+      } else {
+        // Next, check if they clicked on a FurnitureSprite
+        const clickedFurniture = gameObjects.find(go => go instanceof FurnitureSprite) as FurnitureSprite | undefined;
+        if (clickedFurniture) {
+          targetX = clickedFurniture.gridX;
+          targetY = clickedFurniture.gridY;
+          furnitureAtTile = clickedFurniture;
+          hostileAtTile = undefined;
+        }
+      }
+    }
+
+    const tileState = this.gridSystem.getTileState(targetX, targetY);
     if (!tileState) return;
 
-    if (tileState === 'empty') {
-      const path = this.gridSystem.findPath(
-        this.playerEntity.currentGridX,
-        this.playerEntity.currentGridY,
-        worldCoords.x,
-        worldCoords.y,
-      );
-      if (path && path.length > 0) {
-        this.drawDebugPath(path);
-        this.playerEntity.walkPath(path, this.offsetX, this.offsetY, this.currentRotation);
-        this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
-      }
-    } else if (tileState === 'occupied') {
+    const isTrap = furnitureAtTile && furnitureAtTile.texture.key.startsWith('trap');
+    const isTargetOccupied = tileState === 'occupied' || hostileAtTile !== undefined || (furnitureAtTile !== undefined && !isTrap);
+
+    if (isTargetOccupied) {
       const path = this.gridSystem.findPathToAdjacent(
         this.playerEntity.currentGridX,
         this.playerEntity.currentGridY,
-        worldCoords.x,
-        worldCoords.y,
+        targetX,
+        targetY,
       );
       if (path) {
         this.drawDebugPath(path);
-        // Capture the clicked tile so the onComplete callback can start
-        // a barricade attack if the target is destructible (hp !== null).
-        const targetX = worldCoords.x;
-        const targetY = worldCoords.y;
+        
+        // Start barricade/turret attack only if it is a destructible furniture item (hp !== null) and NOT a hostile entity
+        const onComplete = hostileAtTile 
+          ? undefined 
+          : () => this.startBarricadeAttack(targetX, targetY);
+
         this.playerEntity.walkPath(
           path,
           this.offsetX,
           this.offsetY,
           this.currentRotation,
-          () => this.startBarricadeAttack(targetX, targetY),
+          onComplete,
         );
+        this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
+      }
+    } else {
+      const path = this.gridSystem.findPath(
+        this.playerEntity.currentGridX,
+        this.playerEntity.currentGridY,
+        targetX,
+        targetY,
+      );
+      if (path && path.length > 0) {
+        this.drawDebugPath(path);
+        this.playerEntity.walkPath(path, this.offsetX, this.offsetY, this.currentRotation);
         this.cameras.main.startFollow(this.playerEntity, true, 0.05, 0.05);
       }
     }
@@ -1997,6 +2093,12 @@ export class RaidScene extends Phaser.Scene {
   private startStashHold(): void {
     if (this.stashHold) return;
     if (useRaidStore.getState().phase !== 'active') return;
+
+    // In a boss raid, we can't secure the stash while the boss is still alive!
+    const isBossRaid = isBossFixture(this.fixture.id);
+    const bossAlive = isBossRaid && this.hostileEntities.some(e => e.entityId === (this.fixture as BossRoomFixture).boss.entityId);
+    if (bossAlive) return;
+
     const difficulty = this.fixture.difficulty;
     const holdSeconds = STASH_HOLD_SECONDS[difficulty] ?? STASH_HOLD_SECONDS['easy']!;
     const durationMs = holdSeconds * 1000;
@@ -2060,6 +2162,7 @@ export class RaidScene extends Phaser.Scene {
     const size = this.gridSize;
     const target = useRaidStore.getState().target;
     const wallColor = target?.cosmetics?.wallColor ?? WALL_COLOR;
+    const wallHeight = 32;
 
     const colorFor = (wall: EntryPointWall, position: number): number => {
       const ep = this.fixture.entryPoints.find((e) => e.wall === wall && e.position === position);
@@ -2074,10 +2177,57 @@ export class RaidScene extends Phaser.Scene {
     ): void => {
       const s = IsometricEngine.worldToScreen(start.x, start.y, this.currentRotation);
       const e = IsometricEngine.worldToScreen(end.x, end.y, this.currentRotation);
-      this.wallGraphics.lineStyle(WALL_THICKNESS, colorFor(wall, position), 1.0);
+      
+      const neonColor = colorFor(wall, position);
+      const bx = this.offsetX;
+      const by = this.offsetY;
+
+      // 1. Draw volumetric semi-transparent holographic barrier panels
+      this.wallGraphics.fillStyle(neonColor, 0.12);
       this.wallGraphics.beginPath();
-      this.wallGraphics.moveTo(s.x + this.offsetX, s.y + this.offsetY);
-      this.wallGraphics.lineTo(e.x + this.offsetX, e.y + this.offsetY);
+      this.wallGraphics.moveTo(s.x + bx, s.y + by);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by - wallHeight);
+      this.wallGraphics.lineTo(s.x + bx, s.y + by - wallHeight);
+      this.wallGraphics.closePath();
+      this.wallGraphics.fillPath();
+
+      // 2. Draw subtle horizontal scanlines inside the holographic panel
+      this.wallGraphics.lineStyle(1.5, neonColor, 0.25);
+      this.wallGraphics.beginPath();
+      this.wallGraphics.moveTo(s.x + bx, s.y + by - wallHeight * 0.4);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by - wallHeight * 0.4);
+      this.wallGraphics.moveTo(s.x + bx, s.y + by - wallHeight * 0.7);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by - wallHeight * 0.7);
+      this.wallGraphics.strokePath();
+
+      // 3. Draw vertical boundary support pillars
+      this.wallGraphics.lineStyle(1.5, neonColor, 0.4);
+      this.wallGraphics.beginPath();
+      this.wallGraphics.moveTo(s.x + bx, s.y + by);
+      this.wallGraphics.lineTo(s.x + bx, s.y + by - wallHeight);
+      this.wallGraphics.strokePath();
+
+      // 4. Draw high-opacity neon top-capping edge with glowing effect
+      // Primary solid cap
+      this.wallGraphics.lineStyle(2.5, neonColor, 0.85);
+      this.wallGraphics.beginPath();
+      this.wallGraphics.moveTo(s.x + bx, s.y + by - wallHeight);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by - wallHeight);
+      this.wallGraphics.strokePath();
+
+      // Secondary soft glow capping line
+      this.wallGraphics.lineStyle(5.5, neonColor, 0.2);
+      this.wallGraphics.beginPath();
+      this.wallGraphics.moveTo(s.x + bx, s.y + by - wallHeight);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by - wallHeight);
+      this.wallGraphics.strokePath();
+
+      // 5. Draw a small glowing base trim line
+      this.wallGraphics.lineStyle(1.5, neonColor, 0.4);
+      this.wallGraphics.beginPath();
+      this.wallGraphics.moveTo(s.x + bx, s.y + by);
+      this.wallGraphics.lineTo(e.x + bx, e.y + by);
       this.wallGraphics.strokePath();
     };
 
@@ -2176,6 +2326,7 @@ export class RaidScene extends Phaser.Scene {
     });
 
     drone.setTint(0xff5555);
+    drone.setInteractive();
     drone.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
     
     drone.setScale(0);
@@ -2262,6 +2413,85 @@ export class RaidScene extends Phaser.Scene {
             drone.walkPath([step], this.offsetX, this.offsetY, this.currentRotation);
           }
         }
+      }
+    }
+  }
+
+  private tickSquadCombat(): void {
+    if (useRaidStore.getState().phase !== 'active') return;
+
+    const aliveSquad = this.squadEntities.filter(s => s.active && s.hp > 0);
+    if (aliveSquad.length === 0 || this.hostileEntities.length === 0) return;
+
+    const isBossRaid = isBossFixture(this.fixture.id);
+    const bDef = isBossRaid ? (this.fixture as BossRoomFixture).boss : null;
+
+    for (const member of aliveSquad) {
+      if (Date.now() < (member as any).stunnedUntilMs) continue;
+
+      // 1. Prioritize attacking the boss if adjacent
+      if (isBossRaid && bDef) {
+        const bossSprite = this.hostileEntities.find(e => e.entityId === bDef.entityId && e.hp > 0);
+        if (bossSprite) {
+          const dx = Math.abs(member.currentGridX - bossSprite.currentGridX);
+          const dy = Math.abs(member.currentGridY - bossSprite.currentGridY);
+          const dist = Math.max(dx, dy); // Chebyshev distance
+
+          if (dist <= 1) {
+            // Melee attack the boss!
+            const meleeDamage = member.meleeDamage;
+            SoundManager.getInstance().playSfx('laser');
+            
+            const store = useRaidStore.getState();
+            const elapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
+            store.appendAction({
+              t: elapsed,
+              type: 'boss_attacked',
+              data: { bossId: bossSprite.entityId, entityId: member.entityId }
+            });
+
+            applyDamage(bossSprite, meleeDamage, bossSprite.entityId);
+
+            // Flashing animation for the boss
+            this.tweens.add({
+              targets: bossSprite,
+              alpha: { from: 1.0, to: 0.5 },
+              duration: 100,
+              yoyo: true
+            });
+
+            this.broadcastOperationalEvent(`[${elapsed}s] Attack: Squad member ${member.name} dealt ${meleeDamage} damage to Boss!`);
+            continue;
+          }
+        }
+      }
+
+      // 2. Otherwise attack adjacent drones
+      const adjacentDrones = this.hostileEntities.filter(e => {
+        if (e.hp <= 0 || e.entityId === bDef?.entityId) return false;
+        const dx = Math.abs(member.currentGridX - e.currentGridX);
+        const dy = Math.abs(member.currentGridY - e.currentGridY);
+        return Math.max(dx, dy) <= 1;
+      });
+
+      if (adjacentDrones.length > 0) {
+        // Attack the first adjacent drone
+        const targetDrone = adjacentDrones[0];
+        const meleeDamage = member.meleeDamage;
+        SoundManager.getInstance().playSfx('laser');
+        
+        applyDamage(targetDrone, meleeDamage, targetDrone.entityId);
+
+        this.tweens.add({
+          targets: targetDrone,
+          alpha: { from: 1.0, to: 0.5 },
+          duration: 100,
+          yoyo: true
+        });
+
+        const store = useRaidStore.getState();
+        const elapsed = Math.max(0, store.durationSeconds - store.timeRemainingSeconds);
+        this.broadcastOperationalEvent(`[${elapsed}s] Attack: Squad member ${member.name} dealt ${meleeDamage} damage to drone!`);
       }
     }
   }

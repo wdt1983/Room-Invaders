@@ -954,3 +954,28 @@ export async function repairPlacedItem(gridX: number, gridY: number) {
     return { success: false as const, error: err.message || 'An unexpected error occurred repairing item.' };
   }
 }
+
+export async function updateRaiderCosmeticsAction(cosmetics: any) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false as const, error: 'Unauthorized' };
+    }
+
+    const { error: updateError } = await (supabase.from('profiles') as any)
+      .update({ raider_cosmetics: cosmetics })
+      .eq('id', user.id);
+
+    if (updateError) {
+      console.error('Failed to update raider cosmetics:', updateError);
+      return { success: false as const, error: 'Failed to save customization' };
+    }
+
+    return { success: true as const, cosmetics };
+  } catch (err: any) {
+    console.error("[updateRaiderCosmeticsAction] Exception caught:", err);
+    return { success: false as const, error: err.message || 'An unexpected error occurred saving customization.' };
+  }
+}

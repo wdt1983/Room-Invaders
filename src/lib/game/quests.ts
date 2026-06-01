@@ -5,6 +5,7 @@
 // Coordinates real-time progress increments on player actions (placing items,
 // finishing raids, leveling up) and handles sequential tutorial unlocks.
 
+import { createClient } from '@supabase/supabase-js';
 import questsData from '@/game/fixtures/quests.json';
 
 export interface QuestDefinition {
@@ -43,16 +44,33 @@ export function findQuestDefinition(questId: string): QuestDefinition | null {
   return null;
 }
 
+// Lazy admin client creator to bypass RLS in server-side context
+let _supabaseAdmin: any = null;
+function getAdminClient(fallbackClient: any) {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (url && serviceKey) {
+    _supabaseAdmin = createClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    return _supabaseAdmin;
+  }
+  return fallbackClient;
+}
+
 /**
  * Seed the first tutorial quest ("tut-01" - "Wake Up") and first story quest ("story-01") for a player.
  * Safe to call repeatedly (idempotent due to unique index).
  */
 export async function seedInitialQuests(supabase: any, userId: string): Promise<void> {
+  const client = getAdminClient(supabase);
+  
   // 1. Seed tutorial quest
   const tut01 = allQuests.tutorial.find((q) => q.id === 'tut-01');
   if (tut01) {
     try {
-      const { data: existing } = await supabase
+      const { data: existing } = await client
         .from('player_quests')
         .select('id')
         .eq('player_id', userId)
@@ -60,7 +78,7 @@ export async function seedInitialQuests(supabase: any, userId: string): Promise<
         .maybeSingle();
 
       if (!existing) {
-        await supabase.from('player_quests').insert({
+        await client.from('player_quests').insert({
           player_id: userId,
           quest_id: 'tut-01',
           status: 'active',
@@ -76,7 +94,7 @@ export async function seedInitialQuests(supabase: any, userId: string): Promise<
 
   // 2. Seed story quest if user is level >= 3 and has no story quests active or completed
   try {
-    const { data: profile } = await supabase
+    const { data: profile } = await client
       .from('profiles')
       .select('player_level')
       .eq('id', userId)
@@ -87,7 +105,7 @@ export async function seedInitialQuests(supabase: any, userId: string): Promise<
     if (playerLevel >= 3) {
       const story01 = allQuests.story.find((q) => q.id === 'story-01');
       if (story01) {
-        const { data: storyExists } = await supabase
+        const { data: storyExists } = await client
           .from('player_quests')
           .select('id')
           .eq('player_id', userId)
@@ -95,7 +113,7 @@ export async function seedInitialQuests(supabase: any, userId: string): Promise<
           .limit(1);
 
         if (!storyExists || storyExists.length === 0) {
-          await supabase.from('player_quests').insert({
+          await client.from('player_quests').insert({
             player_id: userId,
             quest_id: 'story-01',
             status: 'active',
@@ -115,7 +133,8 @@ export async function seedInitialQuests(supabase: any, userId: string): Promise<
  * Fetch the active or completed story quest for the player.
  */
 export async function getActiveStoryQuest(supabase: any, userId: string): Promise<any | null> {
-  const { data, error } = await supabase
+  const client = getAdminClient(supabase);
+  const { data, error } = await client
     .from('player_quests')
     .select('*')
     .eq('player_id', userId)
@@ -137,9 +156,10 @@ export async function trackQuestProgress(
   amount: number,
   isAbsolute = false
 ): Promise<void> {
+  const client = getAdminClient(supabase);
   try {
     // 1. Fetch active quests for the player
-    const { data: activeQuests, error } = await supabase
+    const { data: activeQuests, error } = await client
       .from('player_quests')
       .select('id, quest_id, progress, target_value')
       .eq('player_id', userId)
@@ -185,7 +205,7 @@ export async function trackQuestProgress(
         updatePayload.completed_at = new Date().toISOString();
       }
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await client
         .from('player_quests')
         .update(updatePayload)
         .eq('id', quest.id);
@@ -202,7 +222,7 @@ export async function trackQuestProgress(
         const nextQuestDef = allQuests.tutorial.find((q) => q.id === questDef.unlockSequence) ||
                              allQuests.story.find((q) => q.id === questDef.unlockSequence);
         if (nextQuestDef) {
-          const { error: unlockError } = await supabase.from('player_quests').insert({
+          const { error: unlockError } = await client.from('player_quests').insert({
             player_id: userId,
             quest_id: nextQuestDef.id,
             status: 'active',

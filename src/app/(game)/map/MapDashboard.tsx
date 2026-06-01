@@ -330,13 +330,39 @@ export function MapDashboard({
               >
                 Close File
               </Button>
-              <Link href={`/raid/${selectedTarget.id}`} className="flex-1">
-                <Button 
-                  className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] animate-pulse h-10 rounded-xl"
-                >
-                  Launch Raid
-                </Button>
-              </Link>
+              {(() => {
+                const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(selectedTarget.id);
+                const isFriend = friends.some(f => f.id === selectedTarget.id);
+                
+                if (isFriend) {
+                  return (
+                    <Link href={`/visit/${selectedTarget.id}`} className="flex-1">
+                      <Button className="w-full text-xs font-bold bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)] h-10 rounded-xl">
+                        Visit Sanctuary
+                      </Button>
+                    </Link>
+                  );
+                }
+                
+                const isLocked = !isUuid && playerProfile.player_level < selectedTarget.player_level;
+                
+                return isLocked ? (
+                  <Button 
+                    disabled
+                    className="flex-1 text-xs font-bold bg-muted border border-border text-muted-foreground h-10 rounded-xl"
+                  >
+                    Locked (Requires Lvl {selectedTarget.player_level})
+                  </Button>
+                ) : (
+                  <Link href={`/raid/${selectedTarget.id}`} className="flex-1">
+                    <Button 
+                      className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] animate-pulse h-10 rounded-xl"
+                    >
+                      Launch Raid
+                    </Button>
+                  </Link>
+                );
+              })()}
             </DialogFooter>
           </DialogContent>
         )}

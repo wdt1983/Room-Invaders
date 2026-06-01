@@ -1,6 +1,88 @@
 # changelog.md — Room Invaders
 ## Applied Logic Technologies, LLC — ALT Games Division
 
+## [0.26.6] — 2026-05-31 — Tactical Human Raider Visual Overhaul
+
+### Added
+- **Tactical Human Raider Visuals (`entity_drone`)**:
+  - Completely decoupled the player's human squad raiders (`entity_drone`) from the automated defense sentry hover drone (`guard_drone`) drawing blocks.
+  - Constructed a fully detailed, realistic standing **3D Voxel Tactical Cyber-Raider** model for squad members, replacing the quadcopter drone look:
+    - **Boots**: Ground-level black boots resting firmly on the floor.
+    - **Cargo Pants**: Tactical dark-navy cargo trousers.
+    - **Utility Belt**: Slate-black waist belt holding modular hazard-tan ammunition pouches on the hips.
+    - **Ballistic Torso & Vest**: Armored chest plate vest overlay (color-tinted to the player's active level/cosmetic color) featuring a glowing cyan chest core badge.
+    - **Survival Backpack**: Heavy carbon explorer pack mounted at the rear spine.
+    - **Sleeves & Armor Shoulders**: Matching combat jacket arm sleeves and armored shoulder plates.
+    - **Assault Rifle**: Matte carbon-black assault rifle held horizontally in gloved hands across the chest, featuring a pulsing green laser sight.
+    - **High-Tech Helmet**: Armored beveled dark helmet mounted over a warm skin-tone neck and face base, equipped with a sweeping neon-cyan cyber-visor plate.
+- **Sentry Patrol Hover Drone (`guard_drone`)**:
+  - Maintained and polished the flying quadcopter sentry drone model (hovering central core sphere, rotor arms, spinning blades, sensor gimbals, stabilizer wings) to visually represent automated base defense units.
+
+## [0.26.5] — 2026-05-31 — High-Fidelity Realistic Volumetric Voxel Entities Overhaul
+
+### Added
+- **High-Fidelity Voxel Entity Models Overhaul**:
+  - Overhauled player and defender drones (`entity_drone` / `guard_drone`) with bottom slate-gray armor base plates, hovering gold core spheres, front sensor gimbals holding twin glowing cyan optic lens visors, side weapon rails with glowing laser tips, and under-chassis thruster nozzles containing active glowing orange thruster flares.
+  - Upgraded mechanical sentry dog (`guard_dog`) with beveled armored gray spine plates, glowing amber energy cells, shoulder heat exhaust vents, cyber neck collars, and front/rear steel limbs with silver pivot joint caps.
+  - Overhauled Warlord "Circuit" (`boss_circuit`) mainframe model with a highly detailed safety mounting base plate and gold hazard corners. Built horizontal modular server drawers, vertical exposed copper power busbars, side ventilation grates, and live blinking green/cyan LED data clusters on the server racks.
+  - Upgraded Warlord "Ironjaw" (`boss_ironjaw`) with heavy slate-gray hydraulic stabilizer ground cylinders on the rear sides and yellow-black industrial hazard trims on its shoulder pads.
+  - Upgraded Warlord "Whisper" (`boss_whisper`) with active light-green glowing fiber-optic circuit lanes running down the core and flashing passive sensor grids on its back.
+  - Upgraded Warlord "Volkov" (`boss_volkov`) with realistic linked steel treads, high-density ammo feeder belts, and rear engine exhaust cooling vents.
+  - Upgraded Warlord "Warden" (`boss_warden`) with security vault vertical steel containment cage bars and heavy hydraulic torso stabilizer cylinders.
+
+## [0.26.4] — 2026-05-30 — Raid HUD Sidebar Redesign, Multi-Squad Spawning & Volumetric Voxel Entity Models
+
+### Added
+- **Volumetric Voxel Character & Boss Models**:
+  - Upgraded player squad members (`entity_drone` / `guard_drone`) with dedicated side stabilizer fins and twin neon-glowing visors on the front face, giving units clear spatial focus during traversal.
+  - Implemented rich, customized voxel models for sentry assets:
+    - **Cyber Sentry Dog** (`guard_dog`): Bronze mechanical chassis, glowing orange cyber-collar, and angular carbon head with crimson optics.
+    - **Hologram Decoy** (`guard_decoy`): Volumetric, semi-transparent purple casing (`alpha = 0.5`) housing a pulsing pink power capacitor core inside.
+  - Created customized, multi-tiered volumetric voxel models for all 5 Warlord Bosses, completely replacing the generic solid blue fallback block:
+    - **Ironjaw** (`boss_ironjaw`): Armored red chassis block, massive protruding gray iron jaw plate, dual spiked shoulder-guards, and glowing amber warning core.
+    - **Whisper** (`boss_whisper`): Sleek black carbon composite core, neon green active-camo side panels, twin high-frequency sensor antennas, and data screen visor.
+    - **Volkov** (`boss_volkov`): Armored navy-blue treads base casing, heavy mechanical steel torso, dual shoulder-mounted tactical railgun barrels, and glowing orange command visor.
+    - **Circuit** (`boss_circuit`): Multi-tiered gold memory stack nodes, glowing copper condenser rings, and sweeping gold matrix-data visor.
+    - **Warden** (`boss_warden`): Heavy purple containment treads, mechanical composite torso with containment structures, dual flanking steel shield plates, and a red searchlight dome on top.
+
+### Fixed
+- **Raid HUD Cyberpunk Sidebar Redesign**: Overhauled `RaidHUD.tsx` layout structure, shifting it from a top-centered overlay to an absolute, right-aligned vertical sidebar. Listed squad roster cards and support abilities vertically using full-width (`w-full`) horizontal flex layouts, custom hover scale micro-animations (`hover:scale-[1.02] active:scale-[0.98]`), and neon active selection highlights, leaving the center gameplay viewport completely clear.
+- **Top-Level Briefing Initializer Spawning Fix**: Lifted `<RaidInitializer>` out of the execution phase conditional block in `RaidPrepContainer.tsx` and mounted it at the root render level. This ensures that the store is initialized on page load and is **not** reset when launching the breach, successfully spawning both Vanguard and Support and enabling seamless `1` / `2` key selection switching.
+
+## [0.26.3] — 2026-05-30 — PvE Anti-Cheat Softening, Tech Tree Level Alignment & Battle Pass Catalog ID Resolution
+
+### Added
+- **Seasonal Battle Pass Reward Catalog ID Migration**: Authored database migration `00033_fix_battle_pass_reward_item_ids.sql` that dynamically queries seeded master item IDs (via their unique `sprite_key`s) and commits them to the `public.battle_pass_rewards` table. Deployed the migration to the remote Supabase database instance `tqvsympapbmpbwkydumc` using `supabase db push`. This resolves the `"missing catalog item ID"` transaction errors, enabling players to successfully claim all free and premium battle pass rewards.
+
+### Fixed
+- **PvE Anti-Cheat Validation Softening**: Fully decoupled PvE raids (`!params.isPvP`) from rigid anti-cheat checks inside `replayValidator.ts` to prevent false-positive rejections caused by network/pathfinding drift and Phaser movement tween cancellations triggered by boss stuns:
+  - Bypassed position walkability checks and expanded allowable Chebyshev step-move distance up to `gridSize` tiles.
+  - Bypassed proximity constraints for both `boss_attacked` and `barricade_attacked` actions.
+  - Bypassed simulated squad HP caps and intermediate death checks.
+  - Preserved standard PvE boss defeat verification to guarantee players still engage and defeat the boss in simulation.
+  - Synced and deployed the updated `resolve-raid` Deno Edge Function to the remote project.
+- **Level-Up Overlay Tech Tree Milestone Unlock Alignment**:
+  - Overhauled [LevelUpOverlay.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/game/LevelUpOverlay.tsx) to align the "Tactical Squad Tech Tree" systemic unlock milestone to trigger correctly at **Level 3** (aligning with actual in-game squad dashboard unlock rules) instead of displaying the old "Lvl 8 Unlock" label.
+  - Added a new **Advanced Security Defenses** milestone at **Level 8** highlighting the unlocking of premium defense blueprints (Tesla Coils, Flame Vents, Patrol Drones) which unlock at Level 8 in the master catalog.
+  - Updated JSDoc comments in squad [actions.ts](file:///c:/Projects/ALT-Games/room-invaders/src/app/(game)/squad/actions.ts) to correctly reference the Level 3 check.
+
+## [0.26.2] — 2026-05-30 — Boss Raid & Server Authoritative Resolution
+
+### Fixed
+- **Boss Raid Scene Initialization Bug**: Fixed a critical runtime crash `TypeError: Cannot read properties of undefined (reading 'name')` at `RaidScene.ts:506` when launching a Boss Raid (e.g. `"boss-ironjaw"`). Resolved this by bypassing the dynamic fixture reconstruction block in `RaidScene.ts` for all hand-authored static NPC rooms and boss room targets. This ensures that their complete definition (including the boss definitions, briefings, and unique rewards) is loaded authoritatively using the standard `resolveFixture(target.id)` routine.
+- **Raid Authoritative Resolution Deno CORS Crash**: Exposes and resolves the true cause behind the misleading `"Server unreachable — showing local estimate."` browser warning.
+  1. Fixed a critical unhandled Deno runtime exception in `resolve-raid/index.ts` where reference variable `anyLoot` was completely undefined at line 1229, crashing Deno requests with a `ReferenceError` during post-raid inventory updates.
+  2. Wrapped the entire `resolve-raid` Deno serve request handler in a global, highly robust `try...catch` block. This guarantees that Deno errors or database exceptions are cleanly caught and returned as structured JSON payloads with full CORS headers (`Access-Control-Allow-Origin: *`) rather than crashing the gateway and triggering browser CORS blocks.
+  3. Refactored client-side `resolveRaid.ts` client wrapper to parse and surface actual structured server-side validation error messages in the results UI rather than masking them under a generic unreachable network error.
+
+## [0.26.1] — 2026-05-30 — Onboarding Recon & Free Scouting
+
+### Fixed
+- **Onboarding Scouting Blocker**: Made scouting 100% free of Intel cost when the player's active quest is `"tut-04"` ("Know Your Enemy") or the player level is `<= 2`. This prevents new players from getting stuck due to an empty Intel balance.
+- **Quest Progress Hook**: Wired up the `"scout_room"` quest progress trigger in the `scoutTargetAction` server action to authoritatively advance and unlock Tutorial 5 upon successfully scouting a base.
+- **Dynamic Onboarding-to-Story Transitions**: Configured `QuestDashboard.tsx` to automatically default the active left tab to `"story"` if onboarding is fully claimed, and immediately trigger the tab shift to `"story"` upon claiming the final tutorial quest (`"tut-08"`).
+- **Edge Function Syncing**: Redeployed Deno Edge Functions (`process-quest`, `resolve-raid`, etc.) to the remote Supabase project, syncing the quest definitions database catalog server-side and resolving the 400 Bad Request error when claiming story quest rewards.
+
 ## [0.26.0] — 2026-05-29 — Milestone 9J: Volumetric Color Shading & Direct Move Relocation Tool
 
 ### Added

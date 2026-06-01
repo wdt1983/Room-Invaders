@@ -95,6 +95,10 @@ export async function resolveRaid(
             ctx.statusText,
             body,
           );
+          const parsed = JSON.parse(body);
+          if (parsed && parsed.success === false) {
+            return parsed as ResolveRaidError;
+          }
         } catch (readErr) {
           console.warn("[resolveRaid] Failed reading error body:", readErr);
         }

@@ -24,9 +24,9 @@ import {
  */
 const SYSTEMIC_UNLOCKS: Record<number, { title: string; desc: string; icon: any }> = {
   3: {
-    title: "Secondary Trap Customization",
-    desc: "Deploy advanced secondary defense options (like Shock Pads) to lock down paths.",
-    icon: ShieldAlert
+    title: "Tactical Squad Tech Tree",
+    desc: "Spend tech points across Offense, Defense, and Utility nodes to boost combat stats.",
+    icon: Cpu
   },
   5: {
     title: "PvP Raiding & Matchmaking",
@@ -34,9 +34,9 @@ const SYSTEMIC_UNLOCKS: Record<number, { title: string; desc: string; icon: any 
     icon: Swords
   },
   8: {
-    title: "Tactical Squad Tech Tree",
-    desc: "Spend tech points across Offense, Defense, and Utility nodes to boost combat stats.",
-    icon: Cpu
+    title: "Advanced Security Defenses",
+    desc: "Unlock lethal defensive systems including Tesla Coils, Patrol Drones, and Flame Vents.",
+    icon: ShieldAlert
   },
   10: {
     title: "Raider Squad Slot #2",

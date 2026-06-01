@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useRaidStore } from "@/lib/store/useRaidStore";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
@@ -39,6 +40,65 @@ export function RaidHUD() {
   const activeEffects = usePlayerStore((s) => s.activeEffects);
   const unlockedAbilities = activeEffects?.unlockedAbilities || [];
 
+  // Keyboard Hotkeys listener for active combat
+  useEffect(() => {
+    if (phase !== 'active') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Focus check to prevent capturing typing inside chat console or inputs
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      const key = e.key.toUpperCase();
+
+      // 1. Squad roster selection (1 - 4)
+      if (key >= '1' && key <= '4') {
+        const index = parseInt(key) - 1;
+        if (prepSquadMembers && index >= 0 && index < prepSquadMembers.length) {
+          const member = prepSquadMembers[index];
+          if (member && member.hp > 0) {
+            EventBus.emit('change-active-unit', index);
+          }
+        }
+      }
+
+      // 2. Support Abilities (Q, W, E)
+      if (unlockedAbilities && unlockedAbilities.length > 0) {
+        let selectedAbility: string | null = null;
+        if (key === 'Q' && unlockedAbilities.includes('medkit')) {
+          selectedAbility = 'medkit';
+        } else if (key === 'W' && unlockedAbilities.includes('breaching_charge')) {
+          selectedAbility = 'breaching_charge';
+        } else if (key === 'E' && unlockedAbilities.includes('emp_grenade')) {
+          selectedAbility = 'emp_grenade';
+        }
+
+        if (selectedAbility) {
+          if (selectedAbility === 'medkit') {
+            // Instant cast Medkit on the currently active squad member
+            const activeMember = prepSquadMembers[activeSquadIndex];
+            if (activeMember && activeMember.hp > 0) {
+              EventBus.emit('execute-ability', { ability: 'medkit', targetId: activeMember.entityId });
+              useRaidStore.getState().setActiveAbilityMode(null);
+            }
+          } else {
+            // Toggle targeting cursor mode for breach charges & EMPs
+            const currentMode = useRaidStore.getState().activeAbilityMode;
+            if (currentMode === selectedAbility) {
+              useRaidStore.getState().setActiveAbilityMode(null);
+            } else {
+              useRaidStore.getState().setActiveAbilityMode(selectedAbility);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [phase, prepSquadMembers, activeSquadIndex, unlockedAbilities]);
+
   if (!target || phase === 'results') return null;
 
   const lowTime = timeRemainingSeconds <= 15 && phase === 'active';
@@ -51,19 +111,19 @@ export function RaidHUD() {
   };
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex flex-col items-center gap-2 p-3">
-      <div className="pointer-events-auto flex w-full max-w-lg flex-col gap-2.5 rounded-md border border-primary/30 bg-background/90 p-3 shadow-lg backdrop-blur">
+    <div className="pointer-events-none absolute top-16 right-4 bottom-16 w-80 z-40 flex flex-col justify-center select-none">
+      <div className="pointer-events-auto flex w-full flex-col gap-3 rounded-2xl border border-primary/30 bg-background/95 p-4 shadow-2xl backdrop-blur max-h-[85vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Crosshair className="size-4 text-primary" />
-            <div className="flex flex-col leading-tight">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="flex items-center gap-2 min-w-0">
+            <Crosshair className="size-4 text-primary shrink-0" />
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
                 {target.difficulty} raid
               </span>
-              <span className="text-sm font-bold">{target.name}</span>
+              <span className="text-sm font-bold truncate text-foreground">{target.name}</span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 font-mono text-2xl tabular-nums">
+          <div className="flex items-center gap-1.5 font-mono text-2xl tabular-nums shrink-0">
             <Timer className={`size-5 ${lowTime ? 'text-destructive' : 'text-primary'}`} />
             <span className={lowTime ? 'text-destructive' : 'text-foreground'}>
               {formatTime(timeRemainingSeconds)}
@@ -80,7 +140,7 @@ export function RaidHUD() {
 
         {/* Combined Squad HP Bar */}
         {squadMaxHp > 0 ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 border-b border-primary/10 pb-2.5">
             <Heart className={`size-4 shrink-0 ${lowHp ? 'text-destructive' : 'text-rose-400'}`} />
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
               <div
@@ -88,7 +148,7 @@ export function RaidHUD() {
                 style={{ width: `${Math.max(0, Math.min(100, hpProgress * 100))}%` }}
               />
             </div>
-            <span className="w-16 text-right font-mono text-xs tabular-nums text-muted-foreground">
+            <span className="w-16 text-right font-mono text-[10px] font-bold tabular-nums text-muted-foreground">
               {squadHp} / {squadMaxHp}
             </span>
           </div>
@@ -96,11 +156,11 @@ export function RaidHUD() {
 
         {/* Deployed Squad Members Portraits (Phase 7) */}
         {prepSquadMembers && prepSquadMembers.length > 0 ? (
-          <div className="flex flex-col gap-1 border-t border-primary/10 pt-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Squad Roster (Click to Select / Medkit)
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Squad Roster (Hotkeys 1-4 / Medkit)
             </span>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-col gap-2">
               {prepSquadMembers.map((member, index) => {
                 const isSelected = activeSquadIndex === index;
                 const hpPercent = member.maxHp > 0 ? (member.hp / member.maxHp) * 100 : 0;
@@ -120,20 +180,25 @@ export function RaidHUD() {
                         EventBus.emit('change-active-unit', index);
                       }
                     }}
-                    className={`flex flex-col gap-1 rounded-lg border p-2 text-left transition-all pointer-events-auto shrink-0 w-28 ${
+                    className={`flex flex-col gap-2 rounded-xl border p-3 text-left transition-all pointer-events-auto w-full hover:scale-[1.01] active:scale-[0.99] ${
                       isDead 
                         ? 'opacity-40 border-muted bg-muted/20 cursor-not-allowed'
                         : isSelected
-                          ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_8px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500'
+                          ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_12px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500'
                           : 'border-primary/20 bg-background/50 hover:bg-primary/5 hover:border-primary/40'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="truncate text-xs font-bold text-foreground">
-                        {member.name}
-                      </span>
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[9px] font-mono font-bold leading-none px-1.5 py-0.5 bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 rounded shrink-0 select-none">
+                          {index + 1}
+                        </span>
+                        <span className="truncate text-xs font-bold text-foreground">
+                          {member.name}
+                        </span>
+                      </div>
                       {member.activeAbility && (
-                        <span className="text-[9px] px-1 bg-primary/25 text-primary font-mono rounded shrink-0">
+                        <span className="text-[9px] px-1.5 py-0.5 bg-primary/25 text-primary font-mono rounded shrink-0 leading-none">
                           {member.activeAbility === 'medkit' ? 'MED' : member.activeAbility === 'breaching_charge' ? 'BRH' : 'EMP'}
                         </span>
                       )}
@@ -147,29 +212,30 @@ export function RaidHUD() {
                         style={{ width: `${Math.max(0, Math.min(100, hpPercent))}%` }}
                       />
                     </div>
-                    <div className="flex justify-between items-center text-[9px] font-mono text-muted-foreground leading-none mt-0.5">
-                      <span>{isDead ? 'KIA' : `${member.hp}/${member.maxHp}`}</span>
+                    <div className="flex justify-between items-center w-full text-[10px] font-mono text-muted-foreground leading-none">
+                      <span>{isDead ? 'KIA' : `${member.hp}/${member.maxHp} HP`}</span>
+                      
+                      {/* Loadout icons summary */}
+                      {!isDead && (member.weapon || member.armor || member.passiveGear) && (
+                        <div className="flex gap-2 text-xs select-none">
+                          {member.weapon && (
+                            <span title={`Weapon: ${member.weapon.replace('_', ' ')}`}>
+                              {member.weapon === 'heavy_machete' ? '🗡️' : '🔨'}
+                            </span>
+                          )}
+                          {member.armor && (
+                            <span title={`Armor: ${member.armor.replace('_', ' ')}`}>
+                              {member.armor === 'reinforced_vest' ? '🛡️' : '🎖️'}
+                            </span>
+                          )}
+                          {member.passiveGear && (
+                            <span title={`Utility: ${member.passiveGear.replace('_', ' ')}`}>
+                              {member.passiveGear === 'adrenaline_rush' ? '⚡' : '📡'}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {/* Small loadout icons summary (Phase 7.0.5) */}
-                    {!isDead && (member.weapon || member.armor || member.passiveGear) && (
-                      <div className="flex gap-1.5 mt-1 border-t border-primary/5 pt-1 text-[9px] leading-none text-muted-foreground select-none">
-                        {member.weapon && (
-                          <span title={`Weapon: ${member.weapon.replace('_', ' ')}`}>
-                            {member.weapon === 'heavy_machete' ? '🗡️' : '🔨'}
-                          </span>
-                        )}
-                        {member.armor && (
-                          <span title={`Armor: ${member.armor.replace('_', ' ')}`}>
-                            {member.armor === 'reinforced_vest' ? '🛡️' : '🎖️'}
-                          </span>
-                        )}
-                        {member.passiveGear && (
-                          <span title={`Utility: ${member.passiveGear.replace('_', ' ')}`}>
-                            {member.passiveGear === 'adrenaline_rush' ? '⚡' : '📡'}
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </button>
                 );
               })}
@@ -179,31 +245,31 @@ export function RaidHUD() {
 
         {/* Support Abilities Panel (Phase 7) */}
         {unlockedAbilities && unlockedAbilities.length > 0 ? (
-          <div className="flex flex-col gap-1.5 border-t border-primary/10 pt-2">
+          <div className="flex flex-col gap-2 border-t border-primary/10 pt-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Tactical Support Abilities
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Support Abilities (Hotkeys Q/W/E)
               </span>
               {activeAbilityMode && (
                 <button 
                   onClick={() => useRaidStore.getState().setActiveAbilityMode(null)}
                   className="text-[10px] font-bold text-destructive hover:underline pointer-events-auto"
                 >
-                  Cancel Target Selection
+                  Cancel
                 </button>
               )}
             </div>
             
             {/* Ability Mode Feedback Banner */}
             {activeAbilityMode && (
-              <div className="text-xs border border-primary/30 bg-primary/10 text-primary-foreground p-1.5 rounded text-center animate-pulse">
-                {activeAbilityMode === 'medkit' && "🔴 combat medkit active: click a squad portrait above to heal 40 HP."}
-                {activeAbilityMode === 'breaching_charge' && "🔴 breaching charge active: click adjacent barricade in room."}
-                {activeAbilityMode === 'emp_grenade' && "🔴 emp grenade active: click any turret tile in room."}
+              <div className="text-[10px] leading-tight border border-primary/30 bg-primary/10 text-primary-foreground p-2 rounded-lg text-center animate-pulse">
+                {activeAbilityMode === 'medkit' && "🔴 Combat Medkit active: click squad card to heal 40 HP."}
+                {activeAbilityMode === 'breaching_charge' && "🔴 Breach Charge active: click barricade in room."}
+                {activeAbilityMode === 'emp_grenade' && "🔴 EMP Grenade active: click turret in room."}
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               {unlockedAbilities.map((ability) => {
                 const isActive = activeAbilityMode === ability;
                 
@@ -211,6 +277,7 @@ export function RaidHUD() {
                 let label = "Ability";
                 let desc = "";
                 let iconClass = "⚡";
+                const hotkey = ability === 'medkit' ? 'Q' : ability === 'breaching_charge' ? 'W' : 'E';
                 
                 if (ability === 'medkit') {
                   label = "Combat Medkit";
@@ -236,17 +303,21 @@ export function RaidHUD() {
                         useRaidStore.getState().setActiveAbilityMode(ability);
                       }
                     }}
-                    className={`flex-1 flex items-center gap-1.5 border p-1.5 rounded-lg text-left transition-all pointer-events-auto ${
+                    className={`relative w-full flex items-center gap-3 border p-2.5 rounded-xl text-left transition-all pointer-events-auto hover:scale-[1.02] active:scale-[0.98] ${
                       isActive 
-                        ? 'border-primary bg-primary text-primary-foreground shadow-[0_0_8px_rgba(224,242,254,0.4)] ring-1 ring-primary'
+                        ? 'border-emerald-500 bg-emerald-500/10 text-foreground shadow-[0_0_12px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500'
                         : 'border-primary/20 bg-background/50 hover:bg-primary/5 hover:border-primary/40 text-foreground'
                     }`}
                   >
-                    <span className="text-base leading-none shrink-0">{iconClass}</span>
-                    <div className="flex flex-col leading-none">
-                      <span className="text-xs font-bold">{label}</span>
-                      <span className="text-[9px] text-muted-foreground mt-0.5">{desc}</span>
+                    <span className="text-2xl leading-none shrink-0">{iconClass}</span>
+                    <div className="flex flex-col leading-tight min-w-0 pr-8">
+                      <span className="text-xs font-extrabold">{label}</span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{desc}</span>
                     </div>
+                    {/* Hotkey Indicator Badge */}
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-mono font-bold leading-none px-2 py-1 bg-muted border border-border text-muted-foreground rounded-md shadow-sm">
+                      {hotkey}
+                    </span>
                   </button>
                 );
               })}
@@ -255,28 +326,28 @@ export function RaidHUD() {
         ) : null}
 
         {stashHoldProgress > 0 ? (
-          <div className="flex items-center gap-2 pt-1 border-t border-primary/10">
-            <Package className="size-4 shrink-0 text-amber-400" />
+          <div className="flex items-center gap-2 pt-2 border-t border-primary/10">
+            <Package className="size-4 shrink-0 text-amber-400 animate-pulse" />
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full bg-amber-400 transition-[width] duration-100 ease-linear"
                 style={{ width: `${Math.max(0, Math.min(100, stashHoldProgress * 100))}%` }}
               />
             </div>
-            <span className="w-20 text-right font-mono text-xs tabular-nums text-amber-400">
+            <span className="text-right font-mono text-[10px] font-bold text-amber-400 shrink-0">
               Capturing...
             </span>
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-primary/10">
-          <span className="text-xs text-muted-foreground">
-            Phase: <span className="font-mono uppercase text-foreground">{phase}</span>
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-primary/10 mt-1">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase">
+            Phase: <span className="font-mono text-foreground">{phase}</span>
           </span>
           <Button
             size="sm"
             variant="destructive"
-            className="h-8 px-2 text-xs pointer-events-auto touch-target-expand"
+            className="h-8 px-2.5 text-xs font-bold pointer-events-auto touch-target-expand rounded-xl shadow-lg shadow-destructive/10"
             onClick={() => emitOutcome('defeat', 'Abandoned')}
           >
             <LogOut className="mr-1.5 size-3.5" />

@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { trackQuestProgress } from "@/lib/game/quests";
 
 /**
  * Server Action to spend Intel to scout a raid target.
@@ -41,6 +42,9 @@ export async function scoutTargetAction(cost: number) {
     console.error("Failed to deduct Intel:", updateError);
     return { success: false as const, error: "Failed to deduct Intel" };
   }
+
+  // 3. Track quest progress for "scout_room"
+  await trackQuestProgress(supabase, user.id, "scout_room", 1);
 
   revalidatePath("/raid");
   return { success: true as const, newIntel };

@@ -114,10 +114,76 @@ const CORNER_STORE_LOOT: NpcLootTable = {
   defeat: [],
 };
 
+const COTTAGE_RUINS_LOOT: NpcLootTable = {
+  xpVictory: 52,
+  xpDefeat: 10,
+  victory: [
+    { resource: "scrap",      min: 22, max: 32, chance: 1.0 },
+    { resource: "components", min: 3,  max: 7,  chance: 1.0 },
+    { resource: "credits",    min: 5,  max: 15, chance: 0.25 },
+  ],
+  defeat: [],
+};
+
+const SHATTERED_APARTMENT_LOOT: NpcLootTable = {
+  xpVictory: 90,
+  xpDefeat: 15,
+  victory: [
+    { resource: "scrap",      min: 38, max: 52, chance: 1.0 },
+    { resource: "components", min: 8,  max: 12, chance: 1.0 },
+    { resource: "credits",    min: 10, max: 25, chance: 0.35 },
+    { resource: "intel",      min: 1,  max: 3,  chance: 0.12 },
+  ],
+  defeat: [],
+};
+
+const CORNER_BODEGA_LOOT: NpcLootTable = {
+  xpVictory: 105,
+  xpDefeat: 20,
+  victory: [
+    { resource: "scrap",      min: 45, max: 60, chance: 1.0 },
+    { resource: "components", min: 10, max: 15, chance: 1.0 },
+    { resource: "credits",    min: 15, max: 30, chance: 0.40 },
+    { resource: "intel",      min: 1,  max: 3,  chance: 0.15 },
+  ],
+  defeat: [],
+};
+
+const SEEDED_DEPOT_LOOT: NpcLootTable = {
+  xpVictory: 145,
+  xpDefeat: 25,
+  victory: [
+    { resource: "scrap",      min: 60, max: 85, chance: 1.0 },
+    { resource: "components", min: 15, max: 25, chance: 1.0 },
+    { resource: "credits",    min: 25, max: 45, chance: 0.45 },
+    { resource: "intel",      min: 2,  max: 4,  chance: 0.20 },
+    { resource: "contraband", min: 1,  max: 2,  chance: 0.10 },
+  ],
+  defeat: [],
+};
+
+const MILITARY_OUTPOST_LOOT: NpcLootTable = {
+  xpVictory: 200,
+  xpDefeat: 35,
+  victory: [
+    { resource: "scrap",      min: 80,  max: 110, chance: 1.0 },
+    { resource: "components", min: 20,  max: 35,  chance: 1.0 },
+    { resource: "credits",    min: 40,  max: 70,  chance: 0.50 },
+    { resource: "intel",      min: 3,  max: 5,   chance: 0.25 },
+    { resource: "contraband", min: 2,   max: 3,   chance: 0.15 },
+  ],
+  defeat: [],
+};
+
 export const NPC_LOOT_TABLES: Record<string, NpcLootTable> = {
   "tier1-abandoned-apartment": APARTMENT_LOOT,
   "tier1-storage-unit":        STORAGE_LOOT,
+  "tier1-cottage-ruins":       COTTAGE_RUINS_LOOT,
   "tier1-corner-store":        CORNER_STORE_LOOT,
+  "tier2-shattered-apartment": SHATTERED_APARTMENT_LOOT,
+  "tier2-corner-bodega":       CORNER_BODEGA_LOOT,
+  "tier3-seeded-depot":        SEEDED_DEPOT_LOOT,
+  "tier3-military-outpost":     MILITARY_OUTPOST_LOOT,
 };
 
 const IRONJAW_LOOT: NpcLootTable = {

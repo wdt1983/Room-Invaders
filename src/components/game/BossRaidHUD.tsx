@@ -22,15 +22,27 @@ export function BossRaidHUD() {
   const [lastPhase, setLastPhase] = useState(1);
   const [activeBanner, setActiveBanner] = useState<string | null>(null);
 
-  // Auto-dismiss briefing after 4s once combat is active
+  // Auto-dismiss briefing after 2s once combat is active
   useEffect(() => {
     if (phase === "active") {
       const timer = setTimeout(() => {
         setShowBriefing(false);
-      }, 4000);
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, [phase]);
+
+  // Skip briefing on Space, Escape, or Enter keys
+  useEffect(() => {
+    if (!showBriefing) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Escape" || e.key === "Enter") {
+        setShowBriefing(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showBriefing]);
 
   // Phase transition banner trigger
   useEffect(() => {

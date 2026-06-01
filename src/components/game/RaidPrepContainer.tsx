@@ -44,6 +44,7 @@ export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepCont
   const playerIntel = usePlayerStore((state) => state.intel);
   const setInventory = usePlayerStore((state) => state.setInventory);
   const activeEffects = usePlayerStore((state) => state.activeEffects);
+  const activeQuestId = usePlayerStore((state) => state.activeQuestId);
   const squadMembers = useSquadStore((state) => state.members);
   const isSlotLocked = useSquadStore((state) => state.isLocked);
 
@@ -130,9 +131,10 @@ export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepCont
 
   // Dynamic Intel scouting cost
   const intelCost = useMemo(() => {
+    if (activeQuestId === "tut-04" || playerLevel <= 2) return 0;
     const base = target.isPvP ? 12 : 5;
     return Math.max(2, Math.round(base * activeEffects.scoutCostMult));
-  }, [target.isPvP, activeEffects.scoutCostMult]);
+  }, [target.isPvP, activeEffects.scoutCostMult, activeQuestId, playerLevel]);
 
   // Scouting handler
   const handleScoutTarget = () => {
@@ -208,36 +210,33 @@ export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepCont
     toast.success("Breach commenced! Good luck, Commander.");
   };
 
-  if (phase === "execute") {
-    // Mount the Phaser Canvas & active Raiding HUD interfaces
-    return (
-      <div className="relative h-full w-full">
-        <RaidInitializer
-          target={{
-            id: target.id,
-            name: target.name,
-            difficulty: target.difficulty as any,
-            isPvP: target.isPvP,
-            gridSize: target.gridSize,
-            entryPoints: target.entryPoints,
-            placedItems: target.placedItems,
-            stash: target.stash,
-          } as any}
-        />
-        <GameWrapper />
-        <RaidHUD />
-        <BossRaidHUD />
-        <RaidResults />
-        <RaidResolver />
-      </div>
-    );
-  }
-
   /* ========================================================
      PREP SCREEN UI
      ======================================================== */
   return (
-    <div className="container mx-auto h-full max-w-4xl overflow-y-auto p-4 pb-20 select-none">
+    <>
+      <RaidInitializer
+        target={{
+          id: target.id,
+          name: target.name,
+          difficulty: target.difficulty as any,
+          isPvP: target.isPvP,
+          gridSize: target.gridSize,
+          entryPoints: target.entryPoints,
+          placedItems: target.placedItems,
+          stash: target.stash,
+        } as any}
+      />
+      {phase === "execute" ? (
+        <div className="relative h-full w-full">
+          <GameWrapper />
+          <RaidHUD />
+          <BossRaidHUD />
+          <RaidResults />
+          <RaidResolver />
+        </div>
+      ) : (
+        <div className="container mx-auto h-full max-w-4xl overflow-y-auto p-4 pb-20 select-none">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -502,6 +501,8 @@ export function RaidPrepContainer({ target, playerLevel, lobbyId }: RaidPrepCont
           </Card>
         </div>
       </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

@@ -1,4 +1,6 @@
 import * as Phaser from "phaser";
+import { usePlayerStore } from "@/lib/store/usePlayerStore";
+import { useSquadStore } from "@/lib/store/useSquadStore";
 
 /**
  * Placeholder-sprite descriptor — `(key, w, h, heightPx, color)`.
@@ -109,6 +111,15 @@ export class BootScene extends Phaser.Scene {
         for (let dir = 0; dir < 4; dir++) {
           this.generateIsoBlock(`${key}_dir_${dir}`, w, h, heightPx, color, dir);
         }
+      }
+    }
+
+    // Pre-generate slot-specific raider textures
+    for (let slot = 1; slot <= 4; slot++) {
+      const slotKey = `entity_drone_slot_${slot}`;
+      this.generateIsoBlock(slotKey, 1, 1, 40, 0xf1c40f, 0);
+      for (let dir = 0; dir < 4; dir++) {
+        this.generateIsoBlock(`${slotKey}_dir_${dir}`, 1, 1, 40, 0xf1c40f, dir);
       }
     }
 
@@ -901,17 +912,417 @@ export class BootScene extends Phaser.Scene {
     }
 
     // E. ENTITIES / DRONES & CHESTS
-    else if (key.startsWith('entity_drone') || key.startsWith('guard_drone')) {
-      // Hovering body sphere (suspended at z=12)
-      drawVolumetricSubBlock(0.33, 0.33, 12, 0.34, 0.34, 8, 0xeab308, { neon: true });
-      // Horizontal rotor arms
-      drawVolumetricSubBlock(0.08, 0.08, 15, 0.84, 0.06, 2, 0x475569);
-      drawVolumetricSubBlock(0.08, 0.86, 15, 0.84, 0.06, 2, 0x475569);
-      // 4 glowing rotor blades discs on corners
-      drawVolumetricSubBlock(0.04, 0.04, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.8, 0.04, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.04, 0.8, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.8, 0.8, 17, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+    else if (key.startsWith('entity_drone')) {
+      // 0. Parse slot number if this is a slot-specific key, default to slot 1 for general key
+      let slotNumber = 1;
+      if (key.includes('slot_2')) slotNumber = 2;
+      else if (key.includes('slot_3')) slotNumber = 3;
+      else if (key.includes('slot_4')) slotNumber = 4;
+
+      // 1. Fetch cosmetics customizer settings
+      let preset = "tactical";
+      let gender = "male";
+      let helmetColor = 0x1e293b;
+      let visorColor = 0x06b6d4;
+      let vestColor = color; // defaults to the squad color preset or customized color
+      let pantsColor = 0x1e3a8a;
+      let bootsColor = 0x0f172a;
+      let hairColor = 0xd97706;
+
+      try {
+        if (typeof window !== "undefined") {
+          // Allow dynamic injection from global window for direct previews, or fallback to Zustand store
+          const activeCosmetics = (window as any).activeRaiderCosmetics || usePlayerStore.getState().raiderCosmetics;
+          if (activeCosmetics) {
+            preset = activeCosmetics.preset ?? preset;
+            gender = activeCosmetics.gender ?? gender;
+            helmetColor = typeof activeCosmetics.helmetColor === 'number' ? activeCosmetics.helmetColor : helmetColor;
+            visorColor = typeof activeCosmetics.visorColor === 'number' ? activeCosmetics.visorColor : visorColor;
+            vestColor = typeof activeCosmetics.vestColor === 'number' ? activeCosmetics.vestColor : vestColor;
+            pantsColor = typeof activeCosmetics.pantsColor === 'number' ? activeCosmetics.pantsColor : pantsColor;
+            bootsColor = typeof activeCosmetics.bootsColor === 'number' ? activeCosmetics.bootsColor : bootsColor;
+            hairColor = typeof activeCosmetics.hairColor === 'number' ? activeCosmetics.hairColor : hairColor;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read store cosmetics inside Phaser generator", e);
+      }
+
+      // 2. Fetch slot-specific loadout weapons and armor
+      let weapon: string | null = null;
+      let armor: string | null = null;
+
+      try {
+        if (typeof window !== "undefined") {
+          const members = (window as any).useSquadStore?.getState().members || [];
+          const member = members.find((m: any) => m.slotNumber === slotNumber);
+          if (member) {
+            weapon = member.weapon || null;
+            armor = member.armor || null;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read squad loadout inside Phaser generator", e);
+      }
+
+      const isFemale = gender === "female";
+      const isRustic = preset === "rustic";
+
+      // 1. FEET & TACTICAL BOOTS (z = 0 to 4)
+      const finalBootsColor = isRustic ? 0x451a03 : bootsColor; // Dark brown leather boots for rustic, else bootsColor
+      drawVolumetricSubBlock(0.32, 0.38, 0, 0.14, 0.16, 4, finalBootsColor, { panel: true });
+      drawVolumetricSubBlock(0.54, 0.38, 0, 0.14, 0.16, 4, finalBootsColor, { panel: true });
+      
+      // 2. LEGS & TACTICAL CARGO PANTS (z = 4 to 16)
+      // Left leg
+      drawVolumetricSubBlock(0.32, 0.34, 4, 0.14, 0.18, 12, pantsColor);
+      // Right leg
+      drawVolumetricSubBlock(0.54, 0.34, 4, 0.14, 0.18, 12, pantsColor);
+      
+      // 3. UTILITY BELT & HIP POUCHES (z = 16 to 18)
+      drawVolumetricSubBlock(0.28, 0.30, 16, 0.44, 0.22, 2, 0x0f172a, { panel: true }); // Belt
+      drawVolumetricSubBlock(0.24, 0.34, 12, 0.06, 0.12, 4, 0xd97706); // Holstered utility pouch left
+      drawVolumetricSubBlock(0.70, 0.34, 12, 0.06, 0.12, 4, 0xd97706); // Holstered utility pouch right
+      
+      // 4. TORSO & ARMORED VEST (z = 18 to 32)
+      if (isRustic) {
+        // Replaces armor plates with a long desert-tan coat (z = 8 to 32)
+        drawVolumetricSubBlock(0.24, 0.28, 8, 0.52, 0.24, 24, vestColor, { panel: true });
+      } else {
+        // Heavy tactical jacket torso
+        // Streamline torso frame for female
+        const torsoW = isFemale ? 0.40 : 0.48;
+        const torsoD = isFemale ? 0.20 : 0.24;
+        const torsoU = (1.0 - torsoW) / 2;
+        const torsoV = 0.28;
+        drawVolumetricSubBlock(torsoU, torsoV, 18, torsoW, torsoD, 14, 0x334155);
+
+        // Armored front breastplate vest overlay (textured with custom color tint!)
+        const vestW = isFemale ? 0.36 : 0.44;
+        const vestU = (1.0 - vestW) / 2;
+        drawVolumetricSubBlock(vestU, 0.26, 20, vestW, 0.04, 10, vestColor, { panel: true });
+
+        // Glowing chest-mounted telemetry core badge
+        drawVolumetricSubBlock(0.44, 0.24, 23, 0.12, 0.02, 4, 0x06b6d4, { neon: true });
+        
+        // --- Armor Loadout Additions ---
+        if (armor === 'reinforced_vest') {
+          // Reinforced Vest: draw extra black plate reinforcement block on chest
+          drawVolumetricSubBlock(0.38, 0.24, 21, 0.24, 0.04, 8, 0x1e293b, { panel: true });
+        } else if (armor === 'tactical_armor') {
+          // Tactical Armor (Exo-Clad): draw extra heavy chest ridges and active power coils
+          drawVolumetricSubBlock(0.34, 0.24, 20, 0.32, 0.04, 12, 0x0f172a, { panel: true });
+          drawVolumetricSubBlock(0.38, 0.22, 24, 0.24, 0.04, 4, 0x06b6d4, { neon: true });
+        }
+      }
+      
+      // 5. BACKPACK (z = 18 to 30)
+      // Heavy-duty composite explorer pack
+      drawVolumetricSubBlock(0.30, 0.52, 18, 0.40, 0.16, 12, 0x1e293b, { panel: true });
+      
+      // 6. TACTICAL SHOULDER PADS & ARMS (z = 18 to 28)
+      // Left arm sleeve
+      const armW = isFemale ? 0.06 : 0.08;
+      const leftArmU = isFemale ? 0.20 : 0.18;
+      drawVolumetricSubBlock(leftArmU, 0.32, 18, armW, 0.16, 10, 0x334155);
+      
+      // Right arm sleeve
+      const rightArmU = isFemale ? 0.74 : 0.74;
+      drawVolumetricSubBlock(rightArmU, 0.32, 18, armW, 0.16, 10, 0x334155);
+
+      if (!isRustic && armor === 'tactical_armor') {
+        // Massive heavy pauldrons and glowing power coils for Exo-Clad tactical armor
+        drawVolumetricSubBlock(leftArmU - 0.04, 0.28, 25, armW + 0.04, 0.22, 5, 0x0f172a, { panel: true });
+        drawVolumetricSubBlock(rightArmU, 0.28, 25, armW + 0.04, 0.22, 5, 0x0f172a, { panel: true });
+        drawVolumetricSubBlock(leftArmU - 0.02, 0.30, 30, armW, 0.18, 1, 0x06b6d4, { neon: true });
+        drawVolumetricSubBlock(rightArmU + 0.02, 0.30, 30, armW, 0.18, 1, 0x06b6d4, { neon: true });
+      } else {
+        // Standard shoulder plates
+        drawVolumetricSubBlock(leftArmU - 0.02, 0.30, 26, armW + 0.02, 0.18, 3, vestColor, { panel: true }); // Left shoulder plate
+        drawVolumetricSubBlock(rightArmU, 0.30, 26, armW + 0.02, 0.18, 3, vestColor, { panel: true }); // Right shoulder plate
+      }
+      
+      // 7. GLOVED HANDS & HELD WEAPON (z = 16 to 22)
+      // Gloved hands holding rifle
+      drawVolumetricSubBlock(0.22, 0.28, 15, 0.08, 0.12, 3, 0x1f2937); // Left hand
+      drawVolumetricSubBlock(0.70, 0.28, 15, 0.08, 0.12, 3, 0x1f2937); // Right hand
+
+      if (weapon === 'heavy_machete') {
+        // Cybernetic Laser Machete: Renders in right hand
+        drawVolumetricSubBlock(0.68, 0.04, 17, 0.08, 0.26, 3, 0xe2e8f0, { panel: true }); // silver blade
+        drawVolumetricSubBlock(0.66, 0.02, 17, 0.12, 0.02, 3, 0xf59e0b, { neon: true });  // glowing amber laser edge
+        drawVolumetricSubBlock(0.68, 0.26, 15, 0.08, 0.08, 6, 0x111827);                // dark hilt
+      } else if (weapon === 'demo_hammer') {
+        // Vibro-Shock Demolition Hammer: Renders held diagonally
+        drawVolumetricSubBlock(0.26, 0.16, 17, 0.48, 0.06, 2, 0x374151);                // long hammer shaft
+        drawVolumetricSubBlock(0.68, 0.04, 13, 0.18, 0.16, 9, 0x1f2937, { panel: true }); // massive steel head casing
+        drawVolumetricSubBlock(0.70, 0.02, 14, 0.14, 0.02, 7, 0xf97316, { neon: true });  // orange active shock pad
+        drawVolumetricSubBlock(0.66, 0.10, 16, 0.02, 0.06, 3, 0xeab308, { neon: true });  // yellow hazard details
+      } else {
+        // Default Tactical Assault Rifle
+        drawVolumetricSubBlock(0.30, 0.20, 18, 0.44, 0.08, 4, 0x0f172a, { panel: true }); // Rifle barrel
+        drawVolumetricSubBlock(0.74, 0.18, 19, 0.03, 0.03, 2, 0x22c55e, { neon: true });  // Green laser sight tip
+      }
+      
+      // 8. HEAD, NECK & TACTICAL BEVELED HELMET (z = 32 to 42)
+      // Neck joint
+      drawVolumetricSubBlock(0.42, 0.34, 30, 0.16, 0.12, 3, 0xfdba74); // Skin tone neck
+      // Armored high-tech helmet
+      drawVolumetricSubBlock(0.30, 0.28, 33, 0.40, 0.24, 9, helmetColor, { panel: true });
+      
+      // Visor
+      const finalVisorColor = isRustic ? 0xf59e0b : visorColor; // Orange/amber goggles for rustic, else visorColor
+      // Sweeping neon cybernetic visor on the face plate
+      drawVolumetricSubBlock(0.36, 0.26, 36, 0.28, 0.02, 3, finalVisorColor, { screen: true }); // Glowing visor
+
+      // 9. FEMALE GENDER ACCESSORY: Custom glowing ponytail projecting behind the helmet (z = 26 to 38)
+      if (isFemale) {
+        // Ponytail block projecting behind the helmet:
+        // Positioned at: uStart = 0.46, vStart = 0.52, zStart = 26, uSize = 0.08, vSize = 0.08, zSize = 12
+        // We draw it using hairColor
+        drawVolumetricSubBlock(0.46, 0.52, 26, 0.08, 0.08, 12, hairColor, { neon: true });
+        // Draw hair band
+        drawVolumetricSubBlock(0.44, 0.50, 36, 0.12, 0.04, 2, 0x0f172a);
+      }
+      
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('guard_drone')) {
+      // 1. Layered armored body plates (suspended at z=12)
+      // Bottom slate-gray chassis plate
+      drawVolumetricSubBlock(0.33, 0.33, 10, 0.34, 0.34, 4, 0x1e293b, { panel: true });
+      // Hovering gold power core sphere
+      drawVolumetricSubBlock(0.33, 0.33, 14, 0.34, 0.34, 6, 0xeab308, { neon: true });
+      
+      // 2. Front-mounted Sensor Gimbal & Twin Cyan Lenses
+      // Gimbal ball
+      drawVolumetricSubBlock(0.42, 0.26, 8, 0.16, 0.08, 4, 0x0f172a);
+      // Twin glowing optics visors
+      drawVolumetricSubBlock(0.44, 0.24, 9, 0.12, 0.02, 2, neonColor, { screen: true });
+      
+      // 3. Side-Mounted Weapon Rails Flanking bottom wings
+      // Left laser rails
+      drawVolumetricSubBlock(0.22, 0.44, 6, 0.06, 0.2, 3, 0x334155);
+      drawVolumetricSubBlock(0.22, 0.40, 6.5, 0.06, 0.04, 1.5, 0x06b6d4, { screen: true }); // Laser tip
+      // Right laser rails
+      drawVolumetricSubBlock(0.72, 0.44, 6, 0.06, 0.2, 3, 0x334155);
+      drawVolumetricSubBlock(0.72, 0.40, 6.5, 0.06, 0.04, 1.5, 0x06b6d4, { screen: true }); // Laser tip
+
+      // 4. Under-Chassis Thruster Nozzle & Flame Flare
+      drawVolumetricSubBlock(0.42, 0.42, 6, 0.16, 0.16, 4, 0x475569);
+      // Glowing thruster plume vector block
+      drawVolumetricSubBlock(0.45, 0.45, 1, 0.10, 0.10, 5, 0xf97316, { neon: true });
+
+      // 5. Horizontal rotor arms
+      drawVolumetricSubBlock(0.08, 0.08, 16, 0.84, 0.06, 2, 0x475569);
+      drawVolumetricSubBlock(0.08, 0.86, 16, 0.84, 0.06, 2, 0x475569);
+      
+      // 6. 4 glowing rotor blades discs on corners
+      drawVolumetricSubBlock(0.04, 0.04, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.8, 0.04, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.04, 0.8, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.8, 0.8, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+
+      // 7. Side stabilizer wings
+      drawVolumetricSubBlock(0.28, 0.4, 10, 0.05, 0.2, 12, 0x475569);
+      drawVolumetricSubBlock(0.67, 0.4, 10, 0.05, 0.2, 12, 0x475569);
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('guard_dog')) {
+      // 1. Mechanical lower chassis base
+      drawVolumetricSubBlock(0.28, 0.15, 0, 0.44, 0.7, 10, 0x78350f, { wood: true });
+      
+      // 2. Beveled armored spine plating
+      drawVolumetricSubBlock(0.30, 0.25, 9, 0.40, 0.5, 3, 0x475569, { panel: true });
+      // Flashing back energy power cell
+      drawVolumetricSubBlock(0.44, 0.40, 12, 0.12, 0.2, 2, 0xeab308, { neon: true });
+      
+      // 3. Glowing shoulder heat vents
+      drawVolumetricSubBlock(0.22, 0.3, 8, 0.06, 0.08, 2, 0xef4444, { neon: true });
+      drawVolumetricSubBlock(0.72, 0.3, 8, 0.06, 0.08, 2, 0xef4444, { neon: true });
+
+      // 4. Cybernetic armored neck collar
+      drawVolumetricSubBlock(0.3, 0.2, 10, 0.4, 0.4, 4, 0xf97316, { neon: true });
+      
+      // 5. Cyber dog head with glowing neon visor
+      drawVolumetricSubBlock(0.33, 0.1, 14, 0.34, 0.34, 8, 0x9a3412);
+      drawVolumetricSubBlock(0.37, 0.08, 17, 0.26, 0.04, 3, 0xef4444, { screen: true });
+      
+      // 6. Front and rear steel limbs with pivot joint caps
+      drawVolumetricSubBlock(0.24, 0.2, 0, 0.08, 0.12, 10, 0x475569);
+      drawVolumetricSubBlock(0.24, 0.2, 6, 0.10, 0.14, 2, 0x9ca3af, { panel: true }); // Left Front Joint
+      
+      drawVolumetricSubBlock(0.68, 0.2, 0, 0.08, 0.12, 10, 0x475569);
+      drawVolumetricSubBlock(0.68, 0.2, 6, 0.10, 0.14, 2, 0x9ca3af, { panel: true }); // Right Front Joint
+      
+      drawVolumetricSubBlock(0.24, 0.68, 0, 0.08, 0.12, 10, 0x475569);
+      drawVolumetricSubBlock(0.24, 0.68, 6, 0.10, 0.14, 2, 0x9ca3af, { panel: true }); // Left Rear Joint
+      
+      drawVolumetricSubBlock(0.68, 0.68, 0, 0.08, 0.12, 10, 0x475569);
+      drawVolumetricSubBlock(0.68, 0.68, 6, 0.10, 0.14, 2, 0x9ca3af, { panel: true }); // Right Rear Joint
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('guard_decoy')) {
+      // Translucent glassmorphic supporting frame base
+      drawVolumetricSubBlock(0.2, 0.2, 0, 0.6, 0.6, 24, 0x7e22ce, { alpha: 0.5 });
+      // High-power emitter node on top
+      drawVolumetricSubBlock(0.3, 0.3, 24, 0.4, 0.4, 4, 0xa855f7, { neon: true });
+      // Glowing purple decoy power capacitor core
+      drawVolumetricSubBlock(0.35, 0.35, 6, 0.3, 0.3, 12, 0xd946ef, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('boss_ironjaw')) {
+      // Heavy armored scavenger chassis base
+      drawVolumetricSubBlock(0.1, 0.1, 0, 0.8, 0.8, 20, 0xef4444, { panel: true });
+      
+      // 2. Heavy slate-gray ground stabilizer hydraulic cylinders (back)
+      drawVolumetricSubBlock(0.18, 0.70, 0, 0.12, 0.12, 22, 0x475569);
+      drawVolumetricSubBlock(0.70, 0.70, 0, 0.12, 0.12, 22, 0x475569);
+      
+      // 3. Massive protruding gray iron jaw plate
+      drawVolumetricSubBlock(0.15, 0.05, 4, 0.7, 0.15, 12, 0x64748b);
+      
+      // 4. Spiked shoulder pads with yellow-black hazard trims
+      drawVolumetricSubBlock(0.04, 0.3, 16, 0.1, 0.4, 28, 0x334155);
+      drawVolumetricSubBlock(0.04, 0.3, 44, 0.1, 0.4, 2, 0xeab308); // Yellow hazard strip
+      
+      drawVolumetricSubBlock(0.86, 0.3, 16, 0.1, 0.4, 28, 0x334155);
+      drawVolumetricSubBlock(0.86, 0.3, 44, 0.1, 0.4, 2, 0xeab308); // Yellow hazard strip
+      
+      // 5. Glowing warning core on top
+      drawVolumetricSubBlock(0.35, 0.35, 20, 0.3, 0.3, 14, 0xeab308, { neon: true });
+      
+      // 6. Crimson glowing visual optics band (eye visor)
+      drawVolumetricSubBlock(0.3, 0.08, 24, 0.4, 0.04, 4, 0xef4444, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('boss_whisper')) {
+      // Midnight-black carbon composite core
+      drawVolumetricSubBlock(0.2, 0.2, 0, 0.6, 0.6, 24, 0x0f172a, { panel: true });
+      
+      // 2. Active dense fiber-optic glowing circuitry channels
+      drawVolumetricSubBlock(0.38, 0.22, 4, 0.04, 0.02, 16, 0x22c55e, { neon: true });
+      drawVolumetricSubBlock(0.58, 0.22, 4, 0.04, 0.02, 16, 0x22c55e, { neon: true });
+      
+      // 3. Flanking neon-green active-camo panels
+      drawVolumetricSubBlock(0.12, 0.25, 4, 0.08, 0.5, 18, 0x22c55e, { neon: true });
+      drawVolumetricSubBlock(0.8, 0.25, 4, 0.08, 0.5, 18, 0x22c55e, { neon: true });
+      
+      // 4. Twin high-frequency sensor scanner antennas
+      drawVolumetricSubBlock(0.48, 0.48, 24, 0.04, 0.04, 20, 0x22c55e);
+      
+      // 5. Flashing passive sensor pod grids on the back
+      drawVolumetricSubBlock(0.35, 0.74, 8, 0.08, 0.04, 8, 0x15803d, { neon: true });
+      drawVolumetricSubBlock(0.57, 0.74, 8, 0.08, 0.04, 8, 0x15803d, { neon: true });
+      
+      // 6. Glowing green data visor screen
+      drawVolumetricSubBlock(0.25, 0.18, 16, 0.5, 0.04, 5, 0x22c55e, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('boss_volkov')) {
+      // Armored navy blue tread base casing
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 16, 0x1e3a8a, { panel: true });
+      
+      // 2. Heavy steel tread track links
+      drawVolumetricSubBlock(0.05, 0.12, 4, 0.03, 0.76, 2, 0x0f172a);
+      drawVolumetricSubBlock(0.05, 0.12, 10, 0.03, 0.76, 2, 0x0f172a);
+      drawVolumetricSubBlock(0.92, 0.12, 4, 0.03, 0.76, 2, 0x0f172a);
+      drawVolumetricSubBlock(0.92, 0.12, 10, 0.03, 0.76, 2, 0x0f172a);
+      
+      // 3. Heavy mechanical steel torso
+      drawVolumetricSubBlock(0.2, 0.2, 16, 0.6, 0.6, 22, 0x3b82f6);
+      
+      // 4. Dual shoulder-mounted heavy railgun barrels
+      drawVolumetricSubBlock(0.08, 0.06, 28, 0.16, 0.5, 8, 0x1e293b);
+      drawVolumetricSubBlock(0.76, 0.06, 28, 0.16, 0.5, 8, 0x1e293b);
+      
+      // 5. High-density ammunition feed belts running into railguns
+      drawVolumetricSubBlock(0.18, 0.50, 18, 0.08, 0.2, 10, 0x475569);
+      drawVolumetricSubBlock(0.74, 0.50, 18, 0.08, 0.2, 10, 0x475569);
+      
+      // 6. Glowing orange command visor
+      drawVolumetricSubBlock(0.35, 0.18, 24, 0.3, 0.04, 4, 0xf97316, { screen: true });
+      
+      // 7. Golden central insignia crest on chest
+      drawVolumetricSubBlock(0.4, 0.19, 18, 0.2, 0.02, 6, 0xeab308, { neon: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('boss_circuit')) {
+      // 1. Sleek metallic safety mounting base plate with yellow hazard corners
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 3, 0x334155, { panel: true });
+      drawVolumetricSubBlock(0.08, 0.08, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner NW
+      drawVolumetricSubBlock(0.78, 0.08, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner NE
+      drawVolumetricSubBlock(0.08, 0.78, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner SW
+      drawVolumetricSubBlock(0.78, 0.78, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner SE
+
+      // 2. Multi-tiered detailed modular server cabinet racks
+      drawVolumetricSubBlock(0.15, 0.15, 3, 0.7, 0.7, 9, 0xca8a04, { panel: true });
+      drawVolumetricSubBlock(0.25, 0.25, 12, 0.5, 0.5, 16, 0xeab308, { panel: true });
+      drawVolumetricSubBlock(0.35, 0.35, 28, 0.3, 0.3, 14, 0xfef08a);
+      
+      // 3. Horizontal server drawer divisions (black seams)
+      drawVolumetricSubBlock(0.24, 0.24, 8, 0.52, 0.52, 1, 0x1e293b);
+      drawVolumetricSubBlock(0.24, 0.24, 14, 0.52, 0.52, 1, 0x1e293b);
+      drawVolumetricSubBlock(0.24, 0.24, 20, 0.52, 0.52, 1, 0x1e293b);
+      drawVolumetricSubBlock(0.24, 0.24, 26, 0.52, 0.52, 1, 0x1e293b);
+
+      // 4. Exposed glowing copper power busbars
+      drawVolumetricSubBlock(0.21, 0.25, 3, 0.04, 0.5, 25, 0xb45309, { neon: true });
+      drawVolumetricSubBlock(0.75, 0.25, 3, 0.04, 0.5, 25, 0xb45309, { neon: true });
+      
+      // 5. Active blinking green and cyan LED computational clusters
+      drawVolumetricSubBlock(0.32, 0.24, 6, 0.08, 0.01, 2, 0x22c55e, { screen: true });
+      drawVolumetricSubBlock(0.44, 0.24, 6, 0.08, 0.01, 2, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.56, 0.24, 6, 0.08, 0.01, 2, 0x22c55e, { screen: true });
+      
+      drawVolumetricSubBlock(0.32, 0.24, 16, 0.08, 0.01, 2, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.44, 0.24, 16, 0.08, 0.01, 2, 0x22c55e, { screen: true });
+      drawVolumetricSubBlock(0.56, 0.24, 16, 0.08, 0.01, 2, 0x06b6d4, { screen: true });
+      
+      // 6. Side ventilation grates
+      drawVolumetricSubBlock(0.24, 0.35, 6, 0.01, 0.3, 6, 0x0f172a);
+      drawVolumetricSubBlock(0.24, 0.35, 18, 0.01, 0.3, 6, 0x0f172a);
+
+      // 7. Glowing copper condenser rings on top
+      drawVolumetricSubBlock(0.28, 0.28, 42, 0.44, 0.44, 3, 0xca8a04, { neon: true });
+      
+      // 8. Matrix-grid data visor screen
+      drawVolumetricSubBlock(0.3, 0.32, 20, 0.4, 0.04, 6, 0xeab308, { screen: true });
+
+      drawnCustomModel = true;
+    }
+    else if (key.startsWith('boss_warden')) {
+      // 1. Heavy purple armored containment treads base
+      drawVolumetricSubBlock(0.06, 0.06, 0, 0.88, 0.88, 18, 0x3b0764, { panel: true });
+      
+      // 2. Heavy-duty composite mechanical torso
+      drawVolumetricSubBlock(0.18, 0.18, 18, 0.64, 0.64, 24, 0x581c87);
+      
+      // 3. Vault containment cage vertical steel bars
+      drawVolumetricSubBlock(0.24, 0.17, 20, 0.04, 0.02, 20, 0x1e293b);
+      drawVolumetricSubBlock(0.38, 0.17, 20, 0.04, 0.02, 20, 0x1e293b);
+      drawVolumetricSubBlock(0.58, 0.17, 20, 0.04, 0.02, 20, 0x1e293b);
+      drawVolumetricSubBlock(0.72, 0.17, 20, 0.04, 0.02, 20, 0x1e293b);
+      
+      // 4. Heavy hydraulic torso stabilizer cylinders
+      drawVolumetricSubBlock(0.12, 0.45, 4, 0.06, 0.10, 18, 0x475569);
+      drawVolumetricSubBlock(0.82, 0.45, 4, 0.06, 0.10, 18, 0x475569);
+      
+      // 5. Dual flanking vertical heavy shield plates
+      drawVolumetricSubBlock(0.04, 0.2, 22, 0.12, 0.6, 18, 0x7e22ce);
+      drawVolumetricSubBlock(0.84, 0.2, 22, 0.12, 0.6, 18, 0x7e22ce);
+      
+      // 6. Red searchlight beacon dome on top
+      drawVolumetricSubBlock(0.35, 0.35, 42, 0.3, 0.3, 10, 0xef4444, { neon: true });
+      
+      // 7. Monolithic horizontal visor slot
+      drawVolumetricSubBlock(0.3, 0.16, 30, 0.4, 0.04, 4, 0xef4444, { screen: true });
 
       drawnCustomModel = true;
     }
@@ -942,5 +1353,57 @@ export class BootScene extends Phaser.Scene {
 
     graphics.generateTexture(key, totalWidth, totalHeight);
     graphics.destroy();
+  }
+
+  /**
+   * Public static helper that dynamically regenerates the human raider voxel textures
+   * at runtime, allowing immediate visual updates without resetting scenes.
+   */
+  public static regenerateRaiderTextures(scene: Phaser.Scene, cosmetics: any): void {
+    const bootScene = scene.scene.get("BootScene") as BootScene;
+    if (!bootScene) return;
+
+    // Update active raider cosmetics on window so the generator picks it up
+    if (typeof window !== "undefined") {
+      (window as any).activeRaiderCosmetics = cosmetics;
+    }
+
+    const keys = ["entity_drone"];
+    for (let dir = 0; dir < 4; dir++) {
+      keys.push(`entity_drone_dir_${dir}`);
+    }
+    for (let slot = 1; slot <= 4; slot++) {
+      const slotKey = `entity_drone_slot_${slot}`;
+      keys.push(slotKey);
+      for (let dir = 0; dir < 4; dir++) {
+        keys.push(`${slotKey}_dir_${dir}`);
+      }
+    }
+
+    for (const key of keys) {
+      if (scene.textures.exists(key)) {
+        scene.textures.remove(key);
+      }
+    }
+
+    const entry = ENTITIES.find(e => e[0] === 'entity_drone');
+    const w = entry ? entry[1] : 1;
+    const h = entry ? entry[2] : 1;
+    const heightPx = entry ? entry[3] : 40;
+    const baseColor = entry ? entry[4] : 0xf1c40f;
+
+    bootScene.generateIsoBlock("entity_drone", w, h, heightPx, baseColor, 0);
+    for (let dir = 0; dir < 4; dir++) {
+      bootScene.generateIsoBlock(`entity_drone_dir_${dir}`, w, h, heightPx, baseColor, dir);
+    }
+    for (let slot = 1; slot <= 4; slot++) {
+      const slotKey = `entity_drone_slot_${slot}`;
+      bootScene.generateIsoBlock(slotKey, w, h, heightPx, baseColor, 0);
+      for (let dir = 0; dir < 4; dir++) {
+        bootScene.generateIsoBlock(`${slotKey}_dir_${dir}`, w, h, heightPx, baseColor, dir);
+      }
+    }
+
+    scene.events.emit("raider-textures-regenerated");
   }
 }

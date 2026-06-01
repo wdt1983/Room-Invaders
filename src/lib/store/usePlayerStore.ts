@@ -96,6 +96,17 @@ export function compileActiveEffects(unlockedTechs: string[]) {
   return effects;
 }
 
+export interface RaiderCosmetics {
+  preset: string;
+  gender: string;
+  helmetColor: number;
+  visorColor: number;
+  vestColor: number;
+  pantsColor: number;
+  bootsColor: number;
+  hairColor: number;
+}
+
 interface PlayerState {
   playerLevel: number;
   xp: number;
@@ -120,11 +131,13 @@ interface PlayerState {
   activeBadge: string | null;
   activeBorder: string | null;
   activeRoomSkin: string | null;
+  raiderCosmetics: RaiderCosmetics | null;
 
   addScrap: (amount: number) => void;
   setInventory: (data: Partial<PlayerState>) => void;
   setPlayerState: (data: Partial<PlayerState>) => void;
   setCosmeticsState: (data: { activeBadge: string | null; activeBorder: string | null; activeRoomSkin: string | null }) => void;
+  setRaiderCosmetics: (cosmetics: RaiderCosmetics) => void;
   applyXpAndLevel: (
     xp: number,
     level?: number,
@@ -161,6 +174,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   activeBadge: null,
   activeBorder: null,
   activeRoomSkin: null,
+  raiderCosmetics: null,
 
   addScrap: (amount) => set((state) => ({ scrap: Math.min(state.scrap + amount, state.maxScrap) })),
   setInventory: (data) => set((state) => {
@@ -188,6 +202,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     activeBorder: data.activeBorder,
     activeRoomSkin: data.activeRoomSkin,
   })),
+  setRaiderCosmetics: (cosmetics) => set(() => ({ raiderCosmetics: cosmetics })),
   applyXpAndLevel: (xp, level) => {
     const prev = get();
     const previousLevel = prev.playerLevel;

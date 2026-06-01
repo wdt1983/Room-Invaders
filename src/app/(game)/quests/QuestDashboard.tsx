@@ -64,7 +64,12 @@ const allQuests: {
 
 export default function QuestDashboard({ initialQuests, playerLevel, bossClears = [] }: QuestDashboardProps) {
   const router = useRouter();
-  const [activeLeftTab, setActiveLeftTab] = useState<'training' | 'story'>('training');
+  const [activeLeftTab, setActiveLeftTab] = useState<'training' | 'story'>(() => {
+    const claimedTutorialsCount = allQuests.tutorial.filter(
+      (q) => initialQuests.some(iq => iq.quest_id === q.id && iq.status === "claimed")
+    ).length;
+    return claimedTutorialsCount === allQuests.tutorial.length ? 'story' : 'training';
+  });
   const [isPending, startTransition] = useTransition();
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [briefingOpen, setBriefingOpen] = useState(false);
@@ -169,7 +174,10 @@ export default function QuestDashboard({ initialQuests, playerLevel, bossClears 
         toast.success(`LEVEL UP! Reached Lvl ${newLevel}!`);
       }
 
-      // 4. Reload page component stats
+      // 4. Reload page component stats & transition to story if onboarding completed
+      if (questId === "tut-08") {
+        setActiveLeftTab("story");
+      }
       startTransition(() => {
         router.refresh();
       });

@@ -593,7 +593,8 @@ export class RoomScene extends Phaser.Scene {
     this.events.once('destroy', cleanup);
 
     // Instantiate Player Entity
-    this.playerEntity = new EntitySprite(this, 0, 0, 'entity_drone');
+    const playerTexture = this.textures.exists('entity_drone_slot_1') ? 'entity_drone_slot_1' : 'entity_drone';
+    this.playerEntity = new EntitySprite(this, 0, 0, playerTexture);
     this.playerEntity.updateIsometricPosition(this.currentRotation, this.offsetX, this.offsetY);
 
     // Disable default browser context menu on canvas

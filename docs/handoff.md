@@ -14,6 +14,115 @@ Room Invaders
 https://github.com/wdt1983/Room-Invaders.git (private)
 
 
+### 2026-05-31 — Version 0.26.6: Tactical Human Raider Visual Overhaul
+
+### Summary
+
+Successfully completed Version 0.26.6, addressing critical visual confusion by completely separating player squad characters (`entity_drone`) from automated defense patrol hover units (`guard_drone`). Designed and procedurally generated a highly realistic standing **3D Voxel Tactical Cyber-Raider** representing the player squad members.
+
+Key accomplishments:
+1. **Separated Character & Drone Assets**: Split `entity_drone` and `guard_drone` into separate drawing blocks in `BootScene.ts`. While the automated sentinel drone remains a floating quadcopter, squad characters are now rendered as fully standing human soldiers.
+2. **Procedural 3D Human Raider Model**: Developed a standing tactical survivalist using coordinate-mapped voxel sub-blocks:
+   - **Tactical Boots**: Ground-level black boots resting firmly on the floor.
+   - **Cargo Pants**: Tactical dark-navy cargo trousers.
+   - **Utility Belt**: Waist belt holding modular hazard-tan ammunition pouches on the hips.
+   - **Ballistic Torso & Vest**: Armored breastplate vest (color-tinted to the player's active level/cosmetic color) featuring a glowing cyan chest core badge.
+   - **Survival Backpack**: Heavy carbon explorer pack mounted at the rear spine.
+   - **Sleeves & Shoulders**: Matching combat jacket arm sleeves and armored shoulder plates.
+   - **Assault Rifle**: Matte carbon-black assault rifle held horizontally in gloved hands across the chest, featuring a pulsing green laser sight.
+   - **High-Tech Helmet**: Armored beveled dark helmet mounted over a warm skin-tone neck and face base, equipped with a sweeping neon-cyan cyber-visor plate.
+3. **Quality Assurance & Verification**:
+   - Executed unit tests (`pnpm test`): **All 72 tests passed 100% green** in under 3 seconds.
+   - Executed Next.js compilation: **TypeScript check and static asset generation compiled 100% successfully** under Turbopack.
+
+### Next Best Tasks
+
+To build further on the game's visuals, the next recommended tasks are:
+1. **Dynamic Character Walk Animations**: Implement a subtle yoyo translation tween inside `RaidScene.ts` and `RoomScene.ts` that bobbles the human raider's body slightly up and down (`scaleY: 1.02, yOffset += 2px`) as they walk across floor tiles to simulate real footsteps.
+2. **Procedural Weapon Swapping**: Read the squad member's active weapon property (`member.weapon`) and dynamically adjust the assault rifle sub-blocks into a heavy hammer (demolition) or a glowing machete (melee) to reflect their tactical loadout in-game.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/game/scenes/BootScene.ts` | **MODIFIED.** Overhauled procedural voxel models for player drones, defender drones, sentry dogs, decoys, and all 5 campaign boss warlords with detailed sub-blocks. |
+| `docs/changelog.md` | **MODIFIED.** Appended 0.26.6 release notes. |
+| `docs/tasks.md` | **MODIFIED.** Added 0.26.6 visual overhaul checklists and marked them all completed. |
+| `docs/handoff.md` | **MODIFIED.** Updated handoff continuous logs. |
+
+
+### 2026-05-31 — Version 0.26.5: High-Fidelity Realistic Volumetric Voxel Entities Overhaul
+
+### Summary
+
+Successfully completed Version 0.26.5, directly executing the aesthetic improvements approved by the user. By breaking down character and boss designs into modular mechanical components, we replaced the simple solid column gold boss and thin-lined entities with extremely rich, functional 3D volumetric voxel models.
+
+Key accomplishments:
+1. **High-Fidelity Player & Sentry Drones (`entity_drone` / `guard_drone`)**: Built with bottom slate-gray armor base plates, hovering gold core power spheres, front-mounted sensor gimbals holding twin cyan optic lens visors, flanking side weapon rails with glowing laser tips, and under-chassis thruster nozzles containing active glowing orange thruster plumes projecting downward.
+2. **Cyber Sentry Dog (`guard_dog`)**: Upgraded with beveled armored gray spine plates, flashing amber power cells, glowing shoulder heat exhaust vents, cyber neck collars, and limbs with silver pivot joint caps.
+3. **Warlord Mainframe "Circuit" (`boss_circuit`)**: Replaced the tiered gold blocks with highly detailed server cabinet racks featuring black horizontal server drawer seams, vertical exposed copper power busbars, side ventilation grates, blinking green/cyan LED data clusters on the front panel representing computational activity, and industrial safety hazard trims on the base plate.
+4. **Warlord Warlords Upgraded**:
+   - **Ironjaw (`boss_ironjaw`)**: Added thick slate-gray hydraulic ground stabilizer cylinders and yellow-black industrial hazard trims on its shoulder pads.
+   - **Whisper (`boss_whisper`)**: Added green glowing fiber-optic circuit pathways and micro-sensor arrays on its back.
+   - **Volkov (`boss_volkov`)**: Added individual treads track link segments, glowing engine exhaust cooling vents, and heavy ammo feeder belts.
+   - **Warden (`boss_warden`)**: Added security vault vertical containment steel bars across the torso, and hydraulic stabilizer pistons.
+5. **Quality Assurance & Verification**:
+   - Executed unit tests (`pnpm test`): **All 72 tests passed 100% green** in under 3 seconds.
+   - Executed Next.js compilation: **TypeScript check and static asset generation compiled 100% successfully** under Turbopack.
+
+### Next Best Tasks
+
+To build further on the game's visuals, the next recommended tasks are:
+1. **Active Voxel Hit Reaction Tweens**: Implement a swift red/white flash and scaling squash-and-stretch tween on entity voxel models in Phaser when they take damage, reinforcing weight and impacts.
+2. **Screen Space Ambient Occlusion Shader**: Add a lightweight WebGL post-processing shader to the Phaser canvas that draws deep creases and soft shadows around the edges of isometric volumetric blocks.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/game/scenes/BootScene.ts` | **MODIFIED.** Overhauled procedural voxel models for player drones, defender drones, sentry dogs, decoys, and all 5 campaign boss warlords with detailed sub-blocks. |
+| `docs/changelog.md` | **MODIFIED.** Appended 0.26.5 release notes. |
+| `docs/tasks.md` | **MODIFIED.** Added 0.26.5 visual overhaul checklists and marked them all completed. |
+| `docs/handoff.md` | **MODIFIED.** Updated handoff continuous logs. |
+
+
+### 2026-05-31 — Version 0.26.4: Raid HUD Sidebar Redesign, Multi-Squad Spawning & Volumetric Voxel Entity Models
+
+### Summary
+
+Successfully completed Version 0.26.4, addressing critical gameplay viewport constraints, spawning initialization lifecycles, and completely replacing simple box assets with procedural 3D voxel models. 
+
+Key accomplishments:
+1. **Raid HUD Cyberpunk Sidebar Redesign**: Overhauled `RaidHUD.tsx`, shifting it from a top-centered overlay to an absolute, right-aligned vertical sidebar (`top-16 right-4 bottom-16 w-80`). Stacked the squad roster and support abilities vertically using full-width hover cards with scale micro-animations (`hover:scale-[1.02] active:scale-[0.98]`) and right-aligned hotkey indicators (`Q`, `W`, `E`), leaving the main gameplay canvas completely unobstructed.
+2. **Top-Level Briefing Initializer Spawning Fix**: Lifted `<RaidInitializer>` out of the execution phase conditional block in `RaidPrepContainer.tsx` and mounted it at the root render level. This ensures that the state store is initialized on page load and preserves the prepared `prepSquadMembers` array during phase transitions, successfully spawning all selected units.
+3. **Volumetric Isometric Holographic Walls**: Programmed 3D-height (`32px`) volumetric polygon boundary panels in `RaidScene.ts` (`drawWalls`) drawn with zero-overhead vector paths. Added translucent overlays (`alpha = 0.12`), glowing neon cap borders (`alpha = 0.85`), and horizontal scanlines.
+4. **Volumetric Voxel Character & Boss Warlords Models**: Coded procedural multi-block voxel generators in `BootScene.ts` to replace flat fallback boxes:
+   - **Player & Sentry Drones**: Added side stabilizer wings (`w=0.05, h=0.2, depth=12`) and front twin optics visors.
+   - **Cyber Sentry Dog (`guard_dog`)**: Detailed with a bronze mechanical chassis, orange cyber-collar, and carbon head with red visors.
+   - **Hologram Decoy (`guard_decoy`)**: semi-transparent purple shell enclosing a pulsing pink capacitor core.
+   - **Warlord Bosses**: Assembled customized voxel structures for all 5 bosses (`boss_ironjaw`'s iron jaw plate, `boss_whisper`'s CAMO wings, `boss_volkov`'s heavy treads and twin shoulder-mounted railguns, `boss_circuit`'s memory stack and copper condenser rings, and `boss_warden`'s purple prison treads and red searchlight dome).
+5. **Operations & NextJS Compilation**: Ran Next.js production build compiler under Turbopack (`pnpm build`). Compilation completed **100% successfully with 0 type-check, linter, or static generation errors**.
+
+### Next Best Tasks (Aesthetic Proposals)
+
+To build further on the game's visuals and aesthetics, the following premium tasks are recommended:
+1. **Dynamic Lighting Cast Shadows (Visuals Upgrade)**: Build a real-time shadow projection engine in `RaidScene.ts` and `RoomScene.ts` that casts dynamic, elongated 2.5D shadows from our 3D volumetric voxel blocks onto floor grid tiles based on moving light source coordinates (e.g. from floating drones or alert spotlights).
+2. **Interactive Radar Grid Sweep Line (Grid Animation Upgrade)**: Implement a sweeping neon cybernetic line that travels diagonally across floor tiles, momentarily brightening neon wall caps and grid intersections to bring the maps to life.
+3. **Active Holographic Glitch Particles (VFX Polish)**: Spawns drifting, color-coded voxel glitch particles from active boss models, and triggers full chromatic aberration tearing flashes during high-intensity boss phase shifts.
+
+### Files Created / Changed
+
+| File | Change |
+| --- | --- |
+| `src/game/scenes/BootScene.ts` | **MODIFIED.** Implemented voxel sub-block assemblies for squad members, sentries, decoys, and all 5 campaign warlord bosses. |
+| `src/components/game/RaidHUD.tsx` | **MODIFIED.** Redesigned HUD container into an absolute right-aligned vertical sidebar with vertical cards and keyboard hotkeys. |
+| `src/components/game/RaidPrepContainer.tsx` | **MODIFIED.** Lifted `<RaidInitializer>` to top-level to prevent state resets and fix squad spawning. |
+| `src/game/scenes/RaidScene.ts` | **MODIFIED.** Overhauled `drawWalls()` to render volumetric 32px 3D panels with glowing neon caps and scanlines. |
+| `docs/changelog.md` | **MODIFIED.** Appended 0.26.4 changelog. |
+| `docs/tasks.md` | **MODIFIED.** Added 0.26.4 task checklists and checked them all off. |
+| `docs/handoff.md` | **MODIFIED.** Updated handoff continuous records. |
+
+
 ### 2026-05-29 — Milestone 9J: Volumetric Color Shading & Direct Move Relocation Tool
 
 ### Summary

@@ -12,6 +12,7 @@ import { ContextMenu } from "@/components/game/ContextMenu";
 import { PosterUploadDialog } from "@/components/game/PosterUploadDialog";
 import { BossPedestalDialog } from "@/components/game/BossPedestalDialog";
 import { BaseDefenseMonitor } from "@/components/game/BaseDefenseMonitor";
+import CharacterCustomizer from "./CharacterCustomizer";
 import { seedInitialQuests, trackQuestProgress } from '@/lib/game/quests';
 
 export const metadata = {
@@ -202,6 +203,7 @@ export default async function RoomPage() {
       <PosterUploadDialog />
       <BossPedestalDialog />
       <BaseDefenseMonitor user={user} />
+      <CharacterCustomizer />
     </div>
   );
 }

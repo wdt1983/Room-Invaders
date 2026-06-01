@@ -17,7 +17,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { trackQuestProgress } from "@/lib/game/quests";
+import { trackQuestProgressAction } from "@/app/(game)/quests/actions";
 import { toast } from "sonner";
 
 interface PvPScoutTarget {
@@ -164,6 +164,14 @@ interface GridNode {
   cooldownRemaining?: number; // mock or computed cooldown
 }
 
+const bossDisplayDetails: Record<string, { name: string; title: string; requiredLevel: number; defenseRating: number }> = {
+  'boss-ironjaw': { name: "Ironjaw", title: "The Scrapyard King", requiredLevel: 3, defenseRating: 80 },
+  'boss-whisper': { name: "Whisper", title: "The Wire Ghost", requiredLevel: 5, defenseRating: 110 },
+  'boss-volkov': { name: "Volkov", title: "The Iron Colonel", requiredLevel: 7, defenseRating: 150 },
+  'boss-circuit': { name: "Circuit", title: "The Machine Mind", requiredLevel: 10, defenseRating: 200 },
+  'boss-warden': { name: "The Warden", title: "Voice of the Fracture", requiredLevel: 15, defenseRating: 350 },
+};
+
 export function NeighborhoodMap({ playerProfile, pvpTargets, friends, activeStoryQuest }: NeighborhoodMapProps) {
   const router = useRouter();
   // Navigation / Pan & Zoom State
@@ -292,13 +300,7 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends, activeStor
       };
       const bossId = questToBossMapping[activeQuestId];
       
-      const bossDisplayDetails: Record<string, { name: string; title: string; requiredLevel: number; defenseRating: number }> = {
-        'boss-ironjaw': { name: "Ironjaw", title: "The Scrapyard King", requiredLevel: 3, defenseRating: 80 },
-        'boss-whisper': { name: "Whisper", title: "The Wire Ghost", requiredLevel: 5, defenseRating: 110 },
-        'boss-volkov': { name: "Volkov", title: "The Iron Colonel", requiredLevel: 7, defenseRating: 150 },
-        'boss-circuit': { name: "Circuit", title: "The Machine Mind", requiredLevel: 10, defenseRating: 200 },
-        'boss-warden': { name: "The Warden", title: "Voice of the Fracture", requiredLevel: 15, defenseRating: 350 },
-      };
+
 
       const bossInfo = bossId ? bossDisplayDetails[bossId] : null;
       if (bossInfo) {
@@ -380,13 +382,9 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends, activeStor
       const activeQuestId = activeStoryQuest.quest_id;
       if (activeQuestId === "story-01" || activeQuestId === "story-03") {
         try {
-          const supabase = createClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            await trackQuestProgress(supabase, user.id, "locate_boss", 1);
-            toast.success("Stronghold located! Story quest updated.");
-            router.refresh();
-          }
+          await trackQuestProgressAction("locate_boss", 1);
+          toast.success("Stronghold located! Story quest updated.");
+          router.refresh();
         } catch (err) {
           console.error("Failed to auto-complete locate quest:", err);
         }
@@ -669,21 +667,47 @@ export function NeighborhoodMap({ playerProfile, pvpTargets, friends, activeStor
                   </Button>
                 </Link>
               ) : selectedNode.type === "boss" ? (
-                <Link href={`/raid/${selectedNode.id}`} className="flex-1">
-                  <Button 
-                    className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_20px_rgba(220,38,38,0.35)] hover:shadow-[0_0_25px_rgba(220,38,38,0.55)] animate-pulse uppercase"
-                  >
-                    Battle Warlord
-                  </Button>
-                </Link>
+                (() => {
+                  const bossInfo = bossDisplayDetails[selectedNode.id] || { requiredLevel: 3 };
+                  const isLocked = playerProfile.player_level < bossInfo.requiredLevel;
+                  return isLocked ? (
+                    <Button 
+                      disabled
+                      className="flex-1 text-xs font-bold bg-muted border border-border text-muted-foreground uppercase"
+                    >
+                      Locked (Requires Lvl {bossInfo.requiredLevel})
+                    </Button>
+                  ) : (
+                    <Link href={`/raid/${selectedNode.id}`} className="flex-1">
+                      <Button 
+                        className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_20px_rgba(220,38,38,0.35)] hover:shadow-[0_0_25px_rgba(220,38,38,0.55)] animate-pulse uppercase"
+                      >
+                        Battle Warlord
+                      </Button>
+                    </Link>
+                  );
+                })()
               ) : (
-                <Link href={`/raid/${selectedNode.id}`} className="flex-1">
-                  <Button 
-                    className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] animate-pulse"
-                  >
-                    Launch Raid
-                  </Button>
-                </Link>
+                (() => {
+                  const requiredLevel = selectedNode.level ?? 1;
+                  const isLocked = playerProfile.player_level < requiredLevel;
+                  return isLocked ? (
+                    <Button 
+                      disabled
+                      className="flex-1 text-xs font-bold bg-muted border border-border text-muted-foreground"
+                    >
+                      Locked (Requires Lvl {requiredLevel})
+                    </Button>
+                  ) : (
+                    <Link href={`/raid/${selectedNode.id}`} className="flex-1">
+                      <Button 
+                        className="w-full text-xs font-bold bg-red-600 hover:bg-red-500 border border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] animate-pulse"
+                      >
+                        Launch Raid
+                      </Button>
+                    </Link>
+                  );
+                })()
               )}
             </DialogFooter>
           </DialogContent>

@@ -1,12 +1,16 @@
 -- Migration: 00032_index_optimizations_and_perf.sql
--- Description: Add index optimizations for spatial grid coordinates, bidirectional social connections, and high-frequency trade/achievement reads to maximize database efficiency.
+-- Description: Add index optimizations for spatial JSONB grid coordinates, bidirectional social connections, and high-frequency trade/achievement reads to maximize database efficiency.
 -- Phase: Post-Launch Scalability & Optimization
 
 -- 1. Optimize Spatial Room Placements
 -- Phaser scenes (`RoomScene.ts` and `RaidScene.ts`) query placed furniture and defensive items by owner and coordinate bounds.
--- This composite index makes spatial collision checks and room load state hydrations extremely fast.
+-- Since coordinates are stored in the `grid_position` JSONB column as `{"x": 3, "y": 5}`, we utilize a high-performance expression-based index.
 CREATE INDEX IF NOT EXISTS idx_player_items_coords 
-ON public.player_items(owner_id, grid_x, grid_y) 
+ON public.player_items(
+    owner_id, 
+    ((grid_position->>'x')::integer), 
+    ((grid_position->>'y')::integer)
+) 
 WHERE placed_in_room = true;
 
 -- 2. Optimize Bidirectional Friend Connections

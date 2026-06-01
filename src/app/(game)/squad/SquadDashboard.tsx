@@ -289,7 +289,7 @@ export default function SquadDashboard({
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded font-bold text-xs transition-all ${activeTab === "tech" ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' : 'text-muted-foreground'}`}
           >
             <Icons.Cpu className="size-4" />
-            Tech Tree {initialPlayerLevel < 8 && <Icons.Lock className="size-3 text-muted-foreground" />}
+            Tech Tree {initialPlayerLevel < 3 && <Icons.Lock className="size-3 text-muted-foreground" />}
           </button>
           <button
             onClick={() => setActiveTab("trophy")}
@@ -561,13 +561,13 @@ export default function SquadDashboard({
            TECH TREE TAB
            ======================================================== */
         <div className="space-y-6">
-          {initialPlayerLevel < 8 ? (
+          {initialPlayerLevel < 3 ? (
             /* Locked Gate Screen */
             <Card className="border-border bg-card/40 backdrop-blur shadow-lg p-10 text-center max-w-lg mx-auto border-dashed">
               <Icons.Lock className="size-16 text-muted-foreground/30 mx-auto mb-4" />
               <h2 className="text-lg font-bold">Research Core Offline</h2>
               <p className="text-xs text-muted-foreground mt-2 max-w-sm mx-auto leading-relaxed">
-                The stronghold's server network is uncalibrated. Reach <strong className="text-foreground">Player Level 8</strong> to unlock database research and available tech points!
+                The stronghold's server network is uncalibrated. Reach <strong className="text-foreground">Player Level 3</strong> to unlock database research and available tech points!
               </p>
             </Card>
           ) : (

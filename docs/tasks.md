@@ -1,5 +1,44 @@
 # tasks.md — Room Invaders
-## Version: 0.26.0 | Last Updated: 2026-05-29
+## Version: 0.26.5 | Last Updated: 2026-05-31
+
+## High-Fidelity Realistic Volumetric Voxel Entities Overhaul (v0.26.5)
+**Goal:** Redesign player drones, cyber sentry dogs, and all campaign boss warlords to feature realistic, mechanical sub-block features such as armor plates, sensor gimbals, ammunition feed belts, vertical server trays, glowing LED grids, and pneumatic stabilizers.
+
+- `[x]` Overhaul player/guard drones (`entity_drone` / `guard_drone`) with armor plates, sensor gimbals, side weapon rails, and active thruster plumes in `BootScene.ts`.
+- `[x]` Upgrade sentry dog (`guard_dog`) with spine plating, amber power cell, exhaust vents, and mechanical leg joint caps in `BootScene.ts`.
+- `[x]` Overhaul "Circuit" (`boss_circuit`) with detailed server racks, blinking LEDs, copper busbars, and safety hazard trims in `BootScene.ts`.
+- `[x]` Overhaul "Ironjaw" (`boss_ironjaw`) with hydraulic ground shocks and hazard plate trims in `BootScene.ts`.
+- `[x]` Overhaul "Whisper" (`boss_whisper`) with glowing green circuit pathways and micro-sensor arrays in `BootScene.ts`.
+- `[x]` Overhaul "Volkov" (`boss_volkov`) with tread links, glowing engine exhausts, and ammunition feed belts in `BootScene.ts`.
+- `[x]` Overhaul "Warden" (`boss_warden`) with security vault steel bars and pneumatic shock bars in `BootScene.ts`.
+- `[x]` Run Next.js production build (`pnpm build`) to verify Turbopack type safety and performance.
+- `[x]` Run all unit tests (`pnpm test`) to guarantee zero regression on combat, movement, and boss AI.
+- `[x]` Document the changes in repository `changelog.md` and update `docs/handoff.md`.
+
+## Raid HUD Sidebar Redesign, Multi-Squad Spawning & Volumetric Voxel Entity Models (v0.26.4)
+**Goal:** Redesign the obstructive Raid HUD into a vertical sidebar, resolve multi-squad spawning state resets, render volumetric laser-barrier wall overlays, and construct customized 3D voxel models for all characters, sentries, and warlord campaign bosses.
+
+- `[x]` Redesign `RaidHUD.tsx` layout structure, shifting it from a top-centered overlay to an absolute, right-aligned vertical sidebar with vertical rosters and abilities.
+- `[x]` Lift and mount `<RaidInitializer>` at the top level of `RaidPrepContainer.tsx` to preserve squad state and fix the single-member spawning issue.
+- `[x]` Overhaul wall graphics in `RaidScene.ts` (`drawWalls`) to draw 32px volumetric isometric panels with translucent overlays, glowing neon caps, and scanline/column grid details.
+- `[x]` Upgrade player squad drones (`entity_drone` / `guard_drone`) with dedicated side stabilizer fins and twin neon-glowing visors on the front face in `BootScene.ts`.
+- `[x]` Implement custom voxel models for sentry assets `guard_dog` (bronze chassis, orange cyber-collar, angular head, red optics) and `guard_decoy` (translucent purple shell, pink pulsing core) in `BootScene.ts`.
+- `[x]` Create customized multi-tiered volumetric voxel assemblies in `BootScene.ts` for all 5 Warlord Bosses (`Ironjaw`, `Whisper`, `Volkov`, `Circuit`, `Warden`) replacing the old solid blue fallback box.
+- `[x]` Run production Next.js compilation check under Turbopack (`pnpm build`) to verify 100% type safety and performance with zero warnings.
+- `[x]` Document the updates under Section 21 of `walkthrough.md` and in `docs/changelog.md`.
+- `[x]` Propose premium visual/aesthetics follow-up tasks to elevate grid coordinate graphics and ambiance.
+
+## PvE Anti-Cheat Softening, Tech Tree Level Alignment & Battle Pass Catalog ID Resolution (v0.26.3)
+**Goal:** Soften rigid validation gates for PvE raids to handle drift/stun anomalies, align the tech tree milestone lock display to level 3, and resolve missing catalog item IDs in battle pass rewards.
+
+- `[x]` Soften/bypass coordinate proximity, walkability, step-distance limits, and HP constraints for PvE raids (`!params.isPvP`) inside `replayValidator.ts`.
+- `[x]` Sync and deploy updated `resolve-raid` Deno Edge Function to the remote project.
+- `[x]` Align "Tactical Squad Tech Tree" systemic unlock milestone to trigger at Level 3 instead of Level 8 in [LevelUpOverlay.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/game/LevelUpOverlay.tsx).
+- `[x]` Create a new "Advanced Security Defenses" systemic unlock milestone for Level 8 in [LevelUpOverlay.tsx](file:///c:/Projects/ALT-Games/room-invaders/src/components/game/LevelUpOverlay.tsx).
+- `[x]` Correct JSDoc comment references in squad [actions.ts](file:///c:/Projects/ALT-Games/room-invaders/src/app/(game)/squad/actions.ts).
+- `[x]` Authored database migration `00033_fix_battle_pass_reward_item_ids.sql` looking up seeded items by their unique `sprite_key`s.
+- `[x]` Successfully applied the migration to the remote Supabase database instance `tqvsympapbmpbwkydumc` using `supabase db push`.
+- `[x]` Verify all 72 unit tests and Next.js production builds compile flawlessly with 0 errors.
 
 ## Milestone 9J: Volumetric Color Shading & Direct Move Relocation Tool (v0.26.0)
 **Goal:** Implement dynamic 3D wall shading based on player cosmetics, and build a secure, zero-cost free relocation Move Tool for room customization.

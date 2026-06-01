@@ -316,7 +316,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
-  if (req.method !== "POST") {
+  try {
+    if (req.method !== "POST") {
     return json({ success: false, error: "Method not allowed" }, 405);
   }
 
@@ -738,10 +739,18 @@ Deno.serve(async (req: Request) => {
       const tierMatch = body.fixtureId.match(/procedural-tier-(\d+)/);
       const tier = tierMatch ? parseInt(tierMatch[1], 10) : 1;
       requiredLevel = tier;
+      gridSize = tier <= 3 ? 10 : tier <= 7 ? 12 : 14;
     } else {
       const fixture = FIXTURES[body.fixtureId];
       if (!fixture) return json({ success: false, error: `Unknown fixture: ${body.fixtureId}` }, 400);
       requiredLevel = fixture.requiredLevel;
+      if (body.fixtureId === "boss-volkov" || body.fixtureId === "boss-circuit") {
+        gridSize = 12;
+      } else if (body.fixtureId === "boss-warden") {
+        gridSize = 14;
+      } else {
+        gridSize = 10;
+      }
     }
 
     // Enforce level lock
@@ -1226,6 +1235,7 @@ Deno.serve(async (req: Request) => {
   const newIntel      = (inventory.intel      ?? 0) + loot.intel;
   const newContraband = (inventory.contraband ?? 0) + loot.contraband;
 
+  const anyLoot = loot.scrap > 0 || loot.components > 0 || loot.credits > 0 || loot.intel > 0 || loot.contraband > 0;
   const shouldUpdateInventory = anyLoot || body.outcome === "victory";
 
   if (shouldUpdateInventory) {
@@ -1429,4 +1439,8 @@ Deno.serve(async (req: Request) => {
     leveledUp,
     isFirstClear: isFirstClearResult,
   });
+  } catch (err) {
+    console.error("[resolve-raid] Fatal unhandled exception in function:", err);
+    return json({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 });

@@ -44,3 +44,18 @@ export async function deactivateSafeMode() {
 
   return { success: true as const, safeModeUntil: nowString };
 }
+
+export async function trackQuestProgressAction(category: string, amount: number, isAbsolute = false) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false as const, error: "Unauthorized" };
+  }
+
+  // Under the hood, trackQuestProgress automatically elevates to adminClient if process.env.SUPABASE_SERVICE_ROLE_KEY is present.
+  await trackQuestProgress(supabase, user.id, category, amount, isAbsolute);
+
+  return { success: true as const };
+}
+
