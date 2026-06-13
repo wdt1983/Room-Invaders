@@ -123,11 +123,14 @@ export default function CharacterCustomizer() {
 
     // Live update in the running Phaser canvas (for direct preview)
     if (typeof window !== "undefined") {
-      const roomScene = (window as any).game?.scene?.keys?.RoomScene;
-      if (roomScene) {
-        import("@/game/scenes/BootScene").then(({ BootScene }) => {
-          BootScene.regenerateRaiderTextures(roomScene, updated);
-        });
+      const game = (window as any).game;
+      if (game) {
+        const activeScene = game.scene.scenes.find((s: any) => s.sys.isActive() || s.sys.isOpen);
+        if (activeScene) {
+          import("@/game/scenes/BootScene").then(({ BootScene }) => {
+            BootScene.regenerateRaiderTextures(activeScene, updated);
+          });
+        }
       }
     }
   };
@@ -159,11 +162,14 @@ export default function CharacterCustomizer() {
       setLocalCosmetics(storeCosmetics);
       // Revert Phaser canvas
       if (typeof window !== "undefined") {
-        const roomScene = (window as any).game?.scene?.keys?.RoomScene;
-        if (roomScene) {
-          import("@/game/scenes/BootScene").then(({ BootScene }) => {
-            BootScene.regenerateRaiderTextures(roomScene, storeCosmetics);
-          });
+        const game = (window as any).game;
+        if (game) {
+          const activeScene = game.scene.scenes.find((s: any) => s.sys.isActive() || s.sys.isOpen);
+          if (activeScene) {
+            import("@/game/scenes/BootScene").then(({ BootScene }) => {
+              BootScene.regenerateRaiderTextures(activeScene, storeCosmetics);
+            });
+          }
         }
       }
     }

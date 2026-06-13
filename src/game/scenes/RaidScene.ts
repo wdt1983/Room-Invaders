@@ -25,6 +25,7 @@ import { TurretAI, type TurretFiredPayload } from '@/game/systems/DefenseAI';
 import { usePlayerStore } from '@/lib/store/usePlayerStore';
 import { SoundManager } from '@/game/objects/SoundManager';
 import { BossAI } from '@/game/systems/BossAI';
+import { BootScene } from './BootScene';
 
 const WALL_COLOR = 0x888888;
 const WALL_THICKNESS = 6;
@@ -177,6 +178,9 @@ export class RaidScene extends Phaser.Scene {
     durationMs: number;
   } | null = null;
   private stashSprite: Phaser.GameObjects.Image | null = null;
+  private ambientOverlay!: Phaser.GameObjects.Graphics;
+  private lightGlowOverlay!: Phaser.GameObjects.Graphics;
+  private shadowGraphics!: Phaser.GameObjects.Graphics;
 
   private onEntityEnteredTile: ((payload: { entityId: string; x: number; y: number }) => void) | null = null;
 
@@ -228,6 +232,7 @@ export class RaidScene extends Phaser.Scene {
     // RaidInitializer on the /raid/[id] page). Unknown ids fall back to the
     // default fixture so the scene always has something to render.
     const target = useRaidStore.getState().target;
+    BootScene.regenerateEnemyTextures(this, target);
     this.gridSize = target?.gridSize ?? 10;
     this.gridSystem = new GridSystem(this.gridSize);
 
@@ -1078,6 +1083,12 @@ export class RaidScene extends Phaser.Scene {
     };
     EventBus.on('turret-jammed', this.onTurretJammed);
 
+    // Initialize ambient and light glow overlays
+    this.shadowGraphics = this.add.graphics().setDepth(0.1);
+    this.ambientOverlay = this.add.graphics().setDepth(900);
+    this.lightGlowOverlay = this.add.graphics().setDepth(901);
+    this.lightGlowOverlay.setBlendMode(Phaser.BlendModes.ADD);
+
     // ── Cleanup on scene shutdown ──────────────────────────────────────────
     // Belt-and-suspenders: navigating away from /raid destroys the Phaser
     // game (GameCanvas unmount), but if Phaser's internal scene manager ever
@@ -1593,6 +1604,9 @@ export class RaidScene extends Phaser.Scene {
         }
       });
     }
+
+    this.updateLighting(time);
+    this.updateShadows(time);
 
     if (useRaidStore.getState().phase !== 'active') return;
     this.turretAI?.tick(time);
@@ -3024,6 +3038,451 @@ export class RaidScene extends Phaser.Scene {
         );
         item.setVisible(visible);
       }
+    }
+  }
+
+  private updateLighting(time: number): void {
+    if (!this.ambientOverlay || !this.lightGlowOverlay) return;
+
+    this.ambientOverlay.clear();
+    this.lightGlowOverlay.clear();
+
+    const isBlackout = useRaidStore.getState().activeEvent?.eventType === 'sector_blackout';
+    const activeGlitch = Math.max(this.glitchIntensity, isBlackout ? 0.25 : 0);
+
+    const cam = this.cameras.main;
+    const view = cam.worldView;
+
+    // Draw the ambient darkness rectangle covering the current camera view
+    const ambientAlpha = isBlackout ? 0.78 : 0.42;
+    this.ambientOverlay.fillStyle(0x060913, ambientAlpha);
+    this.ambientOverlay.fillRect(view.x - 200, view.y - 200, view.width + 400, view.height + 400);
+
+    // List of active light sources to draw cutouts
+    const lightSources: Array<{
+      cx: number;
+      cy: number;
+      radius: number;
+      angle: number;
+      spread: number;
+      color: number;
+      alpha: number;
+      type: 'flashlight' | 'searchlight' | 'pulsate';
+    }> = [];
+
+    // 1. Player squad flashlights
+    this.squadEntities.forEach((entity) => {
+      if (!entity.active || entity.hp <= 0) return;
+
+      const cx = entity.x;
+      const cy = entity.y - 28;
+
+      let dir = 0;
+      if (entity.texture && entity.texture.key) {
+        const match = entity.texture.key.match(/_dir_(\d)/);
+        if (match) {
+          dir = parseInt(match[1]);
+        }
+      }
+
+      const angle = dir * 0.5 * Math.PI + 0.25 * Math.PI;
+
+      lightSources.push({
+        cx,
+        cy,
+        radius: 110,
+        angle,
+        spread: 0.45,
+        color: 0xe0f7fa,
+        alpha: 0.12,
+        type: 'flashlight',
+      });
+    });
+
+    // 2. Hostile entities (drones and bosses)
+    this.hostileEntities.forEach((entity) => {
+      if (!entity.active || (entity as any).hp <= 0) return;
+
+      const isBoss = entity.isBoss;
+      const key = entity.texture.key;
+
+      const cx = entity.x;
+      const cy = isBoss ? entity.y - 35 : (key.includes('drone') ? entity.y - 16 : entity.y - 24);
+
+      let dir = 0;
+      const match = key.match(/_dir_(\d)/);
+      if (match) {
+        dir = parseInt(match[1]);
+      }
+      const baseAngle = dir * 0.5 * Math.PI + 0.25 * Math.PI;
+
+      if (isBoss) {
+        const bossId = entity.entityId;
+
+        if (bossId === 'boss-ironjaw') {
+          const sweep = Math.sin(time / 1000) * 0.4;
+          lightSources.push({
+            cx,
+            cy,
+            radius: 160,
+            angle: baseAngle + sweep,
+            spread: 0.60,
+            color: 0xef4444,
+            alpha: 0.15,
+            type: 'searchlight',
+          });
+        } else if (bossId === 'boss-whisper') {
+          lightSources.push({
+            cx,
+            cy,
+            radius: 35 + 5 * Math.sin(time / 200),
+            angle: 0,
+            spread: Math.PI * 2,
+            color: 0x22c55e,
+            alpha: 0.10,
+            type: 'pulsate',
+          });
+        } else if (bossId === 'boss-volkov') {
+          const sweep = Math.sin(time / 1200) * 0.5;
+          lightSources.push({
+            cx,
+            cy,
+            radius: 200,
+            angle: baseAngle + sweep,
+            spread: 0.70,
+            color: 0xf97316,
+            alpha: 0.16,
+            type: 'searchlight',
+          });
+        } else if (bossId === 'boss-circuit') {
+          for (let i = 0; i < 4; i++) {
+            const rotAngle = baseAngle + i * 0.5 * Math.PI + Math.sin(time / 600) * 0.2;
+            lightSources.push({
+              cx,
+              cy,
+              radius: 140,
+              angle: rotAngle,
+              spread: 0.18,
+              color: 0x06b6d4,
+              alpha: 0.14,
+              type: 'searchlight',
+            });
+          }
+        } else if (bossId === 'boss-warden') {
+          const rotAngle = (time / 1500) * Math.PI * 2;
+          lightSources.push({
+            cx,
+            cy,
+            radius: 220,
+            angle: rotAngle,
+            spread: 0.50,
+            color: 0xec4899,
+            alpha: 0.18,
+            type: 'searchlight',
+          });
+        }
+      } else if (key.includes('drone') || entity.name?.toLowerCase().includes('drone')) {
+        const cosmetics = (window as any).activeEnemyCosmetics?.guard_drone;
+        const color = cosmetics?.searchlightColor || 0xef4444;
+        const sweep = Math.sin(time / 800) * 0.5;
+
+        lightSources.push({
+          cx,
+          cy,
+          radius: 140,
+          angle: baseAngle + sweep,
+          spread: 0.80,
+          color,
+          alpha: 0.15,
+          type: 'searchlight',
+        });
+      }
+    });
+
+    // A. CUT OUT LIGHT CHANNELS
+    this.ambientOverlay.setBlendMode(Phaser.BlendModes.ERASE);
+
+    lightSources.forEach((light) => {
+      this.ambientOverlay.fillStyle(0xffffff, 1.0);
+      if (light.spread >= Math.PI * 2) {
+        this.ambientOverlay.fillCircle(light.cx, light.cy, light.radius);
+      } else {
+        this.ambientOverlay.beginPath();
+        this.ambientOverlay.moveTo(light.cx, light.cy);
+        this.ambientOverlay.slice(
+          light.cx,
+          light.cy,
+          light.radius,
+          light.angle - light.spread / 2,
+          light.angle + light.spread / 2,
+          false
+        );
+        this.ambientOverlay.closePath();
+        this.ambientOverlay.fillPath();
+      }
+
+      this.ambientOverlay.fillCircle(light.cx, light.cy, 35);
+    });
+
+    this.ambientOverlay.setBlendMode(Phaser.BlendModes.NORMAL);
+
+    // B. DRAW GLOWING VOLUMETRIC LIGHT CONES
+    lightSources.forEach((light) => {
+      const flickerFactor = activeGlitch > 0 && Math.random() < 0.15 * activeGlitch ? 0.4 : 1.0;
+      const alpha = light.alpha * flickerFactor;
+
+      this.lightGlowOverlay.fillStyle(light.color, alpha);
+      if (light.spread >= Math.PI * 2) {
+        this.lightGlowOverlay.fillCircle(light.cx, light.cy, light.radius);
+      } else {
+        this.lightGlowOverlay.beginPath();
+        this.lightGlowOverlay.moveTo(light.cx, light.cy);
+        this.lightGlowOverlay.slice(
+          light.cx,
+          light.cy,
+          light.radius,
+          light.angle - light.spread / 2,
+          light.angle + light.spread / 2,
+          false
+        );
+        this.lightGlowOverlay.closePath();
+        this.lightGlowOverlay.fillPath();
+      }
+
+      if (light.spread < Math.PI * 2) {
+        this.lightGlowOverlay.lineStyle(1.0, light.color, alpha * 2.2);
+        this.lightGlowOverlay.beginPath();
+        this.lightGlowOverlay.slice(
+          light.cx,
+          light.cy,
+          light.radius,
+          light.angle - light.spread / 2,
+          light.angle + light.spread / 2,
+          false
+        );
+        this.lightGlowOverlay.strokePath();
+      }
+    });
+  }
+
+  private updateShadows(time: number): void {
+    if (!this.shadowGraphics) return;
+    this.shadowGraphics.clear();
+
+    const lights: Array<{ cx: number; cy: number; radius: number; Lz: number }> = [];
+
+    // Player squad flashlights
+    this.squadEntities.forEach((entity) => {
+      if (!entity.active || entity.hp <= 0) return;
+      lights.push({
+        cx: entity.x,
+        cy: entity.y - 28,
+        radius: 110,
+        Lz: 100
+      });
+    });
+
+    // Hostile entities (drones and bosses)
+    this.hostileEntities.forEach((entity) => {
+      if (!entity.active || (entity as any).hp <= 0) return;
+      const isBoss = entity.isBoss;
+      const key = entity.texture.key;
+      const cy = isBoss ? entity.y - 35 : (key.includes('drone') ? entity.y - 16 : entity.y - 24);
+      lights.push({
+        cx: entity.x,
+        cy: cy,
+        radius: 140,
+        Lz: 80
+      });
+    });
+
+    if (lights.length === 0) return;
+
+    const HEIGHT_MAP: Record<string, number> = {
+      'furniture_bed_twin': 16,
+      'furniture_desk_wooden': 32,
+      'furniture_chair_office': 32,
+      'furniture_shelf_metal': 64,
+      'furniture_dresser_wooden': 40,
+      'furniture_tv_flatscreen': 24,
+      'furniture_rug_area': 0,
+      'furniture_lamp_floor': 48,
+      'furniture_plant_potted': 32,
+      'furniture_table_folding': 20,
+      'furniture_custom_poster': 40,
+      'furniture_custom_poster_pending': 40,
+      'furniture_custom_poster_rejected': 40,
+      'furniture_boss_pedestal': 32,
+      'barricade_bookshelf': 56,
+      'barricade_flipped_table': 24,
+      'barricade_sandbags': 20,
+      'turret_nailgun': 40,
+      'turret_taser': 40,
+      'turret_tesla': 56,
+      'turret_autocannon': 64,
+      'turret_shotgun': 44,
+      'turret_autocannon_mk2': 64,
+      'turret_power_node': 40,
+      'entity_drone': 40,
+      'guard_drone': 40,
+      'guard_dog': 30,
+      'guard_decoy': 32,
+      'boss_ironjaw': 56,
+      'boss_whisper': 48,
+      'boss_volkov': 52,
+      'boss_circuit': 48,
+      'boss_warden': 60,
+      'loot_stash': 14
+    };
+
+    const getObjectHeight = (textureKey: string): number => {
+      let base = textureKey.replace(/_slot_\d/g, '');
+      base = base.replace(/_dir_\d/g, '');
+      return HEIGHT_MAP[base] ?? 0;
+    };
+
+    lights.forEach((light) => {
+      this.furnitureItems.forEach((sprite) => {
+        if (!sprite.active || !sprite.visible) return;
+        const H = getObjectHeight(sprite.texture.key);
+        if (H <= 0) return;
+
+        if (sprite.texture.key.startsWith('trap_')) return;
+
+        const corners = this.getFurnitureScreenCorners(sprite);
+        this.drawShadowVolume(light, corners, H);
+      });
+
+      this.squadEntities.forEach((entity) => {
+        if (!entity.active || !entity.visible || entity.hp <= 0) return;
+        const H = getObjectHeight(entity.texture.key) || 40;
+        const corners = this.getEntityScreenCorners(entity);
+        this.drawShadowVolume(light, corners, H);
+      });
+
+      this.hostileEntities.forEach((entity) => {
+        if (!entity.active || !entity.visible || (entity as any).hp <= 0) return;
+        const H = getObjectHeight(entity.texture.key) || 40;
+        const corners = this.getEntityScreenCorners(entity);
+        this.drawShadowVolume(light, corners, H);
+      });
+    });
+  }
+
+  private getFurnitureScreenCorners(sprite: any): { x: number; y: number }[] {
+    const rotation = this.currentRotation;
+    const gridSize = this.gridSize || 10;
+    const corners = [
+      { gx: sprite.gridX, gy: sprite.gridY },
+      { gx: sprite.gridX + sprite.footprintW, gy: sprite.gridY },
+      { gx: sprite.gridX + sprite.footprintW, gy: sprite.gridY + sprite.footprintH },
+      { gx: sprite.gridX, gy: sprite.gridY + sprite.footprintH }
+    ];
+
+    let shiftX = 0;
+    let shiftY = 0;
+    let rotX = sprite.gridX;
+    let rotY = sprite.gridY;
+    const MAX = gridSize - 1;
+
+    switch (rotation % 4) {
+      case 1:
+        rotX = MAX - sprite.gridY;
+        rotY = sprite.gridX;
+        break;
+      case 2:
+        rotX = MAX - sprite.gridX;
+        rotY = MAX - sprite.gridY;
+        break;
+      case 3:
+        rotX = sprite.gridY;
+        rotY = MAX - sprite.gridX;
+        break;
+      default:
+        break;
+    }
+
+    if (rotY === 0) {
+      shiftX += 2;
+      shiftY += 4;
+    }
+    if (rotX === 0) {
+      shiftX -= 2;
+      shiftY += 4;
+    }
+
+    return corners.map(c => {
+      const pos = IsometricEngine.worldToScreen(c.gx, c.gy, rotation, gridSize);
+      return {
+        x: pos.x + this.offsetX + shiftX,
+        y: pos.y + this.offsetY + shiftY
+      };
+    });
+  }
+
+  private getEntityScreenCorners(entity: any): { x: number; y: number }[] {
+    return [
+      { x: entity.x, y: entity.y - 32 },
+      { x: entity.x + 32, y: entity.y - 16 },
+      { x: entity.x, y: entity.y },
+      { x: entity.x - 32, y: entity.y - 16 }
+    ];
+  }
+
+  private drawShadowVolume(
+    light: { cx: number; cy: number; radius: number; Lz: number },
+    corners: { x: number; y: number }[],
+    H: number
+  ): void {
+    const SL_x = light.cx;
+    const SL_y = light.cy;
+    const Lz = light.Lz;
+
+    const projectedCorners: { x: number; y: number }[] = [];
+
+    for (let i = 0; i < 4; i++) {
+      const Bi = corners[i];
+      const dx = Bi.x - SL_x;
+      const dy = Bi.y - SL_y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 5) return;
+
+      if (dist > light.radius * 1.5) return;
+
+      const clampLz = Math.max(Lz, H + 20);
+      const scale = clampLz / (clampLz - H);
+      projectedCorners.push({
+        x: SL_x + dx * scale,
+        y: SL_y + dy * scale
+      });
+    }
+
+    this.shadowGraphics.fillStyle(0x000000, 0.18);
+    
+    // Draw top face shadow
+    this.shadowGraphics.beginPath();
+    this.shadowGraphics.moveTo(projectedCorners[0].x, projectedCorners[0].y);
+    for (let i = 1; i < projectedCorners.length; i++) {
+      this.shadowGraphics.lineTo(projectedCorners[i].x, projectedCorners[i].y);
+    }
+    this.shadowGraphics.closePath();
+    this.shadowGraphics.fillPath();
+
+    // Draw side wall shadows
+    for (let i = 0; i < 4; i++) {
+      const nextIdx = (i + 1) % 4;
+      const Bi = corners[i];
+      const Bnext = corners[nextIdx];
+      const Si = projectedCorners[i];
+      const Snext = projectedCorners[nextIdx];
+
+      this.shadowGraphics.beginPath();
+      this.shadowGraphics.moveTo(Bi.x, Bi.y);
+      this.shadowGraphics.lineTo(Bnext.x, Bnext.y);
+      this.shadowGraphics.lineTo(Snext.x, Snext.y);
+      this.shadowGraphics.lineTo(Si.x, Si.y);
+      this.shadowGraphics.closePath();
+      this.shadowGraphics.fillPath();
     }
   }
 }

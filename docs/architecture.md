@@ -542,4 +542,60 @@ React Component
 | Offline Support | Room editor functional offline, syncs on reconnect |
 | Install Prompt | Custom deferred prompt UI after tutorial completion |
 | Push Notifications | Future — raid alerts, quest completions, safe mode expiry |
-```
+
+---
+
+## 8. Procedural Voxel Engine & Customization
+
+The game uses a dynamic, zero-overhead 3D Voxel rendering engine drawn directly onto Phaser textures via standard canvas drawing APIs (`BootScene.generateIsoBlock` using `drawVolumetricSubBlock`).
+
+### Raider Cosmetics & Loadout Syncing
+* **Zustand Bindings**: Zustand stores are bound globally to `(window as any).useSquadStore` and `(window as any).usePlayerStore` on client mount.
+* **Slot-specific Textures**: The engine preloads and dynamically regenerates slot-specific textures (`entity_drone_slot_1` through `entity_drone_slot_4`, along with 4-directional maps) whenever the player customizes character appearance or equips new armor/weapons.
+* **Custom Models**: Armors (e.g., `reinforced_vest`, `tactical_armor`) and weapons (e.g., `heavy_machete`, `demo_hammer`) are rendered block-by-block using beveled voxel overlays.
+
+### Enemy & Boss Customization
+* **Hostile vs. Friendly sentinels**: Placed `guard_drone` sentries render with green searchlights and cyan cores when in the safe Room view (friendly state), and auto-regenerate with red/amber/purple searchlights when in a Raid scene (hostile states).
+* **Faction-colored overlays**:
+  - **Easy strongholds**: Orange searchlights/cores.
+  - **Medium strongholds**: Crimson Red searchlights/cores.
+  - **Hard strongholds**: Void Purple searchlights/cores.
+* **Boss Faction Skins**:
+  - **Ironjaw**: Rust-brown armor plates, warning cores, and optional steel shoulder spikes.
+  - **Whisper**: Camouflage panels and glowing green active circuits.
+  - **Volkov**: Navy blue tread base casing and glowing autocannon barrels.
+  - **Circuit**: Server modular casing, blinking computation LEDs, and glowing copper busbars.
+  - **Warden**: Void purple chassis, energy containment shields, and glowing pink beacon searchlights.
+
+---
+
+## 9. Dynamic Searchlights & Ambient Lighting Overlays
+
+To create a realistic, high-fidelity atmosphere in both safe room customization and active raid combat, Room Invaders utilizes a zero-overhead, dual-layer graphics lighting pipeline inside the Phaser rendering context:
+
+### 9.1 Rendering Pipeline Architecture
+Two dedicated `Phaser.GameObjects.Graphics` layers are initialized at high depths to ensure they sit above tiles, walls, and entities, but below the head-up display (HUD) elements:
+1. **Ambient Dark Overlay** (`ambientOverlay` at depth `900`): Draws a translucent dark rectangle (`0x060913`) covering the active camera viewport.
+   - *Safe Room (RoomScene)*: Soft dimming (`alpha = 0.25`) to establish a high-tech bunker mood.
+   - *Standard Raid (RaidScene)*: Tactical dimming (`alpha = 0.42`) for combat visibility.
+   - *Sector Blackout Event (RaidScene)*: Pitch-black darkness (`alpha = 0.78`) to intensify the survival atmosphere.
+2. **Neon Glow Overlay** (`lightGlowOverlay` at depth `901`): A secondary layer set to the additive blend mode (`Phaser.BlendModes.ADD`) for volumetric light projection and colored beams.
+
+### 9.2 Real-time Blend Mode Shading
+The engine performs hardware-accelerated stencil masking without custom WebGL fragment shaders:
+* **ERASE Blend Mode**: Every frame, the ambient dark overlay is set to `Phaser.BlendModes.ERASE`, and the light cutout shapes (circular flashlights and slice-wedged searchlight cones) are drawn onto it as solid white shapes. This cleanly subtracts opacity from the ambient layer, revealing the fully lit game assets underneath.
+* **NORMAL Blend Mode**: The ambient overlay is then set back to normal drawing mode.
+* **ADD Blend Mode**: Glowing volumetric light cones and beam outlines are drawn onto the neon glow overlay using the additive blend mode, providing the visual effect of colored dust and vapor illuminated by searchlights.
+
+### 9.3 Dynamic Light Sources
+1. **Player Squad Flashlights**: Warm cyan-white (`0xe0f7fa`) light cones sweeping at a `0.45` spread angle with a radius of `110px`, dynamically rotating to align with the character's movement path direction (`dir_0` through `dir_3`).
+2. **Sentry Hover Drones (`guard_drone`)**:
+   - *Friendly Sentinels*: Green searchlight beams (`0x10b981`) scanning back and forth.
+   - *Hostile Drones*: Color-tinted based on difficulty (Easy: Orange `0xf97316`, Medium/Hard: Red `0xef4444` or Void Purple `0xa855f7`).
+   - *Motion*: Sweeps back and forth dynamically based on a sinusoidal function: `Math.sin(time / 800) * 0.5` radians.
+3. **Boss Warlords**: Specialized light mechanics based on faction type:
+   - *Ironjaw*: Red sweeps (`0xef4444`), radius `160px`, spread `0.60` rads.
+   - *Whisper*: active-camo green pulsator (`0x22c55e`), radius `35 + 5 * Math.sin(time / 200)px` at 360°.
+   - *Volkov*: Tactical orange command beam (`0xf97316`), radius `200px`, spread `0.70` rads.
+   - *Circuit*: Quad yellow/cyan LED beams (`0x06b6d4`), rotating in multi-array directions.
+   - *Warden*: Top warning beacon (`0xec4899`) rotating continuously in a full 360° circle: `angle = (time / 1500) * Math.PI * 2`.

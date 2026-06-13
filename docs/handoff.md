@@ -12,7 +12,55 @@ ALT Games Division
 Room Invaders
 
 https://github.com/wdt1983/Room-Invaders.git (private)
+### 2026-06-12 — Version 0.26.8: Dynamic Searchlights & Ambient Lighting Overlays
 
+### Summary
+
+Successfully implemented Version 0.26.8, introducing a dual-layer graphics pipeline inside the Phaser engine to render realistic dynamic searchlights and screen-dimming ambient lighting overlays in both `RoomScene.ts` (safe room customization view) and `RaidScene.ts` (active raid combat view).
+
+Key accomplishments:
+1. **Dual-Layer Rendering Pipeline**:
+   - `ambientOverlay` (depth `900`): Renders screen-darkening overlays (`0x060913`). Features soft dimming in safe rooms (`alpha = 0.25`), standard deep Navy shading in raids (`alpha = 0.42`), and near pitch-black shading during sector blackouts (`alpha = 0.78`).
+   - `lightGlowOverlay` (depth `901`): A secondary layer using the additive blend mode (`Phaser.BlendModes.ADD`) to draw volumetric glowing beams and neon beam boundaries.
+2. **Real-time Blend Mode Masking**:
+   - Applied `Phaser.BlendModes.ERASE` on the dark ambient overlay to draw circular flashlights and sweeping wedged searchlight cones, cleanly carving out transparent shapes to reveal fully lit assets below.
+3. **Dynamic Light Sources**:
+   - Attached rotating white flashlights to player squad units that sweep in their active movement direction.
+   - Wired scanning searchlight beams to hover drones (friendly green in safe room, difficulty-coded orange/red/purple for hostiles in raids).
+   - Created specialized light behaviors for all 5 boss Warlords: Ironjaw (sweeping rust optics), Whisper (pulsating camouflage circles), Volkov (heavy orange cone sweeps), Circuit (multiple yellow/cyan arrays), and Warden (360° rotating alert beacon).
+4. **Walk Path Facing Rotation**:
+   - Refactored `walkPath` in `EntitySprite.ts` to calculate facing directions from grid deltas and swap textures (`_dir_0` through `_dir_3`) in real-time, making characters rotate to face their movement paths.
+5. **Quality Assurance & Verification**:
+   - Next.js production build (`pnpm run build`) completed successfully with 0 TypeScript check or static generation errors.
+   - Vitest unit tests (`pnpm test`) completed with **72/72 tests passing green** (100%).
+
+### Next Best Tasks
+
+1. **Dynamic Character Walk Animations**: Implement a subtle yoyo translation tween inside `RaidScene.ts` and `RoomScene.ts` that bobbles the human raider's body slightly up and down (`scaleY: 1.02, yOffset += 2px`) as they walk across floor tiles to simulate real footsteps.
+2. **Procedural Weapon Swapping**: Read the squad member's active weapon property (`member.weapon`) and dynamically adjust the assault rifle sub-blocks into a heavy hammer (demolition) or a glowing machete (melee) to reflect their tactical loadout in-game.
+3. **Dynamic Cast Shadows**: Build a real-time shadow projection engine in `RaidScene.ts` and `RoomScene.ts` that casts dynamic, elongated 2.5D shadows from our 3D volumetric voxel blocks onto floor grid tiles based on moving light source coordinates (e.g., flashlights or drone searchlights).
+
+---
+
+### 2026-06-12 — Version 0.26.7: Procedural Voxel Enemy & Boss Customization
+
+### Summary
+
+Successfully completed Version 0.26.7, enabling dynamically styled voxel assets that adapt to their game environment.
+
+Key accomplishments:
+1. **Procedural Sentry Drone Customization (`guard_drone`)**:
+   - Refactored `guard_drone` draw blocks in `BootScene.ts` to accept dynamic color, searchlight, and stabilizer wing parameters.
+   - Implemented automatic styling adjustments: friendly sentinel drones in the safe Room view render with green searchlights and cyan energy cores, while hostile sentry drones in Raid scenes render with red/amber/purple searchlights based on target difficulty level.
+   - Added support for three stabilizer wing styles: standard wings, armored heavy wings, and rusty scavenger wings.
+2. **Procedural Warlord Boss Customization**:
+   - Refactored the 5 Warlord bosses (`boss_ironjaw`, `boss_whisper`, `boss_volkov`, `boss_circuit`, `boss_warden`) in `BootScene.ts` to support dynamic color tinting, warning core illumination, and customizable armor plates.
+   - Added difficulty-based overlays: e.g., steel shoulder spikes on Ironjaw, camouflage grids on Whisper, heavy tread shielding on Volkov, active computational LED arrays on Circuit, and cryptographic containment shields on Warden.
+3. **Dynamic Texture Regeneration Pipeline**:
+   - Implemented `BootScene.regenerateEnemyTextures` static helper to cleanly reload boss and sentry textures on the fly.
+   - Hooked texture regeneration into the initialization phase of `RaidScene.ts` (using active raid target faction/difficulty settings) and `RoomScene.ts` (using friendly base settings).
+
+---
 
 ### 2026-05-31 — Version 0.26.6: Tactical Human Raider Visual Overhaul
 

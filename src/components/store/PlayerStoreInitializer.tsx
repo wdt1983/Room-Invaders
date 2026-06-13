@@ -97,14 +97,17 @@ export default function PlayerStoreInitializer({
     );
 
     if (typeof window !== "undefined") {
-      const roomScene = (window as any).game?.scene?.keys?.RoomScene;
-      if (roomScene) {
-        import("@/game/scenes/BootScene").then(({ BootScene }) => {
-          const cosmetics = usePlayerStore.getState().raiderCosmetics;
-          if (cosmetics) {
-            BootScene.regenerateRaiderTextures(roomScene, cosmetics);
-          }
-        });
+      const game = (window as any).game;
+      if (game) {
+        const activeScene = game.scene.scenes.find((s: any) => s.sys.isActive() || s.sys.isOpen);
+        if (activeScene) {
+          import("@/game/scenes/BootScene").then(({ BootScene }) => {
+            const cosmetics = usePlayerStore.getState().raiderCosmetics;
+            if (cosmetics) {
+              BootScene.regenerateRaiderTextures(activeScene, cosmetics);
+            }
+          });
+        }
       }
     }
 

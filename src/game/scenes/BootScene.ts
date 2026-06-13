@@ -1088,44 +1088,73 @@ export class BootScene extends Phaser.Scene {
       drawnCustomModel = true;
     }
     else if (key.startsWith('guard_drone')) {
+      let primaryColorVal = color;
+      let thrusterColorVal = 0xf97316;
+      let wingStyleVal = "standard";
+      let searchlightColorVal = 0x06b6d4;
+      let coreColorVal = 0xeab308;
+
+      try {
+        if (typeof window !== "undefined") {
+          const cosmetics = (window as any).activeEnemyCosmetics?.guard_drone;
+          if (cosmetics) {
+            primaryColorVal = typeof cosmetics.primaryColor === 'number' ? cosmetics.primaryColor : primaryColorVal;
+            thrusterColorVal = typeof cosmetics.thrusterColor === 'number' ? cosmetics.thrusterColor : thrusterColorVal;
+            wingStyleVal = cosmetics.wingStyle || wingStyleVal;
+            searchlightColorVal = typeof cosmetics.searchlightColor === 'number' ? cosmetics.searchlightColor : searchlightColorVal;
+            coreColorVal = typeof cosmetics.coreColor === 'number' ? cosmetics.coreColor : coreColorVal;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read guard_drone cosmetics", e);
+      }
+
       // 1. Layered armored body plates (suspended at z=12)
       // Bottom slate-gray chassis plate
-      drawVolumetricSubBlock(0.33, 0.33, 10, 0.34, 0.34, 4, 0x1e293b, { panel: true });
+      drawVolumetricSubBlock(0.33, 0.33, 10, 0.34, 0.34, 4, primaryColorVal, { panel: true });
       // Hovering gold power core sphere
-      drawVolumetricSubBlock(0.33, 0.33, 14, 0.34, 0.34, 6, 0xeab308, { neon: true });
+      drawVolumetricSubBlock(0.33, 0.33, 14, 0.34, 0.34, 6, coreColorVal, { neon: true });
       
       // 2. Front-mounted Sensor Gimbal & Twin Cyan Lenses
       // Gimbal ball
       drawVolumetricSubBlock(0.42, 0.26, 8, 0.16, 0.08, 4, 0x0f172a);
       // Twin glowing optics visors
-      drawVolumetricSubBlock(0.44, 0.24, 9, 0.12, 0.02, 2, neonColor, { screen: true });
+      drawVolumetricSubBlock(0.44, 0.24, 9, 0.12, 0.02, 2, searchlightColorVal, { screen: true });
       
       // 3. Side-Mounted Weapon Rails Flanking bottom wings
       // Left laser rails
       drawVolumetricSubBlock(0.22, 0.44, 6, 0.06, 0.2, 3, 0x334155);
-      drawVolumetricSubBlock(0.22, 0.40, 6.5, 0.06, 0.04, 1.5, 0x06b6d4, { screen: true }); // Laser tip
+      drawVolumetricSubBlock(0.22, 0.40, 6.5, 0.06, 0.04, 1.5, searchlightColorVal, { screen: true }); // Laser tip
       // Right laser rails
       drawVolumetricSubBlock(0.72, 0.44, 6, 0.06, 0.2, 3, 0x334155);
-      drawVolumetricSubBlock(0.72, 0.40, 6.5, 0.06, 0.04, 1.5, 0x06b6d4, { screen: true }); // Laser tip
+      drawVolumetricSubBlock(0.72, 0.40, 6.5, 0.06, 0.04, 1.5, searchlightColorVal, { screen: true }); // Laser tip
 
       // 4. Under-Chassis Thruster Nozzle & Flame Flare
       drawVolumetricSubBlock(0.42, 0.42, 6, 0.16, 0.16, 4, 0x475569);
       // Glowing thruster plume vector block
-      drawVolumetricSubBlock(0.45, 0.45, 1, 0.10, 0.10, 5, 0xf97316, { neon: true });
+      drawVolumetricSubBlock(0.45, 0.45, 1, 0.10, 0.10, 5, thrusterColorVal, { neon: true });
 
       // 5. Horizontal rotor arms
-      drawVolumetricSubBlock(0.08, 0.08, 16, 0.84, 0.06, 2, 0x475569);
-      drawVolumetricSubBlock(0.08, 0.86, 16, 0.84, 0.06, 2, 0x475569);
+      drawVolumetricSubBlock(0.08, 0.08, 16, 0.84, 0.06, 2, primaryColorVal);
+      drawVolumetricSubBlock(0.08, 0.86, 16, 0.84, 0.06, 2, primaryColorVal);
       
       // 6. 4 glowing rotor blades discs on corners
-      drawVolumetricSubBlock(0.04, 0.04, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.8, 0.04, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.04, 0.8, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.8, 0.8, 18, 0.16, 0.16, 1, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.04, 0.04, 18, 0.16, 0.16, 1, searchlightColorVal, { screen: true });
+      drawVolumetricSubBlock(0.8, 0.04, 18, 0.16, 0.16, 1, searchlightColorVal, { screen: true });
+      drawVolumetricSubBlock(0.04, 0.8, 18, 0.16, 0.16, 1, searchlightColorVal, { screen: true });
+      drawVolumetricSubBlock(0.8, 0.8, 18, 0.16, 0.16, 1, searchlightColorVal, { screen: true });
 
       // 7. Side stabilizer wings
-      drawVolumetricSubBlock(0.28, 0.4, 10, 0.05, 0.2, 12, 0x475569);
-      drawVolumetricSubBlock(0.67, 0.4, 10, 0.05, 0.2, 12, 0x475569);
+      if (wingStyleVal === 'heavy') {
+        drawVolumetricSubBlock(0.24, 0.38, 8, 0.08, 0.24, 16, primaryColorVal, { panel: true });
+        drawVolumetricSubBlock(0.68, 0.38, 8, 0.08, 0.24, 16, primaryColorVal, { panel: true });
+      } else if (wingStyleVal === 'scavenger') {
+        drawVolumetricSubBlock(0.28, 0.4, 10, 0.05, 0.2, 12, 0x78350f, { wood: true });
+        drawVolumetricSubBlock(0.67, 0.4, 10, 0.05, 0.2, 12, 0x78350f, { wood: true });
+      } else {
+        drawVolumetricSubBlock(0.28, 0.4, 10, 0.05, 0.2, 12, 0x475569);
+        drawVolumetricSubBlock(0.67, 0.4, 10, 0.05, 0.2, 12, 0x475569);
+      }
 
       drawnCustomModel = true;
     }
@@ -1175,8 +1204,29 @@ export class BootScene extends Phaser.Scene {
       drawnCustomModel = true;
     }
     else if (key.startsWith('boss_ironjaw')) {
+      let primaryColorVal = 0xef4444;
+      let armorColorVal = 0x334155;
+      let warningCoreColorVal = 0xeab308;
+      let visorColorVal = 0xef4444;
+      let spikesVal = false;
+
+      try {
+        if (typeof window !== "undefined") {
+          const cosmetics = (window as any).activeEnemyCosmetics?.boss_ironjaw;
+          if (cosmetics) {
+            primaryColorVal = typeof cosmetics.primaryColor === 'number' ? cosmetics.primaryColor : primaryColorVal;
+            armorColorVal = typeof cosmetics.armorColor === 'number' ? cosmetics.armorColor : armorColorVal;
+            warningCoreColorVal = typeof cosmetics.warningCoreColor === 'number' ? cosmetics.warningCoreColor : warningCoreColorVal;
+            visorColorVal = typeof cosmetics.visorColor === 'number' ? cosmetics.visorColor : visorColorVal;
+            spikesVal = !!cosmetics.spikes;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read boss_ironjaw cosmetics", e);
+      }
+
       // Heavy armored scavenger chassis base
-      drawVolumetricSubBlock(0.1, 0.1, 0, 0.8, 0.8, 20, 0xef4444, { panel: true });
+      drawVolumetricSubBlock(0.1, 0.1, 0, 0.8, 0.8, 20, primaryColorVal, { panel: true });
       
       // 2. Heavy slate-gray ground stabilizer hydraulic cylinders (back)
       drawVolumetricSubBlock(0.18, 0.70, 0, 0.12, 0.12, 22, 0x475569);
@@ -1186,67 +1236,115 @@ export class BootScene extends Phaser.Scene {
       drawVolumetricSubBlock(0.15, 0.05, 4, 0.7, 0.15, 12, 0x64748b);
       
       // 4. Spiked shoulder pads with yellow-black hazard trims
-      drawVolumetricSubBlock(0.04, 0.3, 16, 0.1, 0.4, 28, 0x334155);
+      drawVolumetricSubBlock(0.04, 0.3, 16, 0.1, 0.4, 28, armorColorVal);
       drawVolumetricSubBlock(0.04, 0.3, 44, 0.1, 0.4, 2, 0xeab308); // Yellow hazard strip
       
-      drawVolumetricSubBlock(0.86, 0.3, 16, 0.1, 0.4, 28, 0x334155);
+      drawVolumetricSubBlock(0.86, 0.3, 16, 0.1, 0.4, 28, armorColorVal);
       drawVolumetricSubBlock(0.86, 0.3, 44, 0.1, 0.4, 2, 0xeab308); // Yellow hazard strip
       
       // 5. Glowing warning core on top
-      drawVolumetricSubBlock(0.35, 0.35, 20, 0.3, 0.3, 14, 0xeab308, { neon: true });
+      drawVolumetricSubBlock(0.35, 0.35, 20, 0.3, 0.3, 14, warningCoreColorVal, { neon: true });
       
       // 6. Crimson glowing visual optics band (eye visor)
-      drawVolumetricSubBlock(0.3, 0.08, 24, 0.4, 0.04, 4, 0xef4444, { screen: true });
+      drawVolumetricSubBlock(0.3, 0.08, 24, 0.4, 0.04, 4, visorColorVal, { screen: true });
+
+      // Extra spikes for advanced armor plates
+      if (spikesVal) {
+        drawVolumetricSubBlock(0.04, 0.4, 46, 0.08, 0.08, 6, 0x94a3b8);
+        drawVolumetricSubBlock(0.88, 0.4, 46, 0.08, 0.08, 6, 0x94a3b8);
+      }
 
       drawnCustomModel = true;
     }
     else if (key.startsWith('boss_whisper')) {
+      let primaryColorVal = 0x0f172a;
+      let camoColorVal = 0x22c55e;
+      let circuitsColorVal = 0x22c55e;
+      let visorColorVal = 0x22c55e;
+
+      try {
+        if (typeof window !== "undefined") {
+          const cosmetics = (window as any).activeEnemyCosmetics?.boss_whisper;
+          if (cosmetics) {
+            primaryColorVal = typeof cosmetics.primaryColor === 'number' ? cosmetics.primaryColor : primaryColorVal;
+            camoColorVal = typeof cosmetics.camoColor === 'number' ? cosmetics.camoColor : camoColorVal;
+            circuitsColorVal = typeof cosmetics.circuitsColor === 'number' ? cosmetics.circuitsColor : circuitsColorVal;
+            visorColorVal = typeof cosmetics.visorColor === 'number' ? cosmetics.visorColor : visorColorVal;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read boss_whisper cosmetics", e);
+      }
+
       // Midnight-black carbon composite core
-      drawVolumetricSubBlock(0.2, 0.2, 0, 0.6, 0.6, 24, 0x0f172a, { panel: true });
+      drawVolumetricSubBlock(0.2, 0.2, 0, 0.6, 0.6, 24, primaryColorVal, { panel: true });
       
       // 2. Active dense fiber-optic glowing circuitry channels
-      drawVolumetricSubBlock(0.38, 0.22, 4, 0.04, 0.02, 16, 0x22c55e, { neon: true });
-      drawVolumetricSubBlock(0.58, 0.22, 4, 0.04, 0.02, 16, 0x22c55e, { neon: true });
+      drawVolumetricSubBlock(0.38, 0.22, 4, 0.04, 0.02, 16, circuitsColorVal, { neon: true });
+      drawVolumetricSubBlock(0.58, 0.22, 4, 0.04, 0.02, 16, circuitsColorVal, { neon: true });
       
       // 3. Flanking neon-green active-camo panels
-      drawVolumetricSubBlock(0.12, 0.25, 4, 0.08, 0.5, 18, 0x22c55e, { neon: true });
-      drawVolumetricSubBlock(0.8, 0.25, 4, 0.08, 0.5, 18, 0x22c55e, { neon: true });
+      drawVolumetricSubBlock(0.12, 0.25, 4, 0.08, 0.5, 18, camoColorVal, { neon: true });
+      drawVolumetricSubBlock(0.8, 0.25, 4, 0.08, 0.5, 18, camoColorVal, { neon: true });
       
       // 4. Twin high-frequency sensor scanner antennas
-      drawVolumetricSubBlock(0.48, 0.48, 24, 0.04, 0.04, 20, 0x22c55e);
+      drawVolumetricSubBlock(0.48, 0.48, 24, 0.04, 0.04, 20, camoColorVal);
       
       // 5. Flashing passive sensor pod grids on the back
       drawVolumetricSubBlock(0.35, 0.74, 8, 0.08, 0.04, 8, 0x15803d, { neon: true });
       drawVolumetricSubBlock(0.57, 0.74, 8, 0.08, 0.04, 8, 0x15803d, { neon: true });
       
       // 6. Glowing green data visor screen
-      drawVolumetricSubBlock(0.25, 0.18, 16, 0.5, 0.04, 5, 0x22c55e, { screen: true });
+      drawVolumetricSubBlock(0.25, 0.18, 16, 0.5, 0.04, 5, visorColorVal, { screen: true });
 
       drawnCustomModel = true;
     }
     else if (key.startsWith('boss_volkov')) {
+      let primaryColorVal = 0x3b82f6;
+      let treadColorVal = 0x0f172a;
+      let autocannonGlowVal = 0xef4444;
+      let visorColorVal = 0xf97316;
+
+      try {
+        if (typeof window !== "undefined") {
+          const cosmetics = (window as any).activeEnemyCosmetics?.boss_volkov;
+          if (cosmetics) {
+            primaryColorVal = typeof cosmetics.primaryColor === 'number' ? cosmetics.primaryColor : primaryColorVal;
+            treadColorVal = typeof cosmetics.treadColor === 'number' ? cosmetics.treadColor : treadColorVal;
+            autocannonGlowVal = typeof cosmetics.autocannonGlow === 'number' ? cosmetics.autocannonGlow : autocannonGlowVal;
+            visorColorVal = typeof cosmetics.visorColor === 'number' ? cosmetics.visorColor : visorColorVal;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read boss_volkov cosmetics", e);
+      }
+
       // Armored navy blue tread base casing
-      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 16, 0x1e3a8a, { panel: true });
+      drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 16, primaryColorVal, { panel: true });
       
       // 2. Heavy steel tread track links
-      drawVolumetricSubBlock(0.05, 0.12, 4, 0.03, 0.76, 2, 0x0f172a);
-      drawVolumetricSubBlock(0.05, 0.12, 10, 0.03, 0.76, 2, 0x0f172a);
-      drawVolumetricSubBlock(0.92, 0.12, 4, 0.03, 0.76, 2, 0x0f172a);
-      drawVolumetricSubBlock(0.92, 0.12, 10, 0.03, 0.76, 2, 0x0f172a);
+      drawVolumetricSubBlock(0.05, 0.12, 4, 0.03, 0.76, 2, treadColorVal);
+      drawVolumetricSubBlock(0.05, 0.12, 10, 0.03, 0.76, 2, treadColorVal);
+      drawVolumetricSubBlock(0.92, 0.12, 4, 0.03, 0.76, 2, treadColorVal);
+      drawVolumetricSubBlock(0.92, 0.12, 10, 0.03, 0.76, 2, treadColorVal);
       
       // 3. Heavy mechanical steel torso
-      drawVolumetricSubBlock(0.2, 0.2, 16, 0.6, 0.6, 22, 0x3b82f6);
+      drawVolumetricSubBlock(0.2, 0.2, 16, 0.6, 0.6, 22, primaryColorVal);
       
       // 4. Dual shoulder-mounted heavy railgun barrels
       drawVolumetricSubBlock(0.08, 0.06, 28, 0.16, 0.5, 8, 0x1e293b);
       drawVolumetricSubBlock(0.76, 0.06, 28, 0.16, 0.5, 8, 0x1e293b);
       
+      // Auto-cannon glowing tips
+      drawVolumetricSubBlock(0.12, 0.02, 30, 0.08, 0.04, 4, autocannonGlowVal, { neon: true });
+      drawVolumetricSubBlock(0.80, 0.02, 30, 0.08, 0.04, 4, autocannonGlowVal, { neon: true });
+
       // 5. High-density ammunition feed belts running into railguns
       drawVolumetricSubBlock(0.18, 0.50, 18, 0.08, 0.2, 10, 0x475569);
       drawVolumetricSubBlock(0.74, 0.50, 18, 0.08, 0.2, 10, 0x475569);
       
       // 6. Glowing orange command visor
-      drawVolumetricSubBlock(0.35, 0.18, 24, 0.3, 0.04, 4, 0xf97316, { screen: true });
+      drawVolumetricSubBlock(0.35, 0.18, 24, 0.3, 0.04, 4, visorColorVal, { screen: true });
       
       // 7. Golden central insignia crest on chest
       drawVolumetricSubBlock(0.4, 0.19, 18, 0.2, 0.02, 6, 0xeab308, { neon: true });
@@ -1254,17 +1352,36 @@ export class BootScene extends Phaser.Scene {
       drawnCustomModel = true;
     }
     else if (key.startsWith('boss_circuit')) {
+      let primaryColorVal = 0xeab308;
+      let serverColorVal = 0xca8a04;
+      let ledColorVal = 0x06b6d4;
+      let condenserGlowVal = 0xb45309;
+
+      try {
+        if (typeof window !== "undefined") {
+          const cosmetics = (window as any).activeEnemyCosmetics?.boss_circuit;
+          if (cosmetics) {
+            primaryColorVal = typeof cosmetics.primaryColor === 'number' ? cosmetics.primaryColor : primaryColorVal;
+            serverColorVal = typeof cosmetics.serverColor === 'number' ? cosmetics.serverColor : serverColorVal;
+            ledColorVal = typeof cosmetics.ledColor === 'number' ? cosmetics.ledColor : ledColorVal;
+            condenserGlowVal = typeof cosmetics.condenserGlow === 'number' ? cosmetics.condenserGlow : condenserGlowVal;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read boss_circuit cosmetics", e);
+      }
+
       // 1. Sleek metallic safety mounting base plate with yellow hazard corners
       drawVolumetricSubBlock(0.08, 0.08, 0, 0.84, 0.84, 3, 0x334155, { panel: true });
-      drawVolumetricSubBlock(0.08, 0.08, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner NW
-      drawVolumetricSubBlock(0.78, 0.08, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner NE
-      drawVolumetricSubBlock(0.08, 0.78, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner SW
-      drawVolumetricSubBlock(0.78, 0.78, 3, 0.14, 0.14, 1, 0xeab308); // Hazard corner SE
+      drawVolumetricSubBlock(0.08, 0.08, 3, 0.14, 0.14, 1, primaryColorVal); // Hazard corner NW
+      drawVolumetricSubBlock(0.78, 0.08, 3, 0.14, 0.14, 1, primaryColorVal); // Hazard corner NE
+      drawVolumetricSubBlock(0.08, 0.78, 3, 0.14, 0.14, 1, primaryColorVal); // Hazard corner SW
+      drawVolumetricSubBlock(0.78, 0.78, 3, 0.14, 0.14, 1, primaryColorVal); // Hazard corner SE
 
       // 2. Multi-tiered detailed modular server cabinet racks
-      drawVolumetricSubBlock(0.15, 0.15, 3, 0.7, 0.7, 9, 0xca8a04, { panel: true });
-      drawVolumetricSubBlock(0.25, 0.25, 12, 0.5, 0.5, 16, 0xeab308, { panel: true });
-      drawVolumetricSubBlock(0.35, 0.35, 28, 0.3, 0.3, 14, 0xfef08a);
+      drawVolumetricSubBlock(0.15, 0.15, 3, 0.7, 0.7, 9, serverColorVal, { panel: true });
+      drawVolumetricSubBlock(0.25, 0.25, 12, 0.5, 0.5, 16, primaryColorVal, { panel: true });
+      drawVolumetricSubBlock(0.35, 0.35, 28, 0.3, 0.3, 14, primaryColorVal);
       
       // 3. Horizontal server drawer divisions (black seams)
       drawVolumetricSubBlock(0.24, 0.24, 8, 0.52, 0.52, 1, 0x1e293b);
@@ -1273,36 +1390,55 @@ export class BootScene extends Phaser.Scene {
       drawVolumetricSubBlock(0.24, 0.24, 26, 0.52, 0.52, 1, 0x1e293b);
 
       // 4. Exposed glowing copper power busbars
-      drawVolumetricSubBlock(0.21, 0.25, 3, 0.04, 0.5, 25, 0xb45309, { neon: true });
-      drawVolumetricSubBlock(0.75, 0.25, 3, 0.04, 0.5, 25, 0xb45309, { neon: true });
+      drawVolumetricSubBlock(0.21, 0.25, 3, 0.04, 0.5, 25, condenserGlowVal, { neon: true });
+      drawVolumetricSubBlock(0.75, 0.25, 3, 0.04, 0.5, 25, condenserGlowVal, { neon: true });
       
       // 5. Active blinking green and cyan LED computational clusters
-      drawVolumetricSubBlock(0.32, 0.24, 6, 0.08, 0.01, 2, 0x22c55e, { screen: true });
-      drawVolumetricSubBlock(0.44, 0.24, 6, 0.08, 0.01, 2, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.56, 0.24, 6, 0.08, 0.01, 2, 0x22c55e, { screen: true });
+      drawVolumetricSubBlock(0.32, 0.24, 6, 0.08, 0.01, 2, ledColorVal, { screen: true });
+      drawVolumetricSubBlock(0.44, 0.24, 6, 0.08, 0.01, 2, ledColorVal, { screen: true });
+      drawVolumetricSubBlock(0.56, 0.24, 6, 0.08, 0.01, 2, ledColorVal, { screen: true });
       
-      drawVolumetricSubBlock(0.32, 0.24, 16, 0.08, 0.01, 2, 0x06b6d4, { screen: true });
-      drawVolumetricSubBlock(0.44, 0.24, 16, 0.08, 0.01, 2, 0x22c55e, { screen: true });
-      drawVolumetricSubBlock(0.56, 0.24, 16, 0.08, 0.01, 2, 0x06b6d4, { screen: true });
+      drawVolumetricSubBlock(0.32, 0.24, 16, 0.08, 0.01, 2, ledColorVal, { screen: true });
+      drawVolumetricSubBlock(0.44, 0.24, 16, 0.08, 0.01, 2, ledColorVal, { screen: true });
+      drawVolumetricSubBlock(0.56, 0.24, 16, 0.08, 0.01, 2, ledColorVal, { screen: true });
       
       // 6. Side ventilation grates
       drawVolumetricSubBlock(0.24, 0.35, 6, 0.01, 0.3, 6, 0x0f172a);
       drawVolumetricSubBlock(0.24, 0.35, 18, 0.01, 0.3, 6, 0x0f172a);
 
       // 7. Glowing copper condenser rings on top
-      drawVolumetricSubBlock(0.28, 0.28, 42, 0.44, 0.44, 3, 0xca8a04, { neon: true });
+      drawVolumetricSubBlock(0.28, 0.28, 42, 0.44, 0.44, 3, serverColorVal, { neon: true });
       
       // 8. Matrix-grid data visor screen
-      drawVolumetricSubBlock(0.3, 0.32, 20, 0.4, 0.04, 6, 0xeab308, { screen: true });
+      drawVolumetricSubBlock(0.3, 0.32, 20, 0.4, 0.04, 6, ledColorVal, { screen: true });
 
       drawnCustomModel = true;
     }
     else if (key.startsWith('boss_warden')) {
+      let primaryColorVal = 0x581c87;
+      let shieldColorVal = 0x7e22ce;
+      let beaconColorVal = 0xef4444;
+      let visorColorVal = 0xef4444;
+
+      try {
+        if (typeof window !== "undefined") {
+          const cosmetics = (window as any).activeEnemyCosmetics?.boss_warden;
+          if (cosmetics) {
+            primaryColorVal = typeof cosmetics.primaryColor === 'number' ? cosmetics.primaryColor : primaryColorVal;
+            shieldColorVal = typeof cosmetics.shieldColor === 'number' ? cosmetics.shieldColor : shieldColorVal;
+            beaconColorVal = typeof cosmetics.beaconColor === 'number' ? cosmetics.beaconColor : beaconColorVal;
+            visorColorVal = typeof cosmetics.visorColor === 'number' ? cosmetics.visorColor : visorColorVal;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read boss_warden cosmetics", e);
+      }
+
       // 1. Heavy purple armored containment treads base
-      drawVolumetricSubBlock(0.06, 0.06, 0, 0.88, 0.88, 18, 0x3b0764, { panel: true });
+      drawVolumetricSubBlock(0.06, 0.06, 0, 0.88, 0.88, 18, primaryColorVal, { panel: true });
       
       // 2. Heavy-duty composite mechanical torso
-      drawVolumetricSubBlock(0.18, 0.18, 18, 0.64, 0.64, 24, 0x581c87);
+      drawVolumetricSubBlock(0.18, 0.18, 18, 0.64, 0.64, 24, primaryColorVal);
       
       // 3. Vault containment cage vertical steel bars
       drawVolumetricSubBlock(0.24, 0.17, 20, 0.04, 0.02, 20, 0x1e293b);
@@ -1315,14 +1451,14 @@ export class BootScene extends Phaser.Scene {
       drawVolumetricSubBlock(0.82, 0.45, 4, 0.06, 0.10, 18, 0x475569);
       
       // 5. Dual flanking vertical heavy shield plates
-      drawVolumetricSubBlock(0.04, 0.2, 22, 0.12, 0.6, 18, 0x7e22ce);
-      drawVolumetricSubBlock(0.84, 0.2, 22, 0.12, 0.6, 18, 0x7e22ce);
+      drawVolumetricSubBlock(0.04, 0.2, 22, 0.12, 0.6, 18, shieldColorVal);
+      drawVolumetricSubBlock(0.84, 0.2, 22, 0.12, 0.6, 18, shieldColorVal);
       
       // 6. Red searchlight beacon dome on top
-      drawVolumetricSubBlock(0.35, 0.35, 42, 0.3, 0.3, 10, 0xef4444, { neon: true });
+      drawVolumetricSubBlock(0.35, 0.35, 42, 0.3, 0.3, 10, beaconColorVal, { neon: true });
       
       // 7. Monolithic horizontal visor slot
-      drawVolumetricSubBlock(0.3, 0.16, 30, 0.4, 0.04, 4, 0xef4444, { screen: true });
+      drawVolumetricSubBlock(0.3, 0.16, 30, 0.4, 0.04, 4, visorColorVal, { screen: true });
 
       drawnCustomModel = true;
     }
@@ -1405,5 +1541,159 @@ export class BootScene extends Phaser.Scene {
     }
 
     scene.events.emit("raider-textures-regenerated");
+  }
+
+  /**
+   * Public static helper that dynamically regenerates the enemy and boss voxel textures
+   * at runtime based on the target difficulty and faction settings.
+   */
+  public static regenerateEnemyTextures(scene: Phaser.Scene, target: any): void {
+    const bootScene = scene.scene.get("BootScene") as BootScene;
+    if (!bootScene) return;
+
+    const enemyCosmetics: any = {
+      guard_drone: {
+        primaryColor: 0xf1c40f,
+        thrusterColor: 0xf97316,
+        wingStyle: 'standard',
+        visorColor: 0x06b6d4,
+        searchlightColor: 0x06b6d4,
+        coreColor: 0xeab308,
+      },
+      boss_ironjaw: null,
+      boss_whisper: null,
+      boss_volkov: null,
+      boss_circuit: null,
+      boss_warden: null,
+    };
+
+    if (target) {
+      // Hostile sentry default values (red/amber searchlight)
+      const diff = target.difficulty || 'easy';
+      enemyCosmetics.guard_drone.primaryColor = 0x475569; // darker slate
+      enemyCosmetics.guard_drone.wingStyle = 'heavy';
+      
+      if (diff === 'easy') {
+        enemyCosmetics.guard_drone.searchlightColor = 0xf97316; // amber/orange
+        enemyCosmetics.guard_drone.visorColor = 0xf97316;
+        enemyCosmetics.guard_drone.coreColor = 0xf97316;
+      } else if (diff === 'medium') {
+        enemyCosmetics.guard_drone.searchlightColor = 0xef4444; // crimson red
+        enemyCosmetics.guard_drone.visorColor = 0xef4444;
+        enemyCosmetics.guard_drone.coreColor = 0xef4444;
+      } else {
+        enemyCosmetics.guard_drone.searchlightColor = 0xa855f7; // purple void
+        enemyCosmetics.guard_drone.visorColor = 0xa855f7;
+        enemyCosmetics.guard_drone.coreColor = 0xa855f7;
+      }
+
+      // Faction override for guard drones and boss customization
+      if (target.id === 'boss-ironjaw') {
+        enemyCosmetics.guard_drone.primaryColor = 0x78350f; // rusty brown
+        enemyCosmetics.guard_drone.wingStyle = 'scavenger';
+        enemyCosmetics.guard_drone.searchlightColor = 0xeab308; // yellow searchlight
+        enemyCosmetics.guard_drone.coreColor = 0xb45309;
+
+        enemyCosmetics.boss_ironjaw = {
+          primaryColor: 0xb45309,
+          armorColor: 0x3d2b1f,
+          warningCoreColor: 0xf97316,
+          visorColor: 0xef4444,
+          spikes: true,
+        };
+      } else if (target.id === 'boss-whisper') {
+        enemyCosmetics.guard_drone.primaryColor = 0x0f172a; // stealth black
+        enemyCosmetics.guard_drone.wingStyle = 'standard';
+        enemyCosmetics.guard_drone.searchlightColor = 0x10b981; // matrix green
+        enemyCosmetics.guard_drone.coreColor = 0x22c55e;
+
+        enemyCosmetics.boss_whisper = {
+          primaryColor: 0x020617,
+          camoColor: 0x10b981,
+          circuitsColor: 0x22c55e,
+          visorColor: 0x22c55e,
+        };
+      } else if (target.id === 'boss-volkov') {
+        enemyCosmetics.guard_drone.primaryColor = 0x1e3a8a; // navy
+        enemyCosmetics.guard_drone.wingStyle = 'heavy';
+        enemyCosmetics.guard_drone.searchlightColor = 0x3b82f6; // blue searchlight
+        enemyCosmetics.guard_drone.coreColor = 0x3b82f6;
+
+        enemyCosmetics.boss_volkov = {
+          primaryColor: 0x172554,
+          treadColor: 0x1e293b,
+          autocannonGlow: 0xef4444,
+          visorColor: 0xf97316,
+        };
+      } else if (target.id === 'boss-circuit') {
+        enemyCosmetics.guard_drone.primaryColor = 0xeab308; // bright yellow
+        enemyCosmetics.guard_drone.wingStyle = 'standard';
+        enemyCosmetics.guard_drone.searchlightColor = 0x06b6d4; // cyber cyan
+        enemyCosmetics.guard_drone.coreColor = 0x06b6d4;
+
+        enemyCosmetics.boss_circuit = {
+          primaryColor: 0x713f12,
+          serverColor: 0x854d0e,
+          ledColor: 0x06b6d4,
+          condenserGlow: 0xeab308,
+        };
+      } else if (target.id === 'boss-warden') {
+        enemyCosmetics.guard_drone.primaryColor = 0x4c1d95; // void purple
+        enemyCosmetics.guard_drone.wingStyle = 'heavy';
+        enemyCosmetics.guard_drone.searchlightColor = 0xa855f7; // purple searchlight
+        enemyCosmetics.guard_drone.coreColor = 0xd946ef;
+
+        enemyCosmetics.boss_warden = {
+          primaryColor: 0x2e1065,
+          shieldColor: 0x7c3aed,
+          beaconColor: 0xec4899,
+          visorColor: 0xef4444,
+        };
+      }
+    } else {
+      // Room scene - Friendly base sentry
+      enemyCosmetics.guard_drone.primaryColor = 0x0f172a; // clean slate black
+      enemyCosmetics.guard_drone.wingStyle = 'standard';
+      enemyCosmetics.guard_drone.searchlightColor = 0x10b981; // friendly green searchlight
+      enemyCosmetics.guard_drone.visorColor = 0x06b6d4;
+      enemyCosmetics.guard_drone.coreColor = 0x06b6d4; // friendly blue/cyan core
+    }
+
+    if (typeof window !== "undefined") {
+      (window as any).activeEnemyCosmetics = enemyCosmetics;
+    }
+
+    const keys = ["guard_drone", "boss_ironjaw", "boss_whisper", "boss_volkov", "boss_circuit", "boss_warden"];
+    const allKeys = [...keys];
+    for (const key of keys) {
+      for (let dir = 0; dir < 4; dir++) {
+        allKeys.push(`${key}_dir_${dir}`);
+      }
+    }
+
+    for (const key of allKeys) {
+      if (scene.textures.exists(key)) {
+        scene.textures.remove(key);
+      }
+    }
+
+    const gdEntry = ENTITIES.find(e => e[0] === 'guard_drone') || ['guard_drone', 1, 1, 40, 0xf1c40f];
+    bootScene.generateIsoBlock("guard_drone", gdEntry[1], gdEntry[2], gdEntry[3], gdEntry[4], 0);
+    for (let dir = 0; dir < 4; dir++) {
+      bootScene.generateIsoBlock(`guard_drone_dir_${dir}`, gdEntry[1], gdEntry[2], gdEntry[3], gdEntry[4], dir);
+    }
+
+    const bossKeys = ['boss_ironjaw', 'boss_whisper', 'boss_volkov', 'boss_circuit', 'boss_warden'];
+    for (const bKey of bossKeys) {
+      const bEntry = ENTITIES.find(e => e[0] === bKey);
+      if (bEntry) {
+        bootScene.generateIsoBlock(bKey, bEntry[1], bEntry[2], bEntry[3], bEntry[4], 0);
+        for (let dir = 0; dir < 4; dir++) {
+          bootScene.generateIsoBlock(`${bKey}_dir_${dir}`, bEntry[1], bEntry[2], bEntry[3], bEntry[4], dir);
+        }
+      }
+    }
+
+    scene.events.emit("enemy-textures-regenerated");
   }
 }
